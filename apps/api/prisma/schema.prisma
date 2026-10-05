@@ -14,6 +14,8 @@ enum RegionStatus {
 }
 
 enum ProcessStatus {
+  /// Estado por defecto del sync: nada sale a OCR/LLM hasta que el usuario pida analizar
+  sin_analizar
   pendiente
   procesando
   listo
@@ -76,7 +78,11 @@ model Thread {
   accountId      String
   conversationId String
   subject        String
-  status         ProcessStatus @default(pendiente)
+  status         ProcessStatus @default(sin_analizar)
+  /// Reanálisis automático cuando llegan mensajes nuevos a un hilo ya analizado
+  seguimiento    Boolean       @default(false)
+  /// Llegaron mensajes/adjuntos después del último análisis (y no hay seguimiento)
+  tieneMensajesNuevos Boolean  @default(false)
   contentHash    String?
   lastMessageAt  DateTime?
   createdAt      DateTime      @default(now())

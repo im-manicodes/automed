@@ -46,11 +46,23 @@ function fakePrisma() {
             x.accountId === k.accountId &&
             x.conversationId === k.conversationId,
         );
-        if (!t) db.threads.push((t = { id: id(), status: 'listo', ...create }));
+        if (!t)
+          db.threads.push(
+            (t = {
+              id: id(),
+              status: 'sin_analizar',
+              seguimiento: false,
+              tieneMensajesNuevos: false,
+              syntheses: 0,
+              ...create,
+            }),
+          );
         return t;
       },
-      findUnique: async ({ where }: any) =>
-        db.threads.find((t) => t.id === where.id) ?? null,
+      findUnique: async ({ where }: any) => {
+        const t = db.threads.find((x) => x.id === where.id);
+        return t ? { ...t, _count: { syntheses: t.syntheses } } : null;
+      },
       update: async ({ where, data }: any) =>
         Object.assign(
           db.threads.find((t) => t.id === where.id),
@@ -200,7 +212,8 @@ describe('MailSyncService', () => {
       storageKey: `attachments/${sha('pdf-a1')}.pdf`,
     });
     expect(puts).toHaveLength(2);
-    expect(db.threads[0].status).toBe('pendiente');
+    expect(db.threads[0].status).toBe('sin_analizar');
+    expect(db.threads[0].tieneMensajesNuevos).toBe(false);
   });
 
   it('deduplica por hash: mismo PDF reenviado no se vuelve a subir', async () => {
@@ -348,5 +361,71 @@ describe('MailSyncService', () => {
     const r = await svc.syncNow();
     expect(r.error).toBe('boom');
     expect(svc.isRunning()).toBe(false);
+  });
+
+  describe('mensajes nuevos según el estado del hilo', () => {
+    const run = async (prep: (t: any) => void, id = '2') => {
+      const x = setup();
+      mockInboxImpl(x.graph, () =>
+        pages({ messages: [msg('1', 'c')], deltaLink: 'd' }),
+      );
+      await x.svc.syncNow();
+      prep(x.db.threads[0]);
+      mockInboxImpl(x.graph, () =>
+        pages({ messages: [msg(id, 'c')], deltaLink: 'd2' }),
+      );
+      await x.svc.syncNow();
+      return x.db.threads[0];
+    };
+
+    it('hilo nuevo queda sin_analizar', async () => {
+      const t = await run(() => undefined, '1');
+      expect(t.status).toBe('sin_analizar');
+    });
+    it('mensaje nuevo en hilo nunca analizado sigue sin_analizar', async () => {
+      const t = await run(() => undefined);
+      expect(t).toMatchObject({
+        status: 'sin_analizar',
+        tieneMensajesNuevos: false,
+      });
+    });
+    it('hilo analizado con seguimiento pasa a pendiente', async () => {
+      const t = await run((th) => {
+        th.status = 'listo';
+        th.seguimiento = true;
+      });
+      expect(t.status).toBe('pendiente');
+    });
+    it('hilo analizado sin seguimiento conserva estado y marca tieneMensajesNuevos', async () => {
+      const t = await run((th) => {
+        th.status = 'listo';
+      });
+      expect(t).toMatchObject({ status: 'listo', tieneMensajesNuevos: true });
+    });
+    it('una síntesis previa cuenta como analizado', async () => {
+      const t = await run((th) => {
+        th.syntheses = 1;
+        th.status = 'sin_analizar';
+      });
+      expect(t).toMatchObject({
+        status: 'sin_analizar',
+        tieneMensajesNuevos: true,
+      });
+    });
+    it('nunca rasteriza ni llama a OCR/LLM: solo guarda PDFs', async () => {
+      const { svc, graph, storage } = setup();
+      mockInbox(
+        graph,
+        pages({
+          messages: [msg('1', 'c', { hasAttachments: true })],
+          deltaLink: 'd',
+        }),
+      );
+      graph.listAttachments.mockResolvedValue([pdfAtt('a1')]);
+      graph.downloadAttachment.mockResolvedValue(bytesOf('x'));
+      await svc.syncNow();
+      expect((storage as any).put).toHaveBeenCalledTimes(1);
+      expect(Object.keys(svc)).not.toContain('pipeline');
+    });
   });
 });

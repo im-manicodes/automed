@@ -1,4 +1,8 @@
-import { canTransition, ThreadStateService } from './thread-state.service';
+import {
+  canTransition,
+  stateOnNewContent,
+  ThreadStateService,
+} from './thread-state.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('transiciones de Thread', () => {
@@ -31,5 +35,39 @@ describe('transiciones de Thread', () => {
       where: { id: 't', status: 'pendiente' },
       data: { status: 'procesando' },
     });
+  });
+
+  it('sin_analizar solo sale hacia pendiente', () => {
+    expect(canTransition('sin_analizar', 'pendiente')).toBe(true);
+    for (const to of [
+      'procesando',
+      'listo',
+      'necesita_revision',
+      'error',
+    ] as const)
+      expect(canTransition('sin_analizar', to)).toBe(false);
+    expect(canTransition('listo', 'sin_analizar')).toBe(false);
+    expect(canTransition('pendiente', 'sin_analizar')).toBe(false);
+  });
+
+  it('stateOnNewContent: nunca analizado no cambia', () => {
+    expect(
+      stateOnNewContent({
+        status: 'sin_analizar',
+        seguimiento: true,
+        syntheses: 0,
+      }),
+    ).toBeNull();
+  });
+  it('stateOnNewContent: analizado con seguimiento -> pendiente', () => {
+    expect(
+      stateOnNewContent({ status: 'listo', seguimiento: true, syntheses: 1 }),
+    ).toEqual({ status: 'pendiente', tieneMensajesNuevos: false });
+  });
+  it('stateOnNewContent: analizado sin seguimiento -> marca', () => {
+    for (const status of ['listo', 'necesita_revision', 'error'] as const)
+      expect(
+        stateOnNewContent({ status, seguimiento: false, syntheses: 0 }),
+      ).toEqual({ tieneMensajesNuevos: true });
   });
 });

@@ -54,7 +54,8 @@ export class PipelineService implements OnModuleInit {
       handle: (j) => this.synthesizeThread(j),
       onFailed: (j) => this.failThread(str(j.payload.threadId)),
     });
-    // El sync solo deja el Thread en 'pendiente'; este barrido lo convierte en trabajo.
+    // Este barrido solo recoge hilos 'pendiente' (los que el usuario pidió analizar o con
+    // seguimiento). Un hilo 'sin_analizar' NUNCA se recoge.
     this.worker.addPeriodic(() => this.enqueuePendingThreads());
   }
 
@@ -100,7 +101,81 @@ export class PipelineService implements OnModuleInit {
     return n;
   }
 
-  /** Vuelve a procesar el hilo desde cero (adjuntos incluidos). */
+  /**
+   * Analiza un hilo bajo petición del usuario: sin_analizar | listo/necesita_revision con
+   * mensajes nuevos | error -> pendiente (y se encola el proceso). 409 si ya se procesa o no
+   * hay nada que analizar.
+   */
+  async analyze(threadId: string, opts: { seguimiento?: boolean } = {}) {
+    const t = await this.prisma.thread.findUnique({
+      where: { id: threadId },
+      select: { status: true, tieneMensajesNuevos: true },
+    });
+    if (!t) throw new NotFoundException('Ticket no encontrado');
+    if (t.status === 'procesando' || t.status === 'pendiente')
+      throw new ConflictException('El ticket ya se está procesando');
+    const canAnalyze =
+      t.status === 'sin_analizar' ||
+      t.status === 'error' ||
+      ((t.status === 'listo' || t.status === 'necesita_revision') &&
+        t.tieneMensajesNuevos);
+    if (!canAnalyze)
+      throw new ConflictException(
+        'El ticket ya está analizado y no tiene mensajes nuevos',
+      );
+    // Los adjuntos con error se reintentan; los ya procesados se reutilizan.
+    await this.prisma.attachment.updateMany({
+      where: { message: { threadId }, status: 'error' },
+      data: { status: 'pendiente' },
+    });
+    return this.startAnalysis(threadId, opts.seguimiento);
+  }
+
+  /** Analiza varios hilos; devuelve el resultado por id (un fallo no detiene a los demás). */
+  async analyzeMany(ids: string[], opts: { seguimiento?: boolean } = {}) {
+    const results: {
+      id: string;
+      ok: boolean;
+      status?: ProcessStatus;
+      error?: string;
+    }[] = [];
+    for (const id of [...new Set(ids)]) {
+      try {
+        const r = await this.analyze(id, opts);
+        results.push({ id, ok: true, status: r.status });
+      } catch (e) {
+        results.push({
+          id,
+          ok: false,
+          error: e instanceof Error ? e.message : 'Error desconocido',
+        });
+      }
+    }
+    return results;
+  }
+
+  private async startAnalysis(
+    threadId: string,
+    seguimiento: boolean | undefined,
+  ) {
+    const ok = await this.state.transition(threadId, 'pendiente', {
+      tieneMensajesNuevos: false,
+      ...(seguimiento === undefined ? {} : { seguimiento }),
+    });
+    if (!ok)
+      throw new ConflictException(
+        'El ticket cambió de estado, intenta de nuevo',
+      );
+    const hash = await this.computeThreadHash(threadId);
+    await this.queue.enqueue(
+      JOB_TYPES.processThread,
+      { threadId },
+      { dedupeKey: `process_thread:${threadId}:${hash}`, rearm: true },
+    );
+    return { threadId, status: 'pendiente' as const };
+  }
+
+  /** Vuelve a procesar el hilo desde cero (adjuntos incluidos). Acción explícita del usuario. */
   async reprocess(threadId: string) {
     const t = await this.prisma.thread.findUnique({
       where: { id: threadId },
@@ -113,7 +188,9 @@ export class PipelineService implements OnModuleInit {
       where: { message: { threadId } },
       data: { status: 'pendiente' },
     });
-    await this.state.transition(threadId, 'pendiente');
+    await this.state.transition(threadId, 'pendiente', {
+      tieneMensajesNuevos: false,
+    });
     const hash = await this.computeThreadHash(threadId);
     await this.queue.enqueue(
       JOB_TYPES.processThread,
@@ -136,8 +213,12 @@ export class PipelineService implements OnModuleInit {
       where: { sha256, status: { in: DONE } },
       data: { status: doubtful > 0 ? 'necesita_revision' : 'listo' },
     });
+    // Solo hilos ya analizados: nunca se toca un hilo sin_analizar (nada sale sin analyze).
     const threads = await this.prisma.thread.findMany({
-      where: { messages: { some: { attachments: { some: { sha256 } } } } },
+      where: {
+        status: { in: ['listo', 'necesita_revision', 'error'] },
+        messages: { some: { attachments: { some: { sha256 } } } },
+      },
       select: { id: true },
     });
     const queued: string[] = [];
@@ -171,6 +252,8 @@ export class PipelineService implements OnModuleInit {
     if (!t) throw new NotFoundException('Ticket no encontrado');
     if (t.status === 'procesando' || t.status === 'pendiente')
       throw new ConflictException('El ticket ya se está procesando');
+    if (t.status === 'sin_analizar')
+      throw new ConflictException('Primero analiza el ticket');
     if (
       !(await this.state.transition(threadId, 'pendiente')) ||
       !(await this.state.transition(threadId, 'procesando'))
@@ -197,7 +280,8 @@ export class PipelineService implements OnModuleInit {
       where: { id: threadId },
     });
     if (!thread) return;
-    await this.state.transition(threadId, 'procesando');
+    // Defensa: solo se procesa un hilo 'pendiente' (o 'procesando' en un reintento).
+    if (!(await this.state.transition(threadId, 'procesando'))) return;
 
     const attachments = await this.prisma.attachment.findMany({
       where: { message: { threadId } },
@@ -266,17 +350,33 @@ export class PipelineService implements OnModuleInit {
     });
 
     if ((await this.computeThreadHash(threadId)) !== hash) {
-      // Llegó contenido nuevo mientras se procesaba: se reprocesa con el hash nuevo.
-      await this.state.transition(threadId, 'pendiente');
+      // Llegó contenido nuevo mientras se procesaba: con seguimiento se reprocesa solo;
+      // sin seguimiento el hilo termina y queda marcado con mensajes nuevos.
+      if (thread.seguimiento) {
+        await this.state.transition(threadId, 'pendiente');
+        return;
+      }
+      await this.finishThread(threadId, hash, true);
       return;
     }
+    await this.finishThread(threadId, hash, false);
+  }
+
+  private async finishThread(
+    threadId: string,
+    hash: string,
+    tieneMensajesNuevos: boolean,
+  ) {
     const review = await this.prisma.attachment.count({
       where: { message: { threadId }, status: 'necesita_revision' },
     });
     await this.state.transition(
       threadId,
       review > 0 ? 'necesita_revision' : 'listo',
-      { contentHash: hash },
+      {
+        contentHash: hash,
+        ...(tieneMensajesNuevos ? { tieneMensajesNuevos } : {}),
+      },
     );
   }
 

@@ -5,6 +5,9 @@ Servicio para 1 usuario / 1 buzón de Outlook (Microsoft Graph, OAuth delegado).
 
 Plan completo: `/home/mani/.claude/plans/necesito-un-peque-o-software-swirling-taco.md` (7 fases). Estado: `docs/estado-del-proyecto.md`.
 
+## Flujo de análisis (REGLA)
+**El análisis es siempre bajo petición del usuario.** El sync de correo solo descarga y guarda correos y PDFs (RustFS); ningún hilo se rasteriza, pasa por OCR ni se envía a un LLM hasta que el usuario lo pide (`POST /api/threads/:id/analyze` o `POST /api/threads/analyze`). Estados de Thread: `sin_analizar` (defecto) -> `pendiente` -> `procesando` -> `listo | necesita_revision | error`. `seguimiento` (por hilo, opt-in) reanaliza solo al llegar mensajes nuevos a un hilo ya analizado; sin él se marca `tieneMensajesNuevos`. El barrido del pipeline solo recoge `pendiente`. Motivo: contenido sensible y muchos hilos antiguos cerrados.
+
 ## Stack
 - Monorepo pnpm (`pnpm-workspace.yaml`): `apps/api` (NestJS + Prisma 7 + PostgreSQL), `apps/web` (Vite + React + TS + Tailwind 4 + react-router).
 - Almacenamiento de PDFs/páginas: RustFS (S3 compatible) vía `@aws-sdk/client-s3`, path-style, módulo `storage`. En BD solo `storageKey` + `sha256`.

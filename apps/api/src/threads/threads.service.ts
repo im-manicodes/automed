@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import type { ProcessStatus } from '../generated/prisma/client';
 
 @Injectable()
 export class ThreadsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
+  async list(status?: ProcessStatus) {
     const threads = await this.prisma.thread.findMany({
+      where: status ? { status } : undefined,
       orderBy: { lastMessageAt: 'desc' },
       include: {
         messages: { select: { _count: { select: { attachments: true } } } },
@@ -16,6 +18,8 @@ export class ThreadsService {
       id: t.id,
       subject: t.subject,
       status: t.status,
+      seguimiento: t.seguimiento,
+      tieneMensajesNuevos: t.tieneMensajesNuevos,
       updatedAt: t.updatedAt,
       lastMessageAt: t.lastMessageAt,
       messageCount: t.messages.length,
@@ -49,9 +53,20 @@ export class ThreadsService {
       id: t.id,
       subject: t.subject,
       status: t.status,
+      seguimiento: t.seguimiento,
+      tieneMensajesNuevos: t.tieneMensajesNuevos,
       lastMessageAt: t.lastMessageAt,
       // incluye isFromMe (mensaje propio) en cada mensaje
       messages: t.messages,
     };
+  }
+
+  async setSeguimiento(id: string, seguimiento: boolean) {
+    const r = await this.prisma.thread.updateMany({
+      where: { id },
+      data: { seguimiento },
+    });
+    if (r.count === 0) throw new NotFoundException('Ticket no encontrado');
+    return { id, seguimiento };
   }
 }

@@ -15,6 +15,7 @@ import {
   MAIL_FOLDERS,
   MailFolder,
 } from './graph.service';
+import { stateOnNewContent } from '../jobs/thread-state.service';
 import { GraphMessage, isPdfAttachment, mapMessage } from './graph-mapper';
 
 export interface SyncResult {
@@ -208,11 +209,30 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
       changed = changed || added > 0;
     }
     if (changed) {
-      // Hay contenido nuevo: el pipeline (fase 3) debe volver a procesar el hilo.
-      await this.prisma.thread.update({
+      // Hay contenido nuevo. El análisis (OCR/LLM) es siempre bajo petición del usuario:
+      // un hilo nuevo/nunca analizado queda 'sin_analizar'; uno ya analizado solo se
+      // reanaliza solo si tiene seguimiento, y si no se marca tieneMensajesNuevos.
+      const t = await this.prisma.thread.findUnique({
         where: { id: threadId },
-        data: { status: 'pendiente' },
+        select: {
+          status: true,
+          seguimiento: true,
+          _count: { select: { syntheses: true } },
+        },
       });
+      const change = t
+        ? stateOnNewContent({
+            status: t.status,
+            seguimiento: t.seguimiento,
+            syntheses: t._count.syntheses,
+          })
+        : null;
+      if (change) {
+        await this.prisma.thread.update({
+          where: { id: threadId },
+          data: change,
+        });
+      }
     }
   }
 

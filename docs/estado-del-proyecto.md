@@ -13,6 +13,8 @@
 
 - [x] Fase 5 — Síntesis: `LlmProvider` real (`apps/api/src/llm`) con adaptadores `anthropic` (@anthropic-ai/sdk), `bedrock` (Converse) y `openai`, seleccionados por `LLM_PROVIDER`; métodos `text()` y `vision()`, modelos por `LLM_MODEL_TEXT`/`LLM_MODEL_VISION`, reintentos con backoff (429/5xx/timeouts), timeouts, sin logs de contenido; `NoopLlmProvider` eliminado (la relectura con visión del OCR usa `vision()`). Plantillas versionadas (`Template.version`, una activa; plantilla por defecto en español con instrucciones por sección en comentarios `<!-- -->`): `GET/PUT /api/templates/active`, `POST /api/templates/reset`, `POST /api/templates/preview`. `SynthesisService`: línea de tiempo (isFromMe, citas/firmas recortadas) + OCR por página con `[ilegible #n · doc · p.k]` y `texto_usuario`, map-reduce sobre `SYNTH_MAX_INPUT_TOKENS`, guarda `Synthesis` (versión, hash de entrada, modelo, plantilla) y no llama al LLM si el hash no cambió; implementa `THREAD_SYNTHESIZER` (corregir una región regenera por el flujo de la fase 4). Endpoints `GET /api/threads/:id/synthesis` y `POST /api/threads/:id/synthesis/regenerate` (fuerza nueva versión vía cola). Migración `sintesis_plantillas`.
 
+- [x] Cambio transversal — Análisis solo bajo petición: nuevo estado `sin_analizar` (defecto de hilos del sync), campos `Thread.seguimiento` y `Thread.tieneMensajesNuevos`; migraciones `sin_analizar_enum` (ADD VALUE, separada porque PostgreSQL no permite usar el valor en la misma transacción) y `sin_analizar_datos` (columnas, default, pendiente sin síntesis -> sin_analizar, cancela jobs pendientes de esos hilos). El sync guarda correos/PDFs pero no rasteriza/OCR/LLM; nuevo hilo -> `sin_analizar`; mensajes nuevos: nunca analizado -> igual; analizado + seguimiento -> `pendiente`; analizado sin seguimiento -> conserva estado y `tieneMensajesNuevos=true`. Endpoints: `POST /api/threads/:id/analyze` (body opcional `{seguimiento}`; 409 si procesando/en cola/sin novedades), `POST /api/threads/analyze` (`{ids, seguimiento?}`, máx. 50, resultado por id), `PATCH /api/threads/:id/seguimiento`, `GET /api/threads?status=`; list/detail exponen `status`, `seguimiento`, `tieneMensajesNuevos`. El barrido solo toma `pendiente`; `processThread` ignora hilos que no estén `pendiente/procesando`; corregir regiones solo reencola hilos listo/necesita_revision/error; `regenerate` da 409 en `sin_analizar`; `reprocess` sigue siendo acción explícita (permitido desde `sin_analizar`). Si llega contenido durante un análisis: con seguimiento reanaliza, sin él termina y marca `tieneMensajesNuevos`.
+
 ## En curso
 - Nada.
 
@@ -52,3 +54,8 @@
 - Estimación de tokens aproximada (4 caracteres/token); `SYNTH_MAX_INPUT_TOKENS` debe ir por debajo de la ventana real del modelo.
 - La vista previa de plantilla llama al LLM real (una llamada corta con un hilo de ejemplo).
 - Cambiar la plantilla no regenera hilos solos: el hash cambia, así que la próxima síntesis o `regenerate` genera versión nueva.
+
+## Pendientes del cambio "análisis bajo petición"
+- La UI (fase 6) debe mostrar `sin_analizar`, el botón Analizar (individual/masivo), el interruptor de seguimiento y el aviso de mensajes nuevos.
+- Activar `seguimiento` en un hilo con `tieneMensajesNuevos` no dispara el análisis por sí solo; hay que pulsar Analizar.
+- La migración cancela (status `error`) los jobs pendientes de hilos que pasan a `sin_analizar`; un `process_attachment` compartido por sha256 con otro hilo analizado también se cancelaría (caso raro: se resuelve con `reprocess`).

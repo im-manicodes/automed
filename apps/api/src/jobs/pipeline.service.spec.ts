@@ -1,12 +1,23 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PipelineService } from './pipeline.service';
 import { ThreadStateService } from './thread-state.service';
 import { JobRecord } from './job-handler.interface';
 
-type St = 'pendiente' | 'procesando' | 'listo' | 'necesita_revision' | 'error';
+type St =
+  | 'sin_analizar'
+  | 'pendiente'
+  | 'procesando'
+  | 'listo'
+  | 'necesita_revision'
+  | 'error';
 interface Th {
   id: string;
   status: St;
   contentHash?: string;
+  seguimiento?: boolean;
+  tieneMensajesNuevos?: boolean;
 }
 interface Msg {
   id: string;
@@ -49,7 +60,10 @@ function fakePrisma() {
         db.threads.find((t) => t.id === where.id) ?? null,
       findMany: async ({ where }: any) =>
         db.threads.filter((t) => {
-          if (where.status) return t.status === where.status;
+          if (where.status && typeof where.status === 'string')
+            return t.status === where.status;
+          if (where.status?.in && !where.status.in.includes(t.status))
+            return false;
           const sha = where.messages.some.attachments.some.sha256;
           return db.atts.some(
             (a) => a.sha256 === sha && threadOfAtt(a) === t.id,
@@ -94,7 +108,9 @@ function fakePrisma() {
     },
     ocrRegion: {
       count: async ({ where }: any) =>
-        db.doubtfulShas.has(where.page.attachment.sha256) ? 1 : 0,
+        db.doubtfulShas.has(where.page.sha256 ?? where.page.attachment.sha256)
+          ? 1
+          : 0,
     },
   };
   return { db, prisma };
@@ -235,9 +251,10 @@ describe('PipelineService', () => {
     expect(s.queued.some((q) => q.type === 'synthesize_thread')).toBe(false);
   });
 
-  it('si llegó contenido nuevo durante el proceso, el hilo vuelve a pendiente', async () => {
+  it('si llegó contenido nuevo durante el proceso (con seguimiento), el hilo vuelve a pendiente', async () => {
     const s = setup();
     s.addThread('t1', []);
+    s.db.threads[0].seguimiento = true;
     await s.pipeline.processThread(s.job({ threadId: 't1' }));
     const synth = s.queued.find((q) => q.type === 'synthesize_thread')!;
     s.db.messages.push({
@@ -282,5 +299,144 @@ describe('PipelineService', () => {
     });
     s.db.threads[0].status = 'procesando';
     await expect(s.pipeline.reprocess('t1')).rejects.toThrow();
+  });
+
+  describe('análisis bajo petición', () => {
+    it('el barrido solo recoge pendiente, nunca sin_analizar', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      s.addThread('t2', []);
+      s.db.threads[0].status = 'sin_analizar';
+      await s.pipeline.enqueuePendingThreads();
+      expect(s.queued.map((q) => q.payload.threadId)).toEqual(['t2']);
+    });
+
+    it('processThread no procesa un hilo sin_analizar', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      s.db.threads[0].status = 'sin_analizar';
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      expect(s.queued).toHaveLength(0);
+      expect(s.db.threads[0].status).toBe('sin_analizar');
+      expect(s.processor.process).not.toHaveBeenCalled();
+    });
+
+    it('analyze: sin_analizar -> pendiente, encola y guarda seguimiento', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      Object.assign(s.db.threads[0], {
+        status: 'sin_analizar',
+        tieneMensajesNuevos: true,
+      });
+      const r = await s.pipeline.analyze('t1', { seguimiento: true });
+      expect(r.status).toBe('pendiente');
+      expect(s.db.threads[0]).toMatchObject({
+        status: 'pendiente',
+        seguimiento: true,
+        tieneMensajesNuevos: false,
+      });
+      expect(s.queued[0].type).toBe('process_thread');
+    });
+
+    it('analyze: listo con mensajes nuevos y error sí; listo sin novedades no', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      s.db.threads[0].status = 'listo';
+      await expect(s.pipeline.analyze('t1')).rejects.toThrow(ConflictException);
+      s.db.threads[0].tieneMensajesNuevos = true;
+      await s.pipeline.analyze('t1');
+      expect(s.db.threads[0].status).toBe('pendiente');
+      s.db.threads[0].status = 'error';
+      await s.pipeline.analyze('t1');
+      expect(s.db.threads[0].status).toBe('pendiente');
+    });
+
+    it('analyze: 409 si procesando y 404 si no existe', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      s.db.threads[0].status = 'procesando';
+      await expect(s.pipeline.analyze('t1')).rejects.toThrow(ConflictException);
+      await expect(s.pipeline.analyze('nope')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('analyzeMany devuelve resultado por id sin detenerse en fallos', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      s.addThread('t2', []);
+      s.db.threads[0].status = 'sin_analizar';
+      s.db.threads[1].status = 'procesando';
+      const res = await s.pipeline.analyzeMany(['t1', 't2', 'zz', 't1']);
+      expect(res).toEqual([
+        { id: 't1', ok: true, status: 'pendiente' },
+        { id: 't2', ok: false, error: expect.any(String) },
+        { id: 'zz', ok: false, error: expect.any(String) },
+      ]);
+    });
+
+    it('regenerate de síntesis exige análisis previo', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      s.db.threads[0].status = 'sin_analizar';
+      await expect(s.pipeline.regenerateSynthesis('t1')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('onRegionsChanged no toca hilos sin_analizar y sí los analizados', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      s.addThread('t2', [['a2', 'shaA']]);
+      s.db.threads[0].status = 'sin_analizar';
+      s.db.threads[1].status = 'listo';
+      const queued = await s.pipeline.onRegionsChanged('shaA');
+      expect(queued).toEqual(['t2']);
+      expect(s.db.threads[0].status).toBe('sin_analizar');
+      expect(s.queued.map((q) => q.payload.threadId)).toEqual(['t2']);
+    });
+
+    it('contenido nuevo durante el análisis: con seguimiento reanaliza, sin él marca tieneMensajesNuevos', async () => {
+      for (const seg of [true, false]) {
+        const s = setup();
+        s.addThread('t1', []);
+        s.db.threads[0].seguimiento = seg;
+        await s.pipeline.processThread(s.job({ threadId: 't1' }));
+        const synth = s.queued.find((q) => q.type === 'synthesize_thread')!;
+        s.db.messages.push({
+          id: 'm2',
+          threadId: 't1',
+          graphId: 'g2',
+          bodyText: 'nuevo',
+        });
+        await s.pipeline.synthesizeThread(s.job(synth.payload));
+        if (seg) expect(s.db.threads[0].status).toBe('pendiente');
+        else
+          expect(s.db.threads[0]).toMatchObject({
+            status: 'listo',
+            tieneMensajesNuevos: true,
+          });
+      }
+    });
+  });
+
+  it('migración de datos: pendiente sin síntesis -> sin_analizar (lógica SQL)', () => {
+    const sql = readFileSync(
+      join(
+        __dirname,
+        '../../prisma/migrations/20261007100100_sin_analizar_datos/migration.sql',
+      ),
+      'utf8',
+    );
+    expect(sql).toMatch(/SET "status" = 'sin_analizar'/);
+    expect(sql).toMatch(/"status" = 'pendiente'/);
+    expect(sql).toMatch(/NOT EXISTS \(SELECT 1 FROM "Synthesis"/);
+    expect(sql).toMatch(/SET DEFAULT 'sin_analizar'/);
+    // simula la regla sobre filas
+    const migrate = (t: { status: string; syntheses: number }) =>
+      t.status === 'pendiente' && t.syntheses === 0 ? 'sin_analizar' : t.status;
+    expect(migrate({ status: 'pendiente', syntheses: 0 })).toBe('sin_analizar');
+    expect(migrate({ status: 'pendiente', syntheses: 2 })).toBe('pendiente');
+    expect(migrate({ status: 'listo', syntheses: 0 })).toBe('listo');
   });
 });
