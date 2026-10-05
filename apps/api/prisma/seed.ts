@@ -3,11 +3,11 @@
  *   pnpm db:seed        (desde la raíz)   ·   también lo invoca `prisma db seed` / `migrate reset`
  * Variables opcionales: SEED_USER_EMAIL, SEED_USER_NAME, SEED_USER_PASSWORD (nunca se imprimen).
  */
-import { loadRootEnv } from './load-env';
-import { createPgAdapter } from '../prisma/prisma.service';
-import { PrismaClient } from '../generated/prisma/client';
-import { PasswordService } from '../auth/password.service';
-import { seedBase } from '../seed/seed-base';
+import { loadRootEnv } from '../src/cli/load-env';
+import { createPgAdapter } from '../src/prisma/prisma.service';
+import { PrismaClient } from '../src/generated/prisma/client';
+import { PasswordService } from '../src/auth/password.service';
+import { seedBase } from './seed/base';
 
 loadRootEnv();
 

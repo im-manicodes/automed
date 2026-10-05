@@ -3,12 +3,12 @@
  *   pnpm db:seed:demo          crea/recrea los datos demo (ids "demo-", asuntos "[DEMO]") y sube imágenes a RustFS
  *   pnpm db:seed:demo:clean    borra únicamente lo demo (BD por prefijo de id y objetos S3 "demo/")
  */
-import { loadRootEnv } from './load-env';
-import { createPgAdapter } from '../prisma/prisma.service';
-import { PrismaClient } from '../generated/prisma/client';
-import { StorageService } from '../storage/storage.service';
-import { renderDemoPage } from '../seed/page-image';
-import { assertNotProduction, cleanDemo, seedDemo } from '../seed/seed-demo';
+import { loadRootEnv } from '../src/cli/load-env';
+import { createPgAdapter } from '../src/prisma/prisma.service';
+import { PrismaClient } from '../src/generated/prisma/client';
+import { StorageService } from '../src/storage/storage.service';
+import { renderDemoPage } from './seed/page-image';
+import { assertNotProduction, cleanDemo, seedDemo } from './seed/demo';
 import type { ConfigService } from '@nestjs/config';
 
 loadRootEnv();

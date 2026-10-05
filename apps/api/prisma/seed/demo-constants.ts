@@ -1,5 +1,5 @@
 /** Todo lo creado por `db:seed:demo` lleva este prefijo en su id; `db:seed:demo:clean` borra solo eso. */
-export const DEMO_PREFIX = 'demo-';
+export { DEMO_PREFIX } from '../../src/cli/demo-prefix';
 /** Prefijo de los objetos demo en RustFS/S3. */
 export const DEMO_S3_PREFIX = 'demo/';
 /** Prefijo visible en los asuntos de los tickets demo. */

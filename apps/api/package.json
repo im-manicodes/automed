@@ -12,7 +12,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main.js",
-    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "lint": "eslint \"{src,test,prisma}/**/*.ts\"",
     "test": "jest && jest --config ./test/jest-e2e.json",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -31,9 +31,9 @@
     "db:migrate:create": "prisma migrate dev --create-only",
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
-    "db:seed": "pnpm build && node dist/cli/db-seed.js",
-    "db:seed:demo": "pnpm build && node dist/cli/db-seed-demo.js",
-    "db:seed:demo:clean": "pnpm build && node dist/cli/db-seed-demo.js --clean",
+    "db:seed": "prisma db seed",
+    "db:seed:demo": "tsx prisma/seed-demo.ts",
+    "db:seed:demo:clean": "tsx prisma/seed-demo.ts --clean",
     "db:reset": "pnpm build && node dist/cli/db-reset.js",
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
@@ -91,6 +91,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
@@ -100,20 +101,24 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
+    "roots": [
+      "<rootDir>/src",
+      "<rootDir>/prisma"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "{src,prisma}/**/*.(t|j)s"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "./coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^@nestjs/config$": "<rootDir>/../test/stubs/nestjs-config.stub.ts",
+      "^@nestjs/config$": "<rootDir>/test/stubs/nestjs-config.stub.ts",
       "^(\\.{1,2}/.*)\\.js$": "$1",
-      "^@nestjs/schedule$": "<rootDir>/../test/stubs/nestjs-schedule.stub.ts"
+      "^@nestjs/schedule$": "<rootDir>/test/stubs/nestjs-schedule.stub.ts"
     }
   }
 }

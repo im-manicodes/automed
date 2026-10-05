@@ -15,7 +15,7 @@ import {
   describeTarget,
   isConfirmationValid,
   parseResetArgs,
-} from '../seed/reset-guard';
+} from './reset-guard';
 
 loadRootEnv();
 
@@ -60,7 +60,7 @@ async function main() {
     stdio: 'inherit',
     env: process.env,
   });
-  execFileSync('node', ['dist/cli/db-seed.js'], {
+  execFileSync('pnpm', ['exec', 'prisma', 'db', 'seed'], {
     cwd: apiDir,
     stdio: 'inherit',
     env: process.env,

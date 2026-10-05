@@ -1,10 +1,10 @@
-import type { PrismaClient } from '../generated/prisma/client';
-import type { PasswordService } from '../auth/password.service';
-import { createUser } from '../cli/user-admin';
+import type { PrismaClient } from '../../src/generated/prisma/client';
+import type { PasswordService } from '../../src/auth/password.service';
+import { createUser } from '../../src/cli/user-admin';
 import {
   DEFAULT_TEMPLATE_MARKDOWN,
   DEFAULT_TEMPLATE_NAME,
-} from '../templates/default-template';
+} from '../../src/templates/default-template';
 
 export type SeedDb = Pick<
   PrismaClient,

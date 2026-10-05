@@ -1,6 +1,6 @@
 import type { PrismaClient } from '../generated/prisma/client';
 import type { PasswordService } from '../auth/password.service';
-import { DEMO_PREFIX } from '../seed/demo-constants';
+import { DEMO_PREFIX } from './demo-prefix';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

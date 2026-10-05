@@ -1,7 +1,7 @@
-import type { PrismaClient } from '../generated/prisma/client';
+import type { PrismaClient } from '../../src/generated/prisma/client';
 import { buildDemoDataset } from './demo-data';
 import { DEMO_PREFIX, DEMO_S3_PREFIX } from './demo-constants';
-import { ensureActiveTemplate, type SeedEnv } from './seed-base';
+import { ensureActiveTemplate, type SeedEnv } from './base';
 
 export type DemoDb = Pick<
   PrismaClient,

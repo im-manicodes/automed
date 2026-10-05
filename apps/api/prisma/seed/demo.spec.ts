@@ -5,7 +5,7 @@ import {
   DEMO_SUBJECT_PREFIX,
 } from './demo-constants';
 import { buildDemoDataset } from './demo-data';
-import { cleanDemo, seedDemo, type DemoStorage } from './seed-demo';
+import { cleanDemo, seedDemo, type DemoStorage } from './demo';
 
 const asDb = (d: unknown) => d as any;
 
