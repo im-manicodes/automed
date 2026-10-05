@@ -12,6 +12,7 @@ export interface GraphMessage {
   toRecipients?: GraphRecipient[];
   ccRecipients?: GraphRecipient[];
   receivedDateTime?: string;
+  sentDateTime?: string;
   body?: { contentType?: string; content?: string };
   bodyPreview?: string;
   hasAttachments?: boolean;
@@ -66,7 +67,13 @@ export function bodyToText(m: GraphMessage): string {
   return text.replace(/\r\n/g, '\n').trim();
 }
 
-export function mapMessage(m: GraphMessage) {
+/** true si el remitente es la propia cuenta (comparación sin mayúsculas). */
+export function isFromAccount(m: GraphMessage, accountEmail?: string | null) {
+  const addr = m.from?.emailAddress?.address?.trim().toLowerCase();
+  return !!addr && !!accountEmail && addr === accountEmail.trim().toLowerCase();
+}
+
+export function mapMessage(m: GraphMessage, accountEmail?: string | null) {
   return {
     graphId: m.id,
     conversationId: m.conversationId ?? m.id,
@@ -75,7 +82,9 @@ export function mapMessage(m: GraphMessage) {
     to: (m.toRecipients ?? []).map(formatRecipient).filter(Boolean),
     cc: (m.ccRecipients ?? []).map(formatRecipient).filter(Boolean),
     bodyText: bodyToText(m),
-    receivedAt: new Date(m.receivedDateTime ?? Date.now()),
+    isFromMe: isFromAccount(m, accountEmail),
+    // En Enviados Graph puede traer solo sentDateTime.
+    receivedAt: new Date(m.receivedDateTime ?? m.sentDateTime ?? Date.now()),
     hasAttachments: !!m.hasAttachments,
   };
 }

@@ -23,6 +23,11 @@ export * from './enums.js';
  */
 export type MailAccount = Prisma.MailAccountModel
 /**
+ * Model MailFolderSync
+ * Un deltaLink por carpeta de Graph (inbox, sentitems).
+ */
+export type MailFolderSync = Prisma.MailFolderSyncModel
+/**
  * Model Thread
  * 
  */

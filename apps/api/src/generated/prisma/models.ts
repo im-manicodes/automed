@@ -9,6 +9,7 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/MailAccount.js'
+export type * from './models/MailFolderSync.js'
 export type * from './models/Thread.js'
 export type * from './models/Message.js'
 export type * from './models/Attachment.js'

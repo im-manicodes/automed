@@ -31,6 +31,7 @@ export type MessageMinAggregateOutputType = {
   from: string | null
   subject: string | null
   bodyText: string | null
+  isFromMe: boolean | null
   receivedAt: Date | null
   createdAt: Date | null
 }
@@ -42,6 +43,7 @@ export type MessageMaxAggregateOutputType = {
   from: string | null
   subject: string | null
   bodyText: string | null
+  isFromMe: boolean | null
   receivedAt: Date | null
   createdAt: Date | null
 }
@@ -55,6 +57,7 @@ export type MessageCountAggregateOutputType = {
   cc: number
   subject: number
   bodyText: number
+  isFromMe: number
   receivedAt: number
   createdAt: number
   _all: number
@@ -68,6 +71,7 @@ export type MessageMinAggregateInputType = {
   from?: true
   subject?: true
   bodyText?: true
+  isFromMe?: true
   receivedAt?: true
   createdAt?: true
 }
@@ -79,6 +83,7 @@ export type MessageMaxAggregateInputType = {
   from?: true
   subject?: true
   bodyText?: true
+  isFromMe?: true
   receivedAt?: true
   createdAt?: true
 }
@@ -92,6 +97,7 @@ export type MessageCountAggregateInputType = {
   cc?: true
   subject?: true
   bodyText?: true
+  isFromMe?: true
   receivedAt?: true
   createdAt?: true
   _all?: true
@@ -178,6 +184,7 @@ export type MessageGroupByOutputType = {
   cc: string[]
   subject: string
   bodyText: string
+  isFromMe: boolean
   receivedAt: Date
   createdAt: Date
   _count: MessageCountAggregateOutputType | null
@@ -212,6 +219,7 @@ export type MessageWhereInput = {
   cc?: Prisma.StringNullableListFilter<"Message">
   subject?: Prisma.StringFilter<"Message"> | string
   bodyText?: Prisma.StringFilter<"Message"> | string
+  isFromMe?: Prisma.BoolFilter<"Message"> | boolean
   receivedAt?: Prisma.DateTimeFilter<"Message"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"Message"> | Date | string
   thread?: Prisma.XOR<Prisma.ThreadScalarRelationFilter, Prisma.ThreadWhereInput>
@@ -227,6 +235,7 @@ export type MessageOrderByWithRelationInput = {
   cc?: Prisma.SortOrder
   subject?: Prisma.SortOrder
   bodyText?: Prisma.SortOrder
+  isFromMe?: Prisma.SortOrder
   receivedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   thread?: Prisma.ThreadOrderByWithRelationInput
@@ -245,6 +254,7 @@ export type MessageWhereUniqueInput = Prisma.AtLeast<{
   cc?: Prisma.StringNullableListFilter<"Message">
   subject?: Prisma.StringFilter<"Message"> | string
   bodyText?: Prisma.StringFilter<"Message"> | string
+  isFromMe?: Prisma.BoolFilter<"Message"> | boolean
   receivedAt?: Prisma.DateTimeFilter<"Message"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"Message"> | Date | string
   thread?: Prisma.XOR<Prisma.ThreadScalarRelationFilter, Prisma.ThreadWhereInput>
@@ -260,6 +270,7 @@ export type MessageOrderByWithAggregationInput = {
   cc?: Prisma.SortOrder
   subject?: Prisma.SortOrder
   bodyText?: Prisma.SortOrder
+  isFromMe?: Prisma.SortOrder
   receivedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.MessageCountOrderByAggregateInput
@@ -279,6 +290,7 @@ export type MessageScalarWhereWithAggregatesInput = {
   cc?: Prisma.StringNullableListFilter<"Message">
   subject?: Prisma.StringWithAggregatesFilter<"Message"> | string
   bodyText?: Prisma.StringWithAggregatesFilter<"Message"> | string
+  isFromMe?: Prisma.BoolWithAggregatesFilter<"Message"> | boolean
   receivedAt?: Prisma.DateTimeWithAggregatesFilter<"Message"> | Date | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Message"> | Date | string
 }
@@ -291,6 +303,7 @@ export type MessageCreateInput = {
   cc?: Prisma.MessageCreateccInput | string[]
   subject: string
   bodyText: string
+  isFromMe?: boolean
   receivedAt: Date | string
   createdAt?: Date | string
   thread: Prisma.ThreadCreateNestedOneWithoutMessagesInput
@@ -306,6 +319,7 @@ export type MessageUncheckedCreateInput = {
   cc?: Prisma.MessageCreateccInput | string[]
   subject: string
   bodyText: string
+  isFromMe?: boolean
   receivedAt: Date | string
   createdAt?: Date | string
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutMessageInput
@@ -319,6 +333,7 @@ export type MessageUpdateInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   thread?: Prisma.ThreadUpdateOneRequiredWithoutMessagesNestedInput
@@ -334,6 +349,7 @@ export type MessageUncheckedUpdateInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutMessageNestedInput
@@ -348,6 +364,7 @@ export type MessageCreateManyInput = {
   cc?: Prisma.MessageCreateccInput | string[]
   subject: string
   bodyText: string
+  isFromMe?: boolean
   receivedAt: Date | string
   createdAt?: Date | string
 }
@@ -360,6 +377,7 @@ export type MessageUpdateManyMutationInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -373,6 +391,7 @@ export type MessageUncheckedUpdateManyInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -404,6 +423,7 @@ export type MessageCountOrderByAggregateInput = {
   cc?: Prisma.SortOrder
   subject?: Prisma.SortOrder
   bodyText?: Prisma.SortOrder
+  isFromMe?: Prisma.SortOrder
   receivedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -415,6 +435,7 @@ export type MessageMaxOrderByAggregateInput = {
   from?: Prisma.SortOrder
   subject?: Prisma.SortOrder
   bodyText?: Prisma.SortOrder
+  isFromMe?: Prisma.SortOrder
   receivedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -426,6 +447,7 @@ export type MessageMinOrderByAggregateInput = {
   from?: Prisma.SortOrder
   subject?: Prisma.SortOrder
   bodyText?: Prisma.SortOrder
+  isFromMe?: Prisma.SortOrder
   receivedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
@@ -495,6 +517,10 @@ export type MessageUpdateccInput = {
   push?: string | string[]
 }
 
+export type BoolFieldUpdateOperationsInput = {
+  set?: boolean
+}
+
 export type MessageCreateNestedOneWithoutAttachmentsInput = {
   create?: Prisma.XOR<Prisma.MessageCreateWithoutAttachmentsInput, Prisma.MessageUncheckedCreateWithoutAttachmentsInput>
   connectOrCreate?: Prisma.MessageCreateOrConnectWithoutAttachmentsInput
@@ -517,6 +543,7 @@ export type MessageCreateWithoutThreadInput = {
   cc?: Prisma.MessageCreateccInput | string[]
   subject: string
   bodyText: string
+  isFromMe?: boolean
   receivedAt: Date | string
   createdAt?: Date | string
   attachments?: Prisma.AttachmentCreateNestedManyWithoutMessageInput
@@ -530,6 +557,7 @@ export type MessageUncheckedCreateWithoutThreadInput = {
   cc?: Prisma.MessageCreateccInput | string[]
   subject: string
   bodyText: string
+  isFromMe?: boolean
   receivedAt: Date | string
   createdAt?: Date | string
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutMessageInput
@@ -573,6 +601,7 @@ export type MessageScalarWhereInput = {
   cc?: Prisma.StringNullableListFilter<"Message">
   subject?: Prisma.StringFilter<"Message"> | string
   bodyText?: Prisma.StringFilter<"Message"> | string
+  isFromMe?: Prisma.BoolFilter<"Message"> | boolean
   receivedAt?: Prisma.DateTimeFilter<"Message"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"Message"> | Date | string
 }
@@ -585,6 +614,7 @@ export type MessageCreateWithoutAttachmentsInput = {
   cc?: Prisma.MessageCreateccInput | string[]
   subject: string
   bodyText: string
+  isFromMe?: boolean
   receivedAt: Date | string
   createdAt?: Date | string
   thread: Prisma.ThreadCreateNestedOneWithoutMessagesInput
@@ -599,6 +629,7 @@ export type MessageUncheckedCreateWithoutAttachmentsInput = {
   cc?: Prisma.MessageCreateccInput | string[]
   subject: string
   bodyText: string
+  isFromMe?: boolean
   receivedAt: Date | string
   createdAt?: Date | string
 }
@@ -627,6 +658,7 @@ export type MessageUpdateWithoutAttachmentsInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   thread?: Prisma.ThreadUpdateOneRequiredWithoutMessagesNestedInput
@@ -641,6 +673,7 @@ export type MessageUncheckedUpdateWithoutAttachmentsInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -653,6 +686,7 @@ export type MessageCreateManyThreadInput = {
   cc?: Prisma.MessageCreateccInput | string[]
   subject: string
   bodyText: string
+  isFromMe?: boolean
   receivedAt: Date | string
   createdAt?: Date | string
 }
@@ -665,6 +699,7 @@ export type MessageUpdateWithoutThreadInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   attachments?: Prisma.AttachmentUpdateManyWithoutMessageNestedInput
@@ -678,6 +713,7 @@ export type MessageUncheckedUpdateWithoutThreadInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutMessageNestedInput
@@ -691,6 +727,7 @@ export type MessageUncheckedUpdateManyWithoutThreadInput = {
   cc?: Prisma.MessageUpdateccInput | string[]
   subject?: Prisma.StringFieldUpdateOperationsInput | string
   bodyText?: Prisma.StringFieldUpdateOperationsInput | string
+  isFromMe?: Prisma.BoolFieldUpdateOperationsInput | boolean
   receivedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -735,6 +772,7 @@ export type MessageSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   cc?: boolean
   subject?: boolean
   bodyText?: boolean
+  isFromMe?: boolean
   receivedAt?: boolean
   createdAt?: boolean
   thread?: boolean | Prisma.ThreadDefaultArgs<ExtArgs>
@@ -751,6 +789,7 @@ export type MessageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   cc?: boolean
   subject?: boolean
   bodyText?: boolean
+  isFromMe?: boolean
   receivedAt?: boolean
   createdAt?: boolean
   thread?: boolean | Prisma.ThreadDefaultArgs<ExtArgs>
@@ -765,6 +804,7 @@ export type MessageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   cc?: boolean
   subject?: boolean
   bodyText?: boolean
+  isFromMe?: boolean
   receivedAt?: boolean
   createdAt?: boolean
   thread?: boolean | Prisma.ThreadDefaultArgs<ExtArgs>
@@ -779,11 +819,12 @@ export type MessageSelectScalar = {
   cc?: boolean
   subject?: boolean
   bodyText?: boolean
+  isFromMe?: boolean
   receivedAt?: boolean
   createdAt?: boolean
 }
 
-export type MessageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "threadId" | "graphId" | "from" | "to" | "cc" | "subject" | "bodyText" | "receivedAt" | "createdAt", ExtArgs["result"]["message"]>
+export type MessageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "threadId" | "graphId" | "from" | "to" | "cc" | "subject" | "bodyText" | "isFromMe" | "receivedAt" | "createdAt", ExtArgs["result"]["message"]>
 export type MessageInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   thread?: boolean | Prisma.ThreadDefaultArgs<ExtArgs>
   attachments?: boolean | Prisma.Message$attachmentsArgs<ExtArgs>
@@ -811,6 +852,10 @@ export type $MessagePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     cc: string[]
     subject: string
     bodyText: string
+    /**
+     * true si el remitente es el correo de la cuenta (mensaje enviado por mí)
+     */
+    isFromMe: boolean
     receivedAt: Date
     createdAt: Date
   }, ExtArgs["result"]["message"]>
@@ -1246,6 +1291,7 @@ export interface MessageFieldRefs {
   readonly cc: Prisma.FieldRef<"Message", 'String[]'>
   readonly subject: Prisma.FieldRef<"Message", 'String'>
   readonly bodyText: Prisma.FieldRef<"Message", 'String'>
+  readonly isFromMe: Prisma.FieldRef<"Message", 'Boolean'>
   readonly receivedAt: Prisma.FieldRef<"Message", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"Message", 'DateTime'>
 }

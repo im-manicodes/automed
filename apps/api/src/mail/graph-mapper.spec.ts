@@ -15,6 +15,15 @@ describe('graph-mapper', () => {
     expect(m.bodyText).toBe('cuerpo 1');
   });
 
+  it('isFromMe compara remitente con el correo de la cuenta', () => {
+    expect(mapMessage(msg('1', 'c'), 'yo@x.com').isFromMe).toBe(false);
+    const mine = msg('2', 'c', {
+      from: { emailAddress: { address: 'Yo@X.com' } },
+    });
+    expect(mapMessage(mine, 'yo@x.com').isFromMe).toBe(true);
+    expect(mapMessage(mine).isFromMe).toBe(false);
+  });
+
   it('convierte HTML a texto', () => {
     const t = bodyToText(
       msg('1', 'c', {

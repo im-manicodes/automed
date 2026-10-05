@@ -30,7 +30,7 @@ describe('GraphService', () => {
         json({ value: [msg('2', 'c')], '@odata.deltaLink': 'https://g/delta' }),
       );
     const pages = [];
-    for await (const p of svc.deltaMessages()) pages.push(p);
+    for await (const p of svc.deltaMessages('inbox')) pages.push(p);
     expect(pages.map((p) => p.messages.length)).toEqual([1, 1]);
     expect(pages[0].deltaLink).toBeUndefined();
     expect(pages[1].deltaLink).toBe('https://g/delta');
@@ -41,7 +41,7 @@ describe('GraphService', () => {
     fetchMock
       .mockResolvedValueOnce(json({}, 429, { 'Retry-After': '3' }))
       .mockResolvedValueOnce(json({ value: [], '@odata.deltaLink': 'd' }));
-    for await (const _ of svc.deltaMessages()) void _;
+    for await (const _ of svc.deltaMessages('inbox')) void _;
     expect(svc.sleep).toHaveBeenCalledWith(3000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -54,12 +54,22 @@ describe('GraphService', () => {
     expect(auth.getAccessToken).toHaveBeenCalledWith(true);
   });
 
+  it('usa la carpeta pedida en la URL del delta', async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({ value: [], '@odata.deltaLink': 'd' }),
+    );
+    for await (const _ of svc.deltaMessages('sentitems')) void _;
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      '/mailFolders/sentitems/messages/delta',
+    );
+  });
+
   it('410 => DeltaExpiredError', async () => {
     fetchMock.mockResolvedValueOnce(
       json({ error: { code: 'syncStateNotFound' } }, 410),
     );
     await expect(
-      svc.deltaMessages('https://g/old').next(),
+      svc.deltaMessages('inbox', 'https://g/old').next(),
     ).rejects.toBeInstanceOf(DeltaExpiredError);
   });
 });

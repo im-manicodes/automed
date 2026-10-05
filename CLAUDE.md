@@ -20,7 +20,7 @@ Plan completo: `/home/mani/.claude/plans/necesito-un-peque-o-software-swirling-t
 ## Reglas de trabajo (OBLIGATORIAS)
 1. Cada vez que se ejecute el plan, hacerlo **con subagentes**, eligiendo el modelo más adecuado por tarea: **haiku** (tareas mecánicas), **sonnet 5** (implementación estándar), **sonnet 5.5** (diseño/lógica compleja).
 2. **Antes de cada fase** mostrar al usuario un resumen de lo que se va a ejecutar.
-3. **Durante la ejecución** mostrar progreso cada 3 minutos.
+3. **Durante la ejecución** mostrar una barra de progreso cada 60 segundos (p.ej. `[██████░░░░] 60% — paso actual`).
 4. Todo boilerplate de `apps/api` se genera **siempre con `nest g`** (module, service, controller, interface, etc.); no crear esos archivos a mano.
 5. Actualizar `docs/estado-del-proyecto.md` (hecho / en curso / falta) en cada hito.
 6. No hacer commit salvo que el usuario lo pida.

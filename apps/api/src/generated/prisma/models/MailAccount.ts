@@ -28,7 +28,6 @@ export type MailAccountMinAggregateOutputType = {
   id: string | null
   email: string | null
   tokenEnc: string | null
-  deltaLink: string | null
   lastSyncAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -38,7 +37,6 @@ export type MailAccountMaxAggregateOutputType = {
   id: string | null
   email: string | null
   tokenEnc: string | null
-  deltaLink: string | null
   lastSyncAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -48,7 +46,6 @@ export type MailAccountCountAggregateOutputType = {
   id: number
   email: number
   tokenEnc: number
-  deltaLink: number
   lastSyncAt: number
   createdAt: number
   updatedAt: number
@@ -60,7 +57,6 @@ export type MailAccountMinAggregateInputType = {
   id?: true
   email?: true
   tokenEnc?: true
-  deltaLink?: true
   lastSyncAt?: true
   createdAt?: true
   updatedAt?: true
@@ -70,7 +66,6 @@ export type MailAccountMaxAggregateInputType = {
   id?: true
   email?: true
   tokenEnc?: true
-  deltaLink?: true
   lastSyncAt?: true
   createdAt?: true
   updatedAt?: true
@@ -80,7 +75,6 @@ export type MailAccountCountAggregateInputType = {
   id?: true
   email?: true
   tokenEnc?: true
-  deltaLink?: true
   lastSyncAt?: true
   createdAt?: true
   updatedAt?: true
@@ -163,7 +157,6 @@ export type MailAccountGroupByOutputType = {
   id: string
   email: string
   tokenEnc: string | null
-  deltaLink: string | null
   lastSyncAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -194,22 +187,22 @@ export type MailAccountWhereInput = {
   id?: Prisma.StringFilter<"MailAccount"> | string
   email?: Prisma.StringFilter<"MailAccount"> | string
   tokenEnc?: Prisma.StringNullableFilter<"MailAccount"> | string | null
-  deltaLink?: Prisma.StringNullableFilter<"MailAccount"> | string | null
   lastSyncAt?: Prisma.DateTimeNullableFilter<"MailAccount"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"MailAccount"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MailAccount"> | Date | string
   threads?: Prisma.ThreadListRelationFilter
+  folderSyncs?: Prisma.MailFolderSyncListRelationFilter
 }
 
 export type MailAccountOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   tokenEnc?: Prisma.SortOrderInput | Prisma.SortOrder
-  deltaLink?: Prisma.SortOrderInput | Prisma.SortOrder
   lastSyncAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   threads?: Prisma.ThreadOrderByRelationAggregateInput
+  folderSyncs?: Prisma.MailFolderSyncOrderByRelationAggregateInput
 }
 
 export type MailAccountWhereUniqueInput = Prisma.AtLeast<{
@@ -219,18 +212,17 @@ export type MailAccountWhereUniqueInput = Prisma.AtLeast<{
   OR?: Prisma.MailAccountWhereInput[]
   NOT?: Prisma.MailAccountWhereInput | Prisma.MailAccountWhereInput[]
   tokenEnc?: Prisma.StringNullableFilter<"MailAccount"> | string | null
-  deltaLink?: Prisma.StringNullableFilter<"MailAccount"> | string | null
   lastSyncAt?: Prisma.DateTimeNullableFilter<"MailAccount"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"MailAccount"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MailAccount"> | Date | string
   threads?: Prisma.ThreadListRelationFilter
+  folderSyncs?: Prisma.MailFolderSyncListRelationFilter
 }, "id" | "email">
 
 export type MailAccountOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   tokenEnc?: Prisma.SortOrderInput | Prisma.SortOrder
-  deltaLink?: Prisma.SortOrderInput | Prisma.SortOrder
   lastSyncAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -246,7 +238,6 @@ export type MailAccountScalarWhereWithAggregatesInput = {
   id?: Prisma.StringWithAggregatesFilter<"MailAccount"> | string
   email?: Prisma.StringWithAggregatesFilter<"MailAccount"> | string
   tokenEnc?: Prisma.StringNullableWithAggregatesFilter<"MailAccount"> | string | null
-  deltaLink?: Prisma.StringNullableWithAggregatesFilter<"MailAccount"> | string | null
   lastSyncAt?: Prisma.DateTimeNullableWithAggregatesFilter<"MailAccount"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"MailAccount"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"MailAccount"> | Date | string
@@ -256,51 +247,50 @@ export type MailAccountCreateInput = {
   id?: string
   email: string
   tokenEnc?: string | null
-  deltaLink?: string | null
   lastSyncAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   threads?: Prisma.ThreadCreateNestedManyWithoutAccountInput
+  folderSyncs?: Prisma.MailFolderSyncCreateNestedManyWithoutAccountInput
 }
 
 export type MailAccountUncheckedCreateInput = {
   id?: string
   email: string
   tokenEnc?: string | null
-  deltaLink?: string | null
   lastSyncAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   threads?: Prisma.ThreadUncheckedCreateNestedManyWithoutAccountInput
+  folderSyncs?: Prisma.MailFolderSyncUncheckedCreateNestedManyWithoutAccountInput
 }
 
 export type MailAccountUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   tokenEnc?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  deltaLink?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lastSyncAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   threads?: Prisma.ThreadUpdateManyWithoutAccountNestedInput
+  folderSyncs?: Prisma.MailFolderSyncUpdateManyWithoutAccountNestedInput
 }
 
 export type MailAccountUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   tokenEnc?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  deltaLink?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lastSyncAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   threads?: Prisma.ThreadUncheckedUpdateManyWithoutAccountNestedInput
+  folderSyncs?: Prisma.MailFolderSyncUncheckedUpdateManyWithoutAccountNestedInput
 }
 
 export type MailAccountCreateManyInput = {
   id?: string
   email: string
   tokenEnc?: string | null
-  deltaLink?: string | null
   lastSyncAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -310,7 +300,6 @@ export type MailAccountUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   tokenEnc?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  deltaLink?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lastSyncAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -320,7 +309,6 @@ export type MailAccountUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   tokenEnc?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  deltaLink?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lastSyncAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -330,7 +318,6 @@ export type MailAccountCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   tokenEnc?: Prisma.SortOrder
-  deltaLink?: Prisma.SortOrder
   lastSyncAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -340,7 +327,6 @@ export type MailAccountMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   tokenEnc?: Prisma.SortOrder
-  deltaLink?: Prisma.SortOrder
   lastSyncAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -350,7 +336,6 @@ export type MailAccountMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   tokenEnc?: Prisma.SortOrder
-  deltaLink?: Prisma.SortOrder
   lastSyncAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -377,6 +362,20 @@ export type DateTimeFieldUpdateOperationsInput = {
   set?: Date | string
 }
 
+export type MailAccountCreateNestedOneWithoutFolderSyncsInput = {
+  create?: Prisma.XOR<Prisma.MailAccountCreateWithoutFolderSyncsInput, Prisma.MailAccountUncheckedCreateWithoutFolderSyncsInput>
+  connectOrCreate?: Prisma.MailAccountCreateOrConnectWithoutFolderSyncsInput
+  connect?: Prisma.MailAccountWhereUniqueInput
+}
+
+export type MailAccountUpdateOneRequiredWithoutFolderSyncsNestedInput = {
+  create?: Prisma.XOR<Prisma.MailAccountCreateWithoutFolderSyncsInput, Prisma.MailAccountUncheckedCreateWithoutFolderSyncsInput>
+  connectOrCreate?: Prisma.MailAccountCreateOrConnectWithoutFolderSyncsInput
+  upsert?: Prisma.MailAccountUpsertWithoutFolderSyncsInput
+  connect?: Prisma.MailAccountWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.MailAccountUpdateToOneWithWhereWithoutFolderSyncsInput, Prisma.MailAccountUpdateWithoutFolderSyncsInput>, Prisma.MailAccountUncheckedUpdateWithoutFolderSyncsInput>
+}
+
 export type MailAccountCreateNestedOneWithoutThreadsInput = {
   create?: Prisma.XOR<Prisma.MailAccountCreateWithoutThreadsInput, Prisma.MailAccountUncheckedCreateWithoutThreadsInput>
   connectOrCreate?: Prisma.MailAccountCreateOrConnectWithoutThreadsInput
@@ -391,24 +390,80 @@ export type MailAccountUpdateOneRequiredWithoutThreadsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.MailAccountUpdateToOneWithWhereWithoutThreadsInput, Prisma.MailAccountUpdateWithoutThreadsInput>, Prisma.MailAccountUncheckedUpdateWithoutThreadsInput>
 }
 
+export type MailAccountCreateWithoutFolderSyncsInput = {
+  id?: string
+  email: string
+  tokenEnc?: string | null
+  lastSyncAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  threads?: Prisma.ThreadCreateNestedManyWithoutAccountInput
+}
+
+export type MailAccountUncheckedCreateWithoutFolderSyncsInput = {
+  id?: string
+  email: string
+  tokenEnc?: string | null
+  lastSyncAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  threads?: Prisma.ThreadUncheckedCreateNestedManyWithoutAccountInput
+}
+
+export type MailAccountCreateOrConnectWithoutFolderSyncsInput = {
+  where: Prisma.MailAccountWhereUniqueInput
+  create: Prisma.XOR<Prisma.MailAccountCreateWithoutFolderSyncsInput, Prisma.MailAccountUncheckedCreateWithoutFolderSyncsInput>
+}
+
+export type MailAccountUpsertWithoutFolderSyncsInput = {
+  update: Prisma.XOR<Prisma.MailAccountUpdateWithoutFolderSyncsInput, Prisma.MailAccountUncheckedUpdateWithoutFolderSyncsInput>
+  create: Prisma.XOR<Prisma.MailAccountCreateWithoutFolderSyncsInput, Prisma.MailAccountUncheckedCreateWithoutFolderSyncsInput>
+  where?: Prisma.MailAccountWhereInput
+}
+
+export type MailAccountUpdateToOneWithWhereWithoutFolderSyncsInput = {
+  where?: Prisma.MailAccountWhereInput
+  data: Prisma.XOR<Prisma.MailAccountUpdateWithoutFolderSyncsInput, Prisma.MailAccountUncheckedUpdateWithoutFolderSyncsInput>
+}
+
+export type MailAccountUpdateWithoutFolderSyncsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  tokenEnc?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastSyncAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  threads?: Prisma.ThreadUpdateManyWithoutAccountNestedInput
+}
+
+export type MailAccountUncheckedUpdateWithoutFolderSyncsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  tokenEnc?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastSyncAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  threads?: Prisma.ThreadUncheckedUpdateManyWithoutAccountNestedInput
+}
+
 export type MailAccountCreateWithoutThreadsInput = {
   id?: string
   email: string
   tokenEnc?: string | null
-  deltaLink?: string | null
   lastSyncAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  folderSyncs?: Prisma.MailFolderSyncCreateNestedManyWithoutAccountInput
 }
 
 export type MailAccountUncheckedCreateWithoutThreadsInput = {
   id?: string
   email: string
   tokenEnc?: string | null
-  deltaLink?: string | null
   lastSyncAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  folderSyncs?: Prisma.MailFolderSyncUncheckedCreateNestedManyWithoutAccountInput
 }
 
 export type MailAccountCreateOrConnectWithoutThreadsInput = {
@@ -431,20 +486,20 @@ export type MailAccountUpdateWithoutThreadsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   tokenEnc?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  deltaLink?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lastSyncAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  folderSyncs?: Prisma.MailFolderSyncUpdateManyWithoutAccountNestedInput
 }
 
 export type MailAccountUncheckedUpdateWithoutThreadsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   tokenEnc?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  deltaLink?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lastSyncAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  folderSyncs?: Prisma.MailFolderSyncUncheckedUpdateManyWithoutAccountNestedInput
 }
 
 
@@ -454,10 +509,12 @@ export type MailAccountUncheckedUpdateWithoutThreadsInput = {
 
 export type MailAccountCountOutputType = {
   threads: number
+  folderSyncs: number
 }
 
 export type MailAccountCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   threads?: boolean | MailAccountCountOutputTypeCountThreadsArgs
+  folderSyncs?: boolean | MailAccountCountOutputTypeCountFolderSyncsArgs
 }
 
 /**
@@ -477,16 +534,23 @@ export type MailAccountCountOutputTypeCountThreadsArgs<ExtArgs extends runtime.T
   where?: Prisma.ThreadWhereInput
 }
 
+/**
+ * MailAccountCountOutputType without action
+ */
+export type MailAccountCountOutputTypeCountFolderSyncsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.MailFolderSyncWhereInput
+}
+
 
 export type MailAccountSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   email?: boolean
   tokenEnc?: boolean
-  deltaLink?: boolean
   lastSyncAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   threads?: boolean | Prisma.MailAccount$threadsArgs<ExtArgs>
+  folderSyncs?: boolean | Prisma.MailAccount$folderSyncsArgs<ExtArgs>
   _count?: boolean | Prisma.MailAccountCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["mailAccount"]>
 
@@ -494,7 +558,6 @@ export type MailAccountSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   id?: boolean
   email?: boolean
   tokenEnc?: boolean
-  deltaLink?: boolean
   lastSyncAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -504,7 +567,6 @@ export type MailAccountSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   id?: boolean
   email?: boolean
   tokenEnc?: boolean
-  deltaLink?: boolean
   lastSyncAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -514,15 +576,15 @@ export type MailAccountSelectScalar = {
   id?: boolean
   email?: boolean
   tokenEnc?: boolean
-  deltaLink?: boolean
   lastSyncAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type MailAccountOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "tokenEnc" | "deltaLink" | "lastSyncAt" | "createdAt" | "updatedAt", ExtArgs["result"]["mailAccount"]>
+export type MailAccountOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "tokenEnc" | "lastSyncAt" | "createdAt" | "updatedAt", ExtArgs["result"]["mailAccount"]>
 export type MailAccountInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   threads?: boolean | Prisma.MailAccount$threadsArgs<ExtArgs>
+  folderSyncs?: boolean | Prisma.MailAccount$folderSyncsArgs<ExtArgs>
   _count?: boolean | Prisma.MailAccountCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type MailAccountIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -532,6 +594,7 @@ export type $MailAccountPayload<ExtArgs extends runtime.Types.Extensions.Interna
   name: "MailAccount"
   objects: {
     threads: Prisma.$ThreadPayload<ExtArgs>[]
+    folderSyncs: Prisma.$MailFolderSyncPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -540,7 +603,6 @@ export type $MailAccountPayload<ExtArgs extends runtime.Types.Extensions.Interna
      * Refresh token cifrado (AES-GCM)
      */
     tokenEnc: string | null
-    deltaLink: string | null
     lastSyncAt: Date | null
     createdAt: Date
     updatedAt: Date
@@ -939,6 +1001,7 @@ readonly fields: MailAccountFieldRefs;
 export interface Prisma__MailAccountClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   threads<T extends Prisma.MailAccount$threadsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.MailAccount$threadsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ThreadPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  folderSyncs<T extends Prisma.MailAccount$folderSyncsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.MailAccount$folderSyncsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MailFolderSyncPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -971,7 +1034,6 @@ export interface MailAccountFieldRefs {
   readonly id: Prisma.FieldRef<"MailAccount", 'String'>
   readonly email: Prisma.FieldRef<"MailAccount", 'String'>
   readonly tokenEnc: Prisma.FieldRef<"MailAccount", 'String'>
-  readonly deltaLink: Prisma.FieldRef<"MailAccount", 'String'>
   readonly lastSyncAt: Prisma.FieldRef<"MailAccount", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"MailAccount", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"MailAccount", 'DateTime'>
@@ -1389,6 +1451,30 @@ export type MailAccount$threadsArgs<ExtArgs extends runtime.Types.Extensions.Int
   take?: number
   skip?: number
   distinct?: Prisma.ThreadScalarFieldEnum | Prisma.ThreadScalarFieldEnum[]
+}
+
+/**
+ * MailAccount.folderSyncs
+ */
+export type MailAccount$folderSyncsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the MailFolderSync
+   */
+  select?: Prisma.MailFolderSyncSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the MailFolderSync
+   */
+  omit?: Prisma.MailFolderSyncOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.MailFolderSyncInclude<ExtArgs> | null
+  where?: Prisma.MailFolderSyncWhereInput
+  orderBy?: Prisma.MailFolderSyncOrderByWithRelationInput | Prisma.MailFolderSyncOrderByWithRelationInput[]
+  cursor?: Prisma.MailFolderSyncWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.MailFolderSyncScalarFieldEnum | Prisma.MailFolderSyncScalarFieldEnum[]
 }
 
 /**

@@ -52,6 +52,7 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   MailAccount: 'MailAccount',
+  MailFolderSync: 'MailFolderSync',
   Thread: 'Thread',
   Message: 'Message',
   Attachment: 'Attachment',
@@ -82,13 +83,23 @@ export const MailAccountScalarFieldEnum = {
   id: 'id',
   email: 'email',
   tokenEnc: 'tokenEnc',
-  deltaLink: 'deltaLink',
   lastSyncAt: 'lastSyncAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type MailAccountScalarFieldEnum = (typeof MailAccountScalarFieldEnum)[keyof typeof MailAccountScalarFieldEnum]
+
+
+export const MailFolderSyncScalarFieldEnum = {
+  id: 'id',
+  accountId: 'accountId',
+  folder: 'folder',
+  deltaLink: 'deltaLink',
+  updatedAt: 'updatedAt'
+} as const
+
+export type MailFolderSyncScalarFieldEnum = (typeof MailFolderSyncScalarFieldEnum)[keyof typeof MailFolderSyncScalarFieldEnum]
 
 
 export const ThreadScalarFieldEnum = {
@@ -115,6 +126,7 @@ export const MessageScalarFieldEnum = {
   cc: 'cc',
   subject: 'subject',
   bodyText: 'bodyText',
+  isFromMe: 'isFromMe',
   receivedAt: 'receivedAt',
   createdAt: 'createdAt'
 } as const

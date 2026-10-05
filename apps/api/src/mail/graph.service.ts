@@ -4,11 +4,14 @@ import { GraphAttachment, GraphMessage, GraphPage } from './graph-mapper';
 
 const BASE = 'https://graph.microsoft.com/v1.0';
 const SELECT =
-  'id,conversationId,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,isDraft';
+  'id,conversationId,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,body,bodyPreview,hasAttachments,isDraft';
 const MAX_RETRIES = 5;
 
 /** El deltaLink guardado ya no es válido (410 Gone): hay que reiniciar el delta. */
 export class DeltaExpiredError extends Error {}
+
+export const MAIL_FOLDERS = ['inbox', 'sentitems'] as const;
+export type MailFolder = (typeof MAIL_FOLDERS)[number];
 
 export interface DeltaPage {
   messages: GraphMessage[];
@@ -69,13 +72,16 @@ export class GraphService {
   }
 
   /**
-   * Recorre las páginas del delta de Inbox. Con deltaLink continúa desde ahí;
+   * Recorre las páginas del delta de una carpeta (inbox o sentitems). Con deltaLink continúa desde ahí;
    * sin él, empieza un delta completo. Lanza DeltaExpiredError si el link expiró.
    */
-  async *deltaMessages(deltaLink?: string | null): AsyncGenerator<DeltaPage> {
+  async *deltaMessages(
+    folder: MailFolder,
+    deltaLink?: string | null,
+  ): AsyncGenerator<DeltaPage> {
     let url =
       deltaLink ??
-      `${BASE}/me/mailFolders/inbox/messages/delta?$select=${SELECT}`;
+      `${BASE}/me/mailFolders/${folder}/messages/delta?$select=${SELECT}`;
     const headers = {
       Prefer: 'odata.maxpagesize=25, outlook.body-content-type="text"',
     };

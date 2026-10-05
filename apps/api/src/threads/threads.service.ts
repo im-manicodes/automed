@@ -49,6 +49,7 @@ export class ThreadsService {
       subject: t.subject,
       status: t.status,
       lastMessageAt: t.lastMessageAt,
+      // incluye isFromMe (mensaje propio) en cada mensaje
       messages: t.messages,
     };
   }

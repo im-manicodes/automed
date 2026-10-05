@@ -26,11 +26,23 @@ model MailAccount {
   email        String   @unique
   /// Refresh token cifrado (AES-GCM)
   tokenEnc     String?
-  deltaLink    String?
   lastSyncAt   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   threads      Thread[]
+  folderSyncs  MailFolderSync[]
+}
+
+/// Un deltaLink por carpeta de Graph (inbox, sentitems).
+model MailFolderSync {
+  id         String      @id @default(uuid())
+  accountId  String
+  folder     String
+  deltaLink  String?
+  updatedAt  DateTime    @updatedAt
+  account    MailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, folder])
 }
 
 model Thread {
@@ -59,6 +71,8 @@ model Message {
   cc          String[]
   subject     String
   bodyText    String
+  /// true si el remitente es el correo de la cuenta (mensaje enviado por mí)
+  isFromMe    Boolean      @default(false)
   receivedAt  DateTime
   createdAt   DateTime     @default(now())
   thread      Thread       @relation(fields: [threadId], references: [id], onDelete: Cascade)

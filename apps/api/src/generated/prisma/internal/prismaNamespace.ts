@@ -398,6 +398,7 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   MailAccount: 'MailAccount',
+  MailFolderSync: 'MailFolderSync',
   Thread: 'Thread',
   Message: 'Message',
   Attachment: 'Attachment',
@@ -421,7 +422,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "mailAccount" | "thread" | "message" | "attachment" | "ocrPage" | "ocrRegion" | "synthesis" | "template" | "setting"
+    modelProps: "mailAccount" | "mailFolderSync" | "thread" | "message" | "attachment" | "ocrPage" | "ocrRegion" | "synthesis" | "template" | "setting"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -496,6 +497,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.MailAccountCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.MailAccountCountAggregateOutputType> | number
+        }
+      }
+    }
+    MailFolderSync: {
+      payload: Prisma.$MailFolderSyncPayload<ExtArgs>
+      fields: Prisma.MailFolderSyncFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.MailFolderSyncFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.MailFolderSyncFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>
+        }
+        findFirst: {
+          args: Prisma.MailFolderSyncFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.MailFolderSyncFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>
+        }
+        findMany: {
+          args: Prisma.MailFolderSyncFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>[]
+        }
+        create: {
+          args: Prisma.MailFolderSyncCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>
+        }
+        createMany: {
+          args: Prisma.MailFolderSyncCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.MailFolderSyncCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>[]
+        }
+        delete: {
+          args: Prisma.MailFolderSyncDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>
+        }
+        update: {
+          args: Prisma.MailFolderSyncUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>
+        }
+        deleteMany: {
+          args: Prisma.MailFolderSyncDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.MailFolderSyncUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.MailFolderSyncUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>[]
+        }
+        upsert: {
+          args: Prisma.MailFolderSyncUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MailFolderSyncPayload>
+        }
+        aggregate: {
+          args: Prisma.MailFolderSyncAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateMailFolderSync>
+        }
+        groupBy: {
+          args: Prisma.MailFolderSyncGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MailFolderSyncGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.MailFolderSyncCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MailFolderSyncCountAggregateOutputType> | number
         }
       }
     }
@@ -1134,13 +1209,23 @@ export const MailAccountScalarFieldEnum = {
   id: 'id',
   email: 'email',
   tokenEnc: 'tokenEnc',
-  deltaLink: 'deltaLink',
   lastSyncAt: 'lastSyncAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type MailAccountScalarFieldEnum = (typeof MailAccountScalarFieldEnum)[keyof typeof MailAccountScalarFieldEnum]
+
+
+export const MailFolderSyncScalarFieldEnum = {
+  id: 'id',
+  accountId: 'accountId',
+  folder: 'folder',
+  deltaLink: 'deltaLink',
+  updatedAt: 'updatedAt'
+} as const
+
+export type MailFolderSyncScalarFieldEnum = (typeof MailFolderSyncScalarFieldEnum)[keyof typeof MailFolderSyncScalarFieldEnum]
 
 
 export const ThreadScalarFieldEnum = {
@@ -1167,6 +1252,7 @@ export const MessageScalarFieldEnum = {
   cc: 'cc',
   subject: 'subject',
   bodyText: 'bodyText',
+  isFromMe: 'isFromMe',
   receivedAt: 'receivedAt',
   createdAt: 'createdAt'
 } as const
@@ -1343,6 +1429,13 @@ export type ListEnumProcessStatusFieldRefInput<$PrismaModel> = FieldRefInputType
 
 
 /**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+/**
  * Reference to a field of type 'Int'
  */
 export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
@@ -1381,13 +1474,6 @@ export type EnumRegionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$Pri
  * Reference to a field of type 'RegionStatus[]'
  */
 export type ListEnumRegionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RegionStatus[]'>
-    
-
-
-/**
- * Reference to a field of type 'Boolean'
- */
-export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
     
 
 
@@ -1556,6 +1642,7 @@ export interface PrismaClientOptionsWithAdapter extends PrismaClientBaseOptions 
 export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaClientOptionsWithAdapter
 export type GlobalOmitConfig = {
   mailAccount?: Prisma.MailAccountOmit
+  mailFolderSync?: Prisma.MailFolderSyncOmit
   thread?: Prisma.ThreadOmit
   message?: Prisma.MessageOmit
   attachment?: Prisma.AttachmentOmit

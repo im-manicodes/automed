@@ -16,9 +16,9 @@ function fakePrisma() {
       id: 'acc',
       email: 'yo@x.com',
       tokenEnc: 'enc',
-      deltaLink: null as string | null,
       lastSyncAt: null as Date | null,
     },
+    folders: {} as Record<string, string | null>,
     threads: [] as any[],
     messages: [] as any[],
     attachments: [] as any[],
@@ -27,6 +27,16 @@ function fakePrisma() {
     mailAccount: {
       findFirst: async () => db.account,
       update: async ({ data }: any) => Object.assign(db.account, data),
+    },
+    mailFolderSync: {
+      findUnique: async ({ where }: any) => {
+        const f = where.accountId_folder.folder;
+        return f in db.folders ? { folder: f, deltaLink: db.folders[f] } : null;
+      },
+      upsert: async ({ where, create, update }: any) => {
+        const f = where.accountId_folder.folder;
+        db.folders[f] = (f in db.folders ? update : create).deltaLink;
+      },
     },
     thread: {
       upsert: async ({ where, create }: any) => {
@@ -84,7 +94,7 @@ function setup(graphOverrides: Partial<Record<keyof GraphService, any>> = {}) {
     }),
   } as unknown as StorageService;
   const graph = {
-    deltaMessages: jest.fn(),
+    deltaMessages: jest.fn(() => pages({ messages: [], deltaLink: 'sent0' })),
     listAttachments: jest.fn().mockResolvedValue([]),
     downloadAttachment: jest.fn(),
     ...graphOverrides,
@@ -106,10 +116,23 @@ async function* pages(...p: any[]) {
   for (const x of p) yield x;
 }
 
+/** Inbox devuelve `inbox`; Enviados devuelve una página vacía con su propio deltaLink. */
+function mockInbox(graph: any, inbox: any) {
+  graph.deltaMessages.mockImplementation((folder: string) =>
+    folder === 'inbox' ? inbox : pages({ messages: [], deltaLink: 'sent0' }),
+  );
+}
+function mockInboxImpl(graph: any, make: () => any) {
+  graph.deltaMessages.mockImplementation((folder: string) =>
+    folder === 'inbox' ? make() : pages({ messages: [], deltaLink: 'sent0' }),
+  );
+}
+
 describe('MailSyncService', () => {
   it('agrupa mensajes por conversationId en un Thread y guarda deltaLink', async () => {
     const { svc, db, graph } = setup();
-    graph.deltaMessages.mockReturnValue(
+    mockInbox(
+      graph,
       pages(
         {
           messages: [
@@ -129,24 +152,25 @@ describe('MailSyncService', () => {
     expect(db.threads[0].lastMessageAt.toISOString()).toBe(
       '2026-10-02T10:00:00.000Z',
     );
-    expect(db.account.deltaLink).toBe('https://g/delta1');
+    expect(db.folders.inbox).toBe('https://g/delta1');
   });
 
   it('es idempotente: repetir el mismo mensaje no duplica', async () => {
     const { svc, db, graph } = setup();
-    graph.deltaMessages.mockImplementation(() =>
+    mockInboxImpl(graph, () =>
       pages({ messages: [msg('1', 'c')], deltaLink: 'd' }),
     );
     await svc.syncNow();
     const r = await svc.syncNow();
     expect(r.newMessages).toBe(0);
     expect(db.messages).toHaveLength(1);
-    expect(graph.deltaMessages).toHaveBeenLastCalledWith('d');
+    expect(graph.deltaMessages).toHaveBeenCalledWith('inbox', 'd');
   });
 
   it('guarda todos los PDFs de un mensaje, ignora no-PDF y borradores', async () => {
     const { svc, db, graph, puts } = setup();
-    graph.deltaMessages.mockReturnValue(
+    mockInbox(
+      graph,
       pages({
         messages: [
           msg('1', 'c', { hasAttachments: true }),
@@ -181,7 +205,8 @@ describe('MailSyncService', () => {
 
   it('deduplica por hash: mismo PDF reenviado no se vuelve a subir', async () => {
     const { svc, db, graph, puts } = setup();
-    graph.deltaMessages.mockReturnValue(
+    mockInbox(
+      graph,
       pages({
         messages: [
           msg('1', 'c', { hasAttachments: true }),
@@ -203,7 +228,7 @@ describe('MailSyncService', () => {
 
   it('no re-descarga adjuntos ya guardados', async () => {
     const { svc, graph } = setup();
-    graph.deltaMessages.mockImplementation(() =>
+    mockInboxImpl(graph, () =>
       pages({
         messages: [msg('1', 'c', { hasAttachments: true })],
         deltaLink: 'd',
@@ -218,7 +243,7 @@ describe('MailSyncService', () => {
 
   it('deltaLink expirado: reinicia con delta completo', async () => {
     const { svc, db, graph } = setup();
-    db.account.deltaLink = 'https://g/viejo';
+    db.folders.inbox = 'https://g/viejo';
     graph.deltaMessages
       .mockImplementationOnce(() =>
         (async function* () {
@@ -231,15 +256,73 @@ describe('MailSyncService', () => {
       );
     const r = await svc.syncNow();
     expect(r.resetDelta).toBe(true);
-    expect(graph.deltaMessages).toHaveBeenLastCalledWith(null);
-    expect(db.account.deltaLink).toBe('nuevo');
+    expect(graph.deltaMessages).toHaveBeenCalledWith('inbox', null);
+    expect(db.folders.inbox).toBe('nuevo');
+  });
+
+  it('sincroniza inbox y enviados en un mismo hilo, con isFromMe y deltaLink por carpeta', async () => {
+    const { svc, db, graph } = setup();
+    const mine = {
+      from: { emailAddress: { name: 'Yo', address: 'YO@x.com' } },
+      toRecipients: [
+        { emailAddress: { name: 'Dra. Ana', address: 'ana@clinica.mx' } },
+      ],
+      receivedDateTime: undefined,
+      sentDateTime: '2026-10-03T10:00:00Z',
+    };
+    graph.deltaMessages.mockImplementation((folder: string) =>
+      folder === 'inbox'
+        ? pages({ messages: [msg('in1', 'cA')], deltaLink: 'dIn' })
+        : pages({
+            messages: [
+              msg('out1', 'cA', mine),
+              msg('out2', 'cNuevo', { ...mine, subject: 'RE: nuevo' }),
+            ],
+            deltaLink: 'dSent',
+          }),
+    );
+    const r = await svc.syncNow();
+    expect(r.newMessages).toBe(3);
+    expect(db.threads).toHaveLength(2); // el enviado crea ticket si no existía
+    const a = db.threads.find((t) => t.conversationId === 'cA');
+    const inA = db.messages.filter((m) => m.threadId === a.id);
+    expect(inA.map((m) => [m.graphId, m.isFromMe])).toEqual([
+      ['in1', false],
+      ['out1', true],
+    ]);
+    expect(a.lastMessageAt.toISOString()).toBe('2026-10-03T10:00:00.000Z');
+    expect(db.folders).toEqual({ inbox: 'dIn', sentitems: 'dSent' });
+    await svc.syncNow();
+    expect(graph.deltaMessages).toHaveBeenCalledWith('inbox', 'dIn');
+    expect(graph.deltaMessages).toHaveBeenCalledWith('sentitems', 'dSent');
+  });
+
+  it('adjuntos PDF de enviados: sha256 y dedupe contra el inbox', async () => {
+    const { svc, db, graph, puts } = setup();
+    graph.listAttachments.mockImplementation(async (m: string) => [
+      pdfAtt(`att-${m}`),
+    ]);
+    graph.downloadAttachment.mockResolvedValue(bytesOf('igual'));
+    graph.deltaMessages.mockImplementation((folder: string) =>
+      pages({
+        messages: [
+          msg(folder === 'inbox' ? 'i' : 's', 'c', { hasAttachments: true }),
+        ],
+        deltaLink: 'd',
+      }),
+    );
+    const r = await svc.syncNow();
+    expect(db.attachments).toHaveLength(2);
+    expect(db.attachments[1].sha256).toBe(sha('igual'));
+    expect(puts).toHaveLength(1);
+    expect(r.deduped).toBe(1);
   });
 
   it('no se solapa: segunda llamada concurrente no arranca', async () => {
     const { svc, graph } = setup();
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    graph.deltaMessages.mockImplementation(() =>
+    mockInboxImpl(graph, () =>
       (async function* () {
         await gate;
         yield { messages: [], deltaLink: 'd' };
@@ -256,7 +339,7 @@ describe('MailSyncService', () => {
 
   it('reporta error sin lanzar y libera el candado', async () => {
     const { svc, graph } = setup();
-    graph.deltaMessages.mockImplementation(() =>
+    mockInboxImpl(graph, () =>
       (async function* () {
         throw new Error('boom');
         yield undefined;

@@ -9,7 +9,12 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { DeltaExpiredError, GraphService } from './graph.service';
+import {
+  DeltaExpiredError,
+  GraphService,
+  MAIL_FOLDERS,
+  MailFolder,
+} from './graph.service';
 import { GraphMessage, isPdfAttachment, mapMessage } from './graph-mapper';
 
 export interface SyncResult {
@@ -73,18 +78,34 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
         result.error = 'No hay cuenta conectada';
         return result;
       }
-      try {
-        await this.runDelta(account.id, account.deltaLink, result);
-      } catch (e) {
-        if (!(e instanceof DeltaExpiredError)) throw e;
-        // deltaLink expirado: se descarta y se hace un delta completo (idempotente).
-        result.resetDelta = true;
-        await this.prisma.mailAccount.update({
-          where: { id: account.id },
-          data: { deltaLink: null },
+      for (const folder of MAIL_FOLDERS) {
+        const key = { accountId_folder: { accountId: account.id, folder } };
+        const state = await this.prisma.mailFolderSync.findUnique({
+          where: key,
         });
-        await this.runDelta(account.id, null, result);
+        try {
+          await this.runDelta(
+            account,
+            folder,
+            state?.deltaLink ?? null,
+            result,
+          );
+        } catch (e) {
+          if (!(e instanceof DeltaExpiredError)) throw e;
+          // deltaLink expirado: se descarta y se hace un delta completo (idempotente).
+          result.resetDelta = true;
+          await this.prisma.mailFolderSync.upsert({
+            where: key,
+            create: { accountId: account.id, folder, deltaLink: null },
+            update: { deltaLink: null },
+          });
+          await this.runDelta(account, folder, null, result);
+        }
       }
+      await this.prisma.mailAccount.update({
+        where: { id: account.id },
+        data: { lastSyncAt: new Date() },
+      });
     } catch (e) {
       result.error = e instanceof Error ? e.message : 'Error desconocido';
       this.logger.error(`Sync falló: ${result.error}`);
@@ -96,34 +117,36 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async runDelta(
-    accountId: string,
+    account: { id: string; email: string },
+    folder: MailFolder,
     deltaLink: string | null,
     result: SyncResult,
   ) {
     let finalLink: string | undefined;
-    for await (const page of this.graph.deltaMessages(deltaLink)) {
+    for await (const page of this.graph.deltaMessages(folder, deltaLink)) {
       for (const m of page.messages) {
         if (m['@removed'] || m.isDraft) continue;
-        await this.processMessage(accountId, m, result);
+        await this.processMessage(account, m, result);
       }
       if (page.deltaLink) finalLink = page.deltaLink;
     }
     // El deltaLink solo se guarda tras recorrer todo: si falla a mitad se repite (idempotente).
-    await this.prisma.mailAccount.update({
-      where: { id: accountId },
-      data: {
-        ...(finalLink ? { deltaLink: finalLink } : {}),
-        lastSyncAt: new Date(),
-      },
-    });
+    if (finalLink) {
+      await this.prisma.mailFolderSync.upsert({
+        where: { accountId_folder: { accountId: account.id, folder } },
+        create: { accountId: account.id, folder, deltaLink: finalLink },
+        update: { deltaLink: finalLink },
+      });
+    }
   }
 
   private async processMessage(
-    accountId: string,
+    account: { id: string; email: string },
     raw: GraphMessage,
     result: SyncResult,
   ) {
-    const m = mapMessage(raw);
+    const accountId = account.id;
+    const m = mapMessage(raw, account.email);
     result.messages++;
 
     const existing = await this.prisma.message.findUnique({
@@ -162,6 +185,7 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
           cc: m.cc,
           subject: m.subject,
           bodyText: m.bodyText,
+          isFromMe: m.isFromMe,
           receivedAt: m.receivedAt,
         },
       });
