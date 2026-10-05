@@ -15,10 +15,14 @@ import { ReviewModule } from './review/review.module';
 import { SettingsModule } from './settings/settings.module';
 import { StorageModule } from './storage/storage.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['../../.env', '.env'],
+    }),
     ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
@@ -32,6 +36,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ReviewModule,
     SettingsModule,
     StorageModule,
+    JobsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

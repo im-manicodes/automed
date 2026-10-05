@@ -8,6 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
+export type * from './models/Job.js'
 export type * from './models/MailAccount.js'
 export type * from './models/MailFolderSync.js'
 export type * from './models/Thread.js'

@@ -18,6 +18,11 @@ export { Prisma }
 export * as $Enums from './enums.js'
 export * from './enums.js';
 /**
+ * Model Job
+ * Cola de trabajos en PostgreSQL (claim con FOR UPDATE SKIP LOCKED).
+ */
+export type Job = Prisma.JobModel
+/**
  * Model MailAccount
  * 
  */

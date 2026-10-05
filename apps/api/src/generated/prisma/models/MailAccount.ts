@@ -346,22 +346,6 @@ export type MailAccountScalarRelationFilter = {
   isNot?: Prisma.MailAccountWhereInput
 }
 
-export type StringFieldUpdateOperationsInput = {
-  set?: string
-}
-
-export type NullableStringFieldUpdateOperationsInput = {
-  set?: string | null
-}
-
-export type NullableDateTimeFieldUpdateOperationsInput = {
-  set?: Date | string | null
-}
-
-export type DateTimeFieldUpdateOperationsInput = {
-  set?: Date | string
-}
-
 export type MailAccountCreateNestedOneWithoutFolderSyncsInput = {
   create?: Prisma.XOR<Prisma.MailAccountCreateWithoutFolderSyncsInput, Prisma.MailAccountUncheckedCreateWithoutFolderSyncsInput>
   connectOrCreate?: Prisma.MailAccountCreateOrConnectWithoutFolderSyncsInput

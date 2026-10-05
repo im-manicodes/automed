@@ -22,8 +22,18 @@ export const ProcessStatus = {
   pendiente: 'pendiente',
   procesando: 'procesando',
   listo: 'listo',
-  necesita_ayuda: 'necesita_ayuda',
+  necesita_revision: 'necesita_revision',
   error: 'error'
 } as const
 
 export type ProcessStatus = (typeof ProcessStatus)[keyof typeof ProcessStatus]
+
+
+export const JobStatus = {
+  pendiente: 'pendiente',
+  procesando: 'procesando',
+  listo: 'listo',
+  error: 'error'
+} as const
+
+export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus]

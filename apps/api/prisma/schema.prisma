@@ -17,8 +17,34 @@ enum ProcessStatus {
   pendiente
   procesando
   listo
-  necesita_ayuda
+  necesita_revision
   error
+}
+
+enum JobStatus {
+  pendiente
+  procesando
+  listo
+  error
+}
+
+/// Cola de trabajos en PostgreSQL (claim con FOR UPDATE SKIP LOCKED).
+model Job {
+  id          String    @id @default(uuid())
+  type        String
+  payload     Json      @default("{}")
+  status      JobStatus @default(pendiente)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  runAt       DateTime  @default(now())
+  lockedAt    DateTime?
+  lastError   String?
+  /// Único opcional: evita encolar dos veces el mismo trabajo lógico
+  dedupeKey   String?   @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAt])
 }
 
 model MailAccount {

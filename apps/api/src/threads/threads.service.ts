@@ -16,6 +16,7 @@ export class ThreadsService {
       id: t.id,
       subject: t.subject,
       status: t.status,
+      updatedAt: t.updatedAt,
       lastMessageAt: t.lastMessageAt,
       messageCount: t.messages.length,
       attachmentCount: t.messages.reduce((n, m) => n + m._count.attachments, 0),

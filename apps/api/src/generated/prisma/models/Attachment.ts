@@ -525,14 +525,6 @@ export type AttachmentUncheckedUpdateManyWithoutMessageNestedInput = {
   deleteMany?: Prisma.AttachmentScalarWhereInput | Prisma.AttachmentScalarWhereInput[]
 }
 
-export type IntFieldUpdateOperationsInput = {
-  set?: number
-  increment?: number
-  decrement?: number
-  multiply?: number
-  divide?: number
-}
-
 export type AttachmentCreateNestedOneWithoutPagesInput = {
   create?: Prisma.XOR<Prisma.AttachmentCreateWithoutPagesInput, Prisma.AttachmentUncheckedCreateWithoutPagesInput>
   connectOrCreate?: Prisma.AttachmentCreateOrConnectWithoutPagesInput
