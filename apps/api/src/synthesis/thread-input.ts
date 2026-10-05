@@ -1,6 +1,8 @@
 /** Construcción (pura) de la entrada del LLM a partir de un hilo: mensajes + OCR por página. */
 
 export interface InputMessage {
+  /** Id del Message; permite etiquetar bloques para la síntesis incremental. */
+  id?: string;
   from: string;
   to: string[];
   cc: string[];
@@ -28,6 +30,12 @@ export interface InputPage {
 export interface InputBlock {
   kind: 'message' | 'document';
   text: string;
+  /** Mensaje al que pertenece el bloque (el mensaje mismo o el de su adjunto). */
+  messageId?: string;
+  /** sha256 del adjunto (solo bloques de documento). */
+  sha256?: string;
+  /** true si el bloque solo remite a un documento ya incluido antes (sin contenido). */
+  duplicate?: boolean;
 }
 
 export interface BuiltInput {
@@ -135,13 +143,20 @@ export function buildInputBlocks(
   const next = () => ++counter;
 
   ordered.forEach((m, i) => {
-    blocks.push({ kind: 'message', text: formatMessage(m, i + 1) });
+    blocks.push({
+      kind: 'message',
+      text: formatMessage(m, i + 1),
+      messageId: m.id,
+    });
     for (const att of m.attachments) {
       const first = seen.get(att.sha256);
       if (first) {
         blocks.push({
           kind: 'document',
           text: `### Documento: ${att.filename}\n(Mismo contenido que "${first}", ya incluido.)`,
+          messageId: m.id,
+          sha256: att.sha256,
+          duplicate: true,
         });
         continue;
       }
@@ -153,6 +168,8 @@ export function buildInputBlocks(
         blocks.push({
           kind: 'document',
           text: `### Documento: ${att.filename}\n(Sin texto reconocido.)`,
+          messageId: m.id,
+          sha256: att.sha256,
         });
         continue;
       }
@@ -162,6 +179,8 @@ export function buildInputBlocks(
         blocks.push({
           kind: 'document',
           text: `### Documento: ${att.filename} · página ${p.pageNumber}\n${r.text || '(página sin texto)'}`,
+          messageId: m.id,
+          sha256: att.sha256,
         });
       }
     }

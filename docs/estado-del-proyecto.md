@@ -15,6 +15,8 @@
 
 - [x] Cambio transversal — Análisis solo bajo petición: nuevo estado `sin_analizar` (defecto de hilos del sync), campos `Thread.seguimiento` y `Thread.tieneMensajesNuevos`; migraciones `sin_analizar_enum` (ADD VALUE, separada porque PostgreSQL no permite usar el valor en la misma transacción) y `sin_analizar_datos` (columnas, default, pendiente sin síntesis -> sin_analizar, cancela jobs pendientes de esos hilos). El sync guarda correos/PDFs pero no rasteriza/OCR/LLM; nuevo hilo -> `sin_analizar`; mensajes nuevos: nunca analizado -> igual; analizado + seguimiento -> `pendiente`; analizado sin seguimiento -> conserva estado y `tieneMensajesNuevos=true`. Endpoints: `POST /api/threads/:id/analyze` (body opcional `{seguimiento}`; 409 si procesando/en cola/sin novedades), `POST /api/threads/analyze` (`{ids, seguimiento?}`, máx. 50, resultado por id), `PATCH /api/threads/:id/seguimiento`, `GET /api/threads?status=`; list/detail exponen `status`, `seguimiento`, `tieneMensajesNuevos`. El barrido solo toma `pendiente`; `processThread` ignora hilos que no estén `pendiente/procesando`; corregir regiones solo reencola hilos listo/necesita_revision/error; `regenerate` da 409 en `sin_analizar`; `reprocess` sigue siendo acción explícita (permitido desde `sin_analizar`). Si llega contenido durante un análisis: con seguimiento reanaliza, sin él termina y marca `tieneMensajesNuevos`.
 
+- [x] Cambio transversal — Síntesis incremental: `Synthesis` guarda `coveredMessageIds` (ids de todos los mensajes que cubre, acumulativo), `mode` (`full|incremental`), `baseSynthesisId`, `inputTokensEstimados` (migración `sintesis_incremental`). "Mensajes nuevos" = mensajes del hilo no incluidos en `coveredMessageIds` de la última versión. Incremental cuando hay síntesis previa utilizable (texto no vacío y cobertura no vacía) y no hay `force`: el prompt lleva plantilla + síntesis anterior + bloques de mensajes nuevos con OCR de sus adjuntos (un adjunto repetido por sha256 solo se referencia); sin novedades no se llama al LLM. Plantilla cambiada: no se regenera sola; el incremental usa la plantilla con la que se escribió el markdown previo y `GET /api/threads/:id/synthesis` devuelve `plantillaDesactualizada` y `plantillaActivaVersion`. Corrección de región: el job lleva `correctedSha256` y solo se envía ese documento + síntesis anterior con instrucción de ajustar lo dependiente. `POST .../synthesis/regenerate` = completo (`force`), responde `mode:'full'` y `advertencia`. Presupuesto `SYNTH_MAX_INPUT_TOKENS`: si síntesis previa + novedades no caben, las novedades se condensan por tramos (map-reduce). Se registra (sin contenido) modo y tokens estimados en logs y en `Synthesis`. OCR: `processThread` solo encola adjuntos no procesados y `OcrService` deduplica por sha256 (tests añadidos).
+
 ## En curso
 - Nada.
 
@@ -54,6 +56,13 @@
 - Estimación de tokens aproximada (4 caracteres/token); `SYNTH_MAX_INPUT_TOKENS` debe ir por debajo de la ventana real del modelo.
 - La vista previa de plantilla llama al LLM real (una llamada corta con un hilo de ejemplo).
 - Cambiar la plantilla no regenera hilos solos: el hash cambia, así que la próxima síntesis o `regenerate` genera versión nueva.
+
+## Pendientes de la síntesis incremental
+- Síntesis anteriores a la migración tienen cobertura vacía: la siguiente actualización de esos hilos es completa (una vez); después son incrementales.
+- Los errores se acumulan: cada incremental parte del markdown previo; si deriva, el usuario puede usar regenerate (completo).
+- La estimación de tokens es aproximada (4 caracteres/token) y suma todas las llamadas (map, reduce, final).
+- Tras un cambio de plantilla, una actualización incremental conserva la plantilla vieja; la UI (fase 6) debe mostrar `plantillaDesactualizada` y ofrecer regenerar.
+- Una corrección repetida idéntica sobre la misma versión base se omite por hash; correcciones sobre un hilo con mensajes nuevos pendientes se combinan en una sola actualización.
 
 ## Pendientes del cambio "análisis bajo petición"
 - La UI (fase 6) debe mostrar `sin_analizar`, el botón Analizar (individual/masivo), el interruptor de seguimiento y el aviso de mensajes nuevos.

@@ -13,8 +13,14 @@ export interface AttachmentProcessor {
 }
 export const ATTACHMENT_PROCESSOR = Symbol('ATTACHMENT_PROCESSOR');
 
-/** Fase 5: arma el prompt (texto del hilo + OCR), llama a `LlmProvider` y guarda `Synthesis`. */
+/**
+ * Fase 5: síntesis incremental. Con síntesis previa solo envía al LLM la síntesis anterior + novedades
+ * (mensajes nuevos con OCR de sus adjuntos, o el documento corregido); `force` = modo completo.
+ * Arma el prompt (texto del hilo + OCR), llama a `LlmProvider` y guarda `Synthesis`. */
 export interface ThreadSynthesizer {
-  synthesize(threadId: string, opts?: { force?: boolean }): Promise<void>;
+  synthesize(
+    threadId: string,
+    opts?: { force?: boolean; correctedSha256?: string },
+  ): Promise<void>;
 }
 export const THREAD_SYNTHESIZER = Symbol('THREAD_SYNTHESIZER');

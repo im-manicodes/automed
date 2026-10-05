@@ -90,7 +90,7 @@ export class ThreadsController {
     return this.pipeline.reprocess(id);
   }
 
-  /** Vuelve a generar la síntesis (nueva versión) sin reprocesar adjuntos/OCR. */
+  /** Regenera la síntesis en modo COMPLETO (nueva versión, mayor consumo) sin reprocesar adjuntos/OCR. */
   @Post(':id/synthesis/regenerate')
   @HttpCode(202)
   regenerateSynthesis(@Param('id') id: string) {

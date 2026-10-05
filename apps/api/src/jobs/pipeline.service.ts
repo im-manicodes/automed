@@ -230,7 +230,7 @@ export class PipelineService implements OnModuleInit {
       const hash = await this.computeThreadHash(t.id);
       await this.queue.enqueue(
         JOB_TYPES.synthesizeThread,
-        { threadId: t.id, hash },
+        { threadId: t.id, hash, correctedSha256: sha256 },
         {
           dedupeKey: `synthesize_thread:${t.id}:${hash}:correccion:${stamp}`,
         },
@@ -241,7 +241,7 @@ export class PipelineService implements OnModuleInit {
   }
 
   /**
-   * Regenera la síntesis de un hilo (el LLM se vuelve a llamar aunque la entrada no cambie).
+   * Regenera la síntesis de un hilo en modo COMPLETO (force; el LLM se vuelve a llamar aunque la entrada no cambie).
    * Pasa por la cola: listo/necesita_revision/error -> pendiente -> procesando.
    */
   async regenerateSynthesis(threadId: string) {
@@ -269,7 +269,13 @@ export class PipelineService implements OnModuleInit {
         dedupeKey: `synthesize_thread:${threadId}:${hash}:manual:${Date.now()}`,
       },
     );
-    return { threadId, status: 'procesando' as const };
+    return {
+      threadId,
+      status: 'procesando' as const,
+      mode: 'full' as const,
+      advertencia:
+        'Se regenera la síntesis completa desde cero: se envía todo el hilo al modelo y consume más. Para el uso normal, la síntesis se actualiza sola con solo lo nuevo.',
+    };
   }
 
   // ---- handlers ----
@@ -347,6 +353,10 @@ export class PipelineService implements OnModuleInit {
     if (!thread || thread.status !== 'procesando') return;
     await this.synthesizer.synthesize(threadId, {
       force: job.payload.force === true,
+      correctedSha256:
+        typeof job.payload.correctedSha256 === 'string'
+          ? job.payload.correctedSha256
+          : undefined,
     });
 
     if ((await this.computeThreadHash(threadId)) !== hash) {

@@ -420,6 +420,84 @@ describe('PipelineService', () => {
     });
   });
 
+  describe('síntesis incremental', () => {
+    it('hilo analizado con mensaje nuevo: solo se encola el adjunto nuevo (el procesado no se reprocesa)', async () => {
+      const s = setup();
+      s.addThread('t1', [['old', 'shaOld']]);
+      s.db.atts[0].status = 'listo';
+      // llega un mensaje nuevo con un adjunto nuevo
+      s.db.messages.push({
+        id: 'm-new',
+        threadId: 't1',
+        graphId: 'g-new',
+        bodyText: 'nuevo',
+      });
+      s.db.atts.push({
+        id: 'new',
+        messageId: 'm-new',
+        sha256: 'shaNew',
+        status: 'pendiente',
+      });
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      const pa = s.queued.filter((q) => q.type === 'process_attachment');
+      expect(pa.map((q) => q.opts.dedupeKey)).toEqual([
+        'process_attachment:shaNew',
+      ]);
+      expect(s.processor.process).not.toHaveBeenCalled();
+    });
+
+    it('un adjunto nuevo con el sha256 de uno ya procesado no se procesa de nuevo', async () => {
+      const s = setup();
+      s.addThread('t1', [['old', 'shaOld']]);
+      s.db.atts[0].status = 'listo';
+      s.db.messages.push({
+        id: 'm-new',
+        threadId: 't1',
+        graphId: 'g-new',
+        bodyText: 'reenvío',
+      });
+      s.db.atts.push({
+        id: 'dup',
+        messageId: 'm-new',
+        sha256: 'shaOld',
+        status: 'pendiente',
+      });
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      expect(
+        s.queued.filter((q) => q.type === 'process_attachment'),
+      ).toHaveLength(0);
+      expect(s.db.atts[1].status).toBe('listo');
+    });
+
+    it('regenerate explícito: síntesis completa (force), con mode y advertencia', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      s.db.threads[0].status = 'listo';
+      const r = await s.pipeline.regenerateSynthesis('t1');
+      expect(r).toMatchObject({ mode: 'full', status: 'procesando' });
+      expect(r.advertencia).toMatch(/consume más/);
+      const q = s.queued.find((x) => x.type === 'synthesize_thread')!;
+      expect(q.payload.force).toBe(true);
+      await s.pipeline.synthesizeThread(s.job(q.payload));
+      expect(s.synth.synthesize).toHaveBeenCalledWith('t1', { force: true });
+    });
+
+    it('corrección de región: el job lleva el sha256 corregido y no force', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      s.db.threads[0].status = 'listo';
+      await s.pipeline.onRegionsChanged('shaA');
+      const q = s.queued.find((x) => x.type === 'synthesize_thread')!;
+      expect(q.payload).toMatchObject({ correctedSha256: 'shaA' });
+      expect(q.payload.force).toBeUndefined();
+      await s.pipeline.synthesizeThread(s.job(q.payload));
+      expect(s.synth.synthesize).toHaveBeenCalledWith('t1', {
+        force: false,
+        correctedSha256: 'shaA',
+      });
+    });
+  });
+
   it('migración de datos: pendiente sin síntesis -> sin_analizar (lógica SQL)', () => {
     const sql = readFileSync(
       join(

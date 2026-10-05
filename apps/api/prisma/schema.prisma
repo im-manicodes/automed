@@ -74,22 +74,22 @@ model MailFolderSync {
 }
 
 model Thread {
-  id             String        @id @default(uuid())
-  accountId      String
-  conversationId String
-  subject        String
-  status         ProcessStatus @default(sin_analizar)
+  id                  String        @id @default(uuid())
+  accountId           String
+  conversationId      String
+  subject             String
+  status              ProcessStatus @default(sin_analizar)
   /// Reanálisis automático cuando llegan mensajes nuevos a un hilo ya analizado
-  seguimiento    Boolean       @default(false)
+  seguimiento         Boolean       @default(false)
   /// Llegaron mensajes/adjuntos después del último análisis (y no hay seguimiento)
-  tieneMensajesNuevos Boolean  @default(false)
-  contentHash    String?
-  lastMessageAt  DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  account        MailAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  messages       Message[]
-  syntheses      Synthesis[]
+  tieneMensajesNuevos Boolean       @default(false)
+  contentHash         String?
+  lastMessageAt       DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  account             MailAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  messages            Message[]
+  syntheses           Synthesis[]
 
   @@unique([accountId, conversationId])
 }
@@ -171,18 +171,27 @@ model OcrRegion {
 }
 
 model Synthesis {
-  id              String   @id @default(uuid())
-  threadId        String
-  version         Int
-  markdown        String
-  inputHash       String
+  id                   String   @id @default(uuid())
+  threadId             String
+  version              Int
+  markdown             String
+  inputHash            String
   /// Modelo LLM que generó el texto
-  model           String?
+  model                String?
   /// Plantilla usada (id y versión) al generar
-  templateId      String?
-  templateVersion Int?
-  createdAt       DateTime @default(now())
-  thread          Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  templateId           String?
+  templateVersion      Int?
+  /// Ids de TODOS los mensajes del hilo que cubre esta versión (acumulativo). "Mensajes nuevos" =
+  /// mensajes del hilo cuyo id no está aquí. Vacío en versiones anteriores a la síntesis incremental.
+  coveredMessageIds    Json     @default("[]")
+  /// 'full' (hilo completo) | 'incremental' (síntesis previa + novedades)
+  mode                 String   @default("full")
+  /// Síntesis previa sobre la que se actualizó (solo mode = incremental)
+  baseSynthesisId      String?
+  /// Tokens estimados enviados al LLM (suma de llamadas) para auditar costo; sin contenido
+  inputTokensEstimados Int?
+  createdAt            DateTime @default(now())
+  thread               Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@unique([threadId, version])
 }
