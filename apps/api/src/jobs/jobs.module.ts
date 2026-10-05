@@ -5,19 +5,20 @@ import { JobWorkerService } from './job-worker.service';
 import { PipelineService } from './pipeline.service';
 import { ThreadStateService } from './thread-state.service';
 import { JobsController } from './jobs.controller';
-import { NoopThreadSynthesizer } from './noop-hooks';
+import { SynthesisModule } from '../synthesis/synthesis.module';
+import { SynthesisService } from '../synthesis/synthesis.service';
 import { OcrModule } from '../ocr/ocr.module';
 import { THREAD_SYNTHESIZER } from './pipeline-hooks.interface';
 
 @Module({
-  imports: [AuthModule, OcrModule],
+  imports: [AuthModule, OcrModule, SynthesisModule],
   providers: [
     JobQueueService,
     JobWorkerService,
     PipelineService,
     ThreadStateService,
-    // ATTACHMENT_PROCESSOR lo aporta OcrModule (fase 4). Fase 5 reemplaza el sintetizador.
-    { provide: THREAD_SYNTHESIZER, useClass: NoopThreadSynthesizer },
+    // ATTACHMENT_PROCESSOR lo aporta OcrModule (fase 4). THREAD_SYNTHESIZER lo implementa SynthesisService (fase 5).
+    { provide: THREAD_SYNTHESIZER, useExisting: SynthesisService },
   ],
   controllers: [JobsController],
   exports: [PipelineService, JobQueueService],

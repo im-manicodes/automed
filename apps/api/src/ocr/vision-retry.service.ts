@@ -13,8 +13,9 @@ export interface VisionReading {
 
 const SYSTEM =
   'Eres un transcriptor de documentos. Recibes el recorte de una línea de un documento ' +
-  'escaneado (puede ser manuscrito). Transcribe EXACTAMENTE lo que ves, sin interpretar ni ' +
-  'corregir. Responde solo con JSON: {"text": "...", "confidence": 0.0-1.0}. ' +
+  'escaneado (puede ser manuscrito). Transcribe EXACTAMENTE lo que ves, de forma literal, sin ' +
+  'interpretar, resumir ni corregir y sin añadir nada que no esté en la imagen. Escribe ' +
+  '[ilegible] donde no puedas leer. Responde solo con JSON: {"text": "...", "confidence": 0.0-1.0}. ' +
   'Usa confidence baja si hay partes ilegibles.';
 
 /** Extrae {text, confidence} de la respuesta del modelo (tolera texto/markdown alrededor). */
@@ -63,12 +64,11 @@ export class VisionRetryService {
     ocrText: string,
   ): Promise<VisionReading | null> {
     const crop = await cropRegionPng(pagePng, box);
-    const raw = await this.llm.complete({
-      system: SYSTEM,
-      prompt: `Lectura automática previa (puede estar mal): "${ocrText}". Transcribe el recorte.`,
-      images: [{ mediaType: 'image/png', data: crop }],
-      maxTokens: 300,
-    });
+    const raw = await this.llm.vision(
+      { mediaType: 'image/png', data: crop },
+      `Lectura automática previa (puede estar mal): "${ocrText}". Transcribe el recorte.`,
+      { system: SYSTEM, maxTokens: 300, temperature: 0 },
+    );
     return parseVisionReading(raw);
   }
 }

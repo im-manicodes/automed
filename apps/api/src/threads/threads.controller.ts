@@ -33,4 +33,11 @@ export class ThreadsController {
   reprocess(@Param('id') id: string) {
     return this.pipeline.reprocess(id);
   }
+
+  /** Vuelve a generar la síntesis (nueva versión) sin reprocesar adjuntos/OCR. */
+  @Post(':id/synthesis/regenerate')
+  @HttpCode(202)
+  regenerateSynthesis(@Param('id') id: string) {
+    return this.pipeline.regenerateSynthesis(id);
+  }
 }

@@ -159,6 +159,36 @@ export class PipelineService implements OnModuleInit {
     return queued;
   }
 
+  /**
+   * Regenera la síntesis de un hilo (el LLM se vuelve a llamar aunque la entrada no cambie).
+   * Pasa por la cola: listo/necesita_revision/error -> pendiente -> procesando.
+   */
+  async regenerateSynthesis(threadId: string) {
+    const t = await this.prisma.thread.findUnique({
+      where: { id: threadId },
+      select: { status: true },
+    });
+    if (!t) throw new NotFoundException('Ticket no encontrado');
+    if (t.status === 'procesando' || t.status === 'pendiente')
+      throw new ConflictException('El ticket ya se está procesando');
+    if (
+      !(await this.state.transition(threadId, 'pendiente')) ||
+      !(await this.state.transition(threadId, 'procesando'))
+    )
+      throw new ConflictException(
+        'El ticket cambió de estado, intenta de nuevo',
+      );
+    const hash = await this.computeThreadHash(threadId);
+    await this.queue.enqueue(
+      JOB_TYPES.synthesizeThread,
+      { threadId, hash, force: true },
+      {
+        dedupeKey: `synthesize_thread:${threadId}:${hash}:manual:${Date.now()}`,
+      },
+    );
+    return { threadId, status: 'procesando' as const };
+  }
+
   // ---- handlers ----
 
   async processThread(job: JobRecord) {
@@ -231,7 +261,9 @@ export class PipelineService implements OnModuleInit {
       where: { id: threadId },
     });
     if (!thread || thread.status !== 'procesando') return;
-    await this.synthesizer.synthesize(threadId);
+    await this.synthesizer.synthesize(threadId, {
+      force: job.payload.force === true,
+    });
 
     if ((await this.computeThreadHash(threadId)) !== hash) {
       // Llegó contenido nuevo mientras se procesaba: se reprocesa con el hash nuevo.

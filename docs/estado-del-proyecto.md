@@ -11,11 +11,12 @@
 
 - [x] Fase 4 — OCR: rasterizado con pdfjs-dist + @napi-rs/canvas (sin binarios del sistema, `OCR_RENDER_DPI`=250) a `pages/{sha256}/{n}.png` en RustFS; `OcrEngine` con salida por línea/palabra (bbox normalizada, confianza 0..1) y adaptadores `local` (HTTP a `services/ocr-local`: FastAPI + PaddleOCR CPU, Tesseract como fallback; perfil `ocr` en docker-compose) y `textract` (DetectDocumentText/AnalyzeDocument, SDK v3); selección por `OCR_ENGINE`. `OcrService` reemplaza al no-op de `ATTACHMENT_PROCESSOR` (dedupe por sha256, regiones `ok|dudoso` por `OCR_CONFIDENCE_THRESHOLD`, reintento opcional con visión `OCR_VISION_RETRY` vía `LlmProvider`, hoy `NoopLlmProvider`). Migración `ocr_paginas_regiones` (OcrPage.sha256 + unique sha256/página, engine; OcrRegion.source). Endpoints: `GET /api/attachments/:id/pages`, `GET /api/attachments/:id/pages/:n/image`, `PATCH /api/ocr/regions/:id` (marca `corregido` y reencola la síntesis de los hilos con ese sha256). Benchmark: `pnpm --filter api ocr:benchmark -- <dir>`. Ver pendientes de la fase 4.
 
+- [x] Fase 5 — Síntesis: `LlmProvider` real (`apps/api/src/llm`) con adaptadores `anthropic` (@anthropic-ai/sdk), `bedrock` (Converse) y `openai`, seleccionados por `LLM_PROVIDER`; métodos `text()` y `vision()`, modelos por `LLM_MODEL_TEXT`/`LLM_MODEL_VISION`, reintentos con backoff (429/5xx/timeouts), timeouts, sin logs de contenido; `NoopLlmProvider` eliminado (la relectura con visión del OCR usa `vision()`). Plantillas versionadas (`Template.version`, una activa; plantilla por defecto en español con instrucciones por sección en comentarios `<!-- -->`): `GET/PUT /api/templates/active`, `POST /api/templates/reset`, `POST /api/templates/preview`. `SynthesisService`: línea de tiempo (isFromMe, citas/firmas recortadas) + OCR por página con `[ilegible #n · doc · p.k]` y `texto_usuario`, map-reduce sobre `SYNTH_MAX_INPUT_TOKENS`, guarda `Synthesis` (versión, hash de entrada, modelo, plantilla) y no llama al LLM si el hash no cambió; implementa `THREAD_SYNTHESIZER` (corregir una región regenera por el flujo de la fase 4). Endpoints `GET /api/threads/:id/synthesis` y `POST /api/threads/:id/synthesis/regenerate` (fuerza nueva versión vía cola). Migración `sintesis_plantillas`.
+
 ## En curso
 - Nada.
 
 ## Falta
-- [ ] Fase 5 — Síntesis (LlmProvider Bedrock/API key, plantilla)
 - [ ] Fase 6 — UI completa (login, visor PDF, corrección)
 - [ ] Fase 7 — Hardening y entrega
 
@@ -42,3 +43,12 @@
 - Si se corrige una región mientras el hilo está `procesando`, no se reencola (la síntesis en curso podría no verla); reprocesar el hilo lo resuelve.
 - Las correcciones del usuario no se editan una segunda vez en estado `corregido` salvo que se vuelva a llamar al PATCH (permitido).
 - Cómo correr el benchmark: `pnpm --filter api ocr:benchmark -- /ruta/a/pdfs --engine local|textract [--dpi 250] [--threshold 0.85] [--max-pages N] [--csv salida.csv]` (usa el `.env` raíz; no guarda nada ni imprime texto de los documentos). Para `local` levantar antes `docker compose --profile ocr up -d ocr-local`.
+
+## Pendientes de la fase 5
+- No probado con APIs reales (Anthropic, Bedrock, OpenAI): solo SDK mockeado. Verificar al menos un hilo real con cada proveedor que vayas a usar.
+- El ID por defecto de Bedrock (`anthropic.claude-sonnet-5-5`) es una suposición: confirma el ID/perfil de inferencia en tu región y ponlo en `LLM_MODEL_TEXT`.
+- Claude 5.x y GPT-5 rechazan `temperature`: el adaptador la omite en esos modelos (lista en `llm-config.ts`, `modelAcceptsTemperature`). Sonnet 5.5 piensa en modo adaptativo por defecto; no se fija `effort` (se podría bajar para la relectura de recortes).
+- La relectura de visión sigue pidiendo JSON `{text, confidence}` (OcrService necesita la confianza); el prompt exige transcripción literal.
+- Estimación de tokens aproximada (4 caracteres/token); `SYNTH_MAX_INPUT_TOKENS` debe ir por debajo de la ventana real del modelo.
+- La vista previa de plantilla llama al LLM real (una llamada corta con un hilo de ejemplo).
+- Cambiar la plantilla no regenera hilos solos: el hash cambia, así que la próxima síntesis o `regenerate` genera versión nueva.

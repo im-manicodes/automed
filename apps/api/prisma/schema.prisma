@@ -48,25 +48,25 @@ model Job {
 }
 
 model MailAccount {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id          String           @id @default(uuid())
+  email       String           @unique
   /// Refresh token cifrado (AES-GCM)
-  tokenEnc     String?
-  lastSyncAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  threads      Thread[]
-  folderSyncs  MailFolderSync[]
+  tokenEnc    String?
+  lastSyncAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  threads     Thread[]
+  folderSyncs MailFolderSync[]
 }
 
 /// Un deltaLink por carpeta de Graph (inbox, sentitems).
 model MailFolderSync {
-  id         String      @id @default(uuid())
-  accountId  String
-  folder     String
-  deltaLink  String?
-  updatedAt  DateTime    @updatedAt
-  account    MailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id        String      @id @default(uuid())
+  accountId String
+  folder    String
+  deltaLink String?
+  updatedAt DateTime    @updatedAt
+  account   MailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@unique([accountId, folder])
 }
@@ -125,53 +125,58 @@ model Attachment {
 }
 
 model OcrPage {
-  id            String      @id @default(uuid())
-  attachmentId  String
+  id           String      @id @default(uuid())
+  attachmentId String
   /// Denormalizado de Attachment.sha256: un PDF repetido comparte un solo juego de páginas
-  sha256        String
-  pageNumber    Int
-  imageKey      String
-  width         Int
-  height        Int
-  text          String?
+  sha256       String
+  pageNumber   Int
+  imageKey     String
+  width        Int
+  height       Int
+  text         String?
   /// Motor que produjo el OCR (local | textract)
-  engine        String?
-  attachment    Attachment  @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
-  regions       OcrRegion[]
+  engine       String?
+  attachment   Attachment  @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  regions      OcrRegion[]
 
   @@unique([attachmentId, pageNumber])
   @@unique([sha256, pageNumber])
 }
 
 model OcrRegion {
-  id          String       @id @default(uuid())
-  pageId      String
+  id         String       @id @default(uuid())
+  pageId     String
   /// Caja normalizada 0..1
-  x           Float
-  y           Float
-  w           Float
-  h           Float
-  text        String
-  confidence  Float
-  status      RegionStatus @default(ok)
-  userText    String?
+  x          Float
+  y          Float
+  w          Float
+  h          Float
+  text       String
+  confidence Float
+  status     RegionStatus @default(ok)
+  userText   String?
   /// Origen del texto vigente: ocr | vision | usuario
-  source      String       @default("ocr")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  page        OcrPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  source     String       @default("ocr")
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  page       OcrPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@index([pageId, status])
 }
 
 model Synthesis {
-  id        String   @id @default(uuid())
-  threadId  String
-  version   Int
-  markdown  String
-  inputHash String
-  createdAt DateTime @default(now())
-  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  id              String   @id @default(uuid())
+  threadId        String
+  version         Int
+  markdown        String
+  inputHash       String
+  /// Modelo LLM que generó el texto
+  model           String?
+  /// Plantilla usada (id y versión) al generar
+  templateId      String?
+  templateVersion Int?
+  createdAt       DateTime @default(now())
+  thread          Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@unique([threadId, version])
 }
@@ -179,6 +184,8 @@ model Synthesis {
 model Template {
   id        String   @id @default(uuid())
   name      String
+  /// Versión incremental; solo una fila activa a la vez (las demás son historial)
+  version   Int      @default(1)
   markdown  String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())

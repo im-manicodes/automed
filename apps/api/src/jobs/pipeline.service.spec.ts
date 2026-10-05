@@ -156,7 +156,7 @@ describe('PipelineService', () => {
     const synth = s.queued.find((q) => q.type === 'synthesize_thread')!;
     expect(synth).toBeDefined();
     await s.pipeline.synthesizeThread(s.job(synth.payload));
-    expect(s.synth.synthesize).toHaveBeenCalledWith('t1');
+    expect(s.synth.synthesize).toHaveBeenCalledWith('t1', { force: false });
     expect(s.db.threads[0].status).toBe('listo');
     expect(s.db.threads[0].contentHash).toBe(synth.payload.hash);
   });

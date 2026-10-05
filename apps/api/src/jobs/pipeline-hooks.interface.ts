@@ -15,6 +15,6 @@ export const ATTACHMENT_PROCESSOR = Symbol('ATTACHMENT_PROCESSOR');
 
 /** Fase 5: arma el prompt (texto del hilo + OCR), llama a `LlmProvider` y guarda `Synthesis`. */
 export interface ThreadSynthesizer {
-  synthesize(threadId: string): Promise<void>;
+  synthesize(threadId: string, opts?: { force?: boolean }): Promise<void>;
 }
 export const THREAD_SYNTHESIZER = Symbol('THREAD_SYNTHESIZER');
