@@ -27,7 +27,7 @@ docker compose up --build   # web http://localhost:8080
 ```
 
 ## Comandos
-`pnpm build` · `pnpm lint` · `pnpm test` · `pnpm --filter api prisma:migrate`
+`pnpm build` · `pnpm lint` · `pnpm test` · `pnpm --filter web test` (vitest) · `pnpm --filter api prisma:migrate`
 
 ## Configuración
 Ver `.env.example` (raíz) (BD, S3/RustFS, Microsoft Graph, `OCR_ENGINE`, `LLM_PROVIDER`).

@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { useSession } from '../context/session'
 
 const items = [
   { to: '/tickets', label: 'Tickets', icon: '📋' },
@@ -6,16 +8,36 @@ const items = [
   { to: '/ajustes', label: 'Ajustes', icon: '⚙️' },
 ]
 
+function UserMenu() {
+  const { session, logout } = useSession()
+  const [open, setOpen] = useState(false)
+  if (session.status !== 'authenticated') return null
+  return (
+    <div className="relative">
+      <button type="button" className="btn btn-secondary !min-h-11 !px-3 !py-1.5 text-sm" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((o) => !o)}>
+        <span aria-hidden>👤&nbsp;</span>Mi cuenta
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 mt-2 w-64 space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <p className="break-all text-sm text-slate-700">{session.email}</p>
+          <button type="button" role="menuitem" className="btn btn-secondary w-full" onClick={() => void logout()}>Salir</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Layout() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3">
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2">
         <h1 className="text-xl font-bold">Auto-med</h1>
+        <UserMenu />
       </header>
-      <main className="flex-1 p-4 pb-24">
+      <main className="flex-1 p-4 pb-28">
         <Outlet />
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white">
+      <nav aria-label="Principal" className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white">
         <ul className="mx-auto flex max-w-3xl">
           {items.map((i) => (
             <li key={i.to} className="flex-1">
@@ -23,7 +45,7 @@ export default function Layout() {
                 to={i.to}
                 className={({ isActive }) =>
                   `flex min-h-14 flex-col items-center justify-center text-sm font-medium ${
-                    isActive ? 'text-blue-700' : 'text-slate-600'
+                    isActive ? 'text-blue-700 underline underline-offset-4' : 'text-slate-700'
                   }`
                 }
               >

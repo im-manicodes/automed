@@ -1,20 +1,36 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
+import Spinner from './components/Spinner'
 import Ajustes from './pages/Ajustes'
 import Plantilla from './pages/Plantilla'
 import TicketDetalle from './pages/TicketDetalle'
 import Tickets from './pages/Tickets'
 
+// Flujo de corrección de OCR (carga diferida).
+const RevisionPage = lazy(() => import('./revision/RevisionPage'))
+
 export default function App() {
   return (
     <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Navigate to="/tickets" replace />} />
-        <Route path="/tickets" element={<Tickets />} />
-        <Route path="/tickets/:id" element={<TicketDetalle />} />
-        <Route path="/plantilla" element={<Plantilla />} />
-        <Route path="/ajustes" element={<Ajustes />} />
-        <Route path="*" element={<Navigate to="/tickets" replace />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<Layout />}>
+          <Route index element={<Navigate to="/tickets" replace />} />
+          <Route path="/tickets" element={<Tickets />} />
+          <Route path="/tickets/:id" element={<TicketDetalle />} />
+          <Route
+            path="/tickets/:id/revision/:attachmentId"
+            element={
+              <Suspense fallback={<Spinner text="Cargando…" />}>
+                <RevisionPage />
+              </Suspense>
+            }
+          />
+          <Route path="/plantilla" element={<Plantilla />} />
+          <Route path="/ajustes" element={<Ajustes />} />
+          <Route path="*" element={<Navigate to="/tickets" replace />} />
+        </Route>
       </Route>
     </Routes>
   )
