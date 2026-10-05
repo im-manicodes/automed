@@ -1,5 +1,6 @@
 """Motores OCR locales. PaddleOCR (principal, CPU) y Tesseract (fallback / validación)."""
 import io
+import logging
 import os
 from typing import Optional
 
@@ -76,6 +77,7 @@ class PaddleEngine:
 
 
 _engine: Optional[object] = None
+fallback_reason: Optional[str] = None
 
 
 def get_engine():
@@ -89,8 +91,12 @@ def get_engine():
     else:
         try:
             _engine = PaddleEngine()
-        except Exception:
+        except Exception as e:
             if os.getenv("OCR_FALLBACK", "true").lower() != "true":
                 raise
+            # Nunca degradar en silencio: queda en logs y en /health (fallback_reason).
+            logging.getLogger("uvicorn.error").error("PaddleOCR no cargó, se usa Tesseract: %r", e)
+            global fallback_reason
+            fallback_reason = repr(e)[:300]
             _engine = TesseractEngine()
     return _engine

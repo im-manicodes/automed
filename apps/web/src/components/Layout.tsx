@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { useSession } from '../context/session'
+import { useSession } from '../context/session-context'
 
 const items = [
   { to: '/tickets', label: 'Tickets', icon: '📋' },

@@ -1,17 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { authApi, setUnauthorizedHandler } from '../lib/api'
-
-type SessionState =
-  | { status: 'loading' }
-  | { status: 'anonymous'; error?: string }
-  | { status: 'authenticated'; email: string }
-
-interface SessionCtx {
-  session: SessionState
-  logout: () => Promise<void>
-}
-
-const Ctx = createContext<SessionCtx | null>(null)
+import { SessionContext as Ctx, type SessionState } from './session-context'
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionState>({ status: 'loading' })
@@ -44,10 +33,4 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ session, logout }), [session, logout])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
-}
-
-export function useSession(): SessionCtx {
-  const c = useContext(Ctx)
-  if (!c) throw new Error('useSession debe usarse dentro de SessionProvider')
-  return c
 }

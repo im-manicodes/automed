@@ -5,3 +5,8 @@ pillow>=10.4
 pytesseract==0.3.13
 paddlepaddle==3.0.0
 paddleocr==3.0.3
+# paddleocr 3.0.3 es incompatible con paddlex >= 3.1 (TypeError en PaddlePredictorOption): fijar versión.
+paddlex[ocr-core]==3.0.3
+# paddlex 3.0.3 importa langchain.docstore, que desaparece en langchain >= 1.0: fijar < 0.3.
+langchain>=0.2,<0.3
+langchain-community>=0.2,<0.3

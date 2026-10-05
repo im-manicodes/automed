@@ -8,8 +8,9 @@ Síntesis con IA de hilos de Outlook (tickets), con OCR de PDFs escaneados y cor
 ```
 apps/api   NestJS + Prisma + PostgreSQL
 apps/web   Vite + React + Tailwind (mobile-first, español)
-docs/      estado-del-proyecto.md
-docker-compose.yml  rustfs, api, web (Postgres externo vía DATABASE_URL en .env)
+docs/      estado-del-proyecto.md, despliegue.md, benchmark-ocr.md, entra-id-registro.md
+services/ocr-local  OCR local (PaddleOCR/Tesseract, perfil `ocr`, solo pruebas)
+docker-compose.yml  rustfs, api, web (Postgres externo vía DATABASE_URL_DOCKER en .env)
 ```
 
 ## Arranque rápido (desarrollo)
@@ -23,11 +24,13 @@ pnpm dev                                  # api :3000, web :5173
 
 ## Todo con Docker
 ```bash
-docker compose up --build   # web http://localhost:8080
+docker compose up -d --build   # web http://localhost:8080; api healthy en /api/health
+docker compose --profile ocr up -d ocr-local   # opcional: OCR local
 ```
+Guía completa (variables, Entra ID, Textract/Bedrock, backups, problemas): `docs/despliegue.md`. Medir el OCR con tus PDFs: `docs/benchmark-ocr.md`.
 
 ## Comandos
-`pnpm build` · `pnpm lint` · `pnpm test` · `pnpm --filter web test` (vitest) · `pnpm --filter api prisma:migrate`
+`pnpm build` · `pnpm lint` · `pnpm test` · `pnpm --filter api test:e2e-flow` (flujo completo con mocks, esquema temporal) · `pnpm --filter web test` (vitest) · `pnpm --filter api prisma:migrate`
 
 ## Configuración
 Ver `.env.example` (raíz) (BD, S3/RustFS, Microsoft Graph, `OCR_ENGINE`, `LLM_PROVIDER`).

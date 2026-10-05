@@ -20,7 +20,10 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  /** Cookie Secure: COOKIE_SECURE=true|false la fuerza; si no, se deduce de MS_REDIRECT_URI (https). */
   private secure() {
+    const forced = this.config.get<string>('COOKIE_SECURE');
+    if (forced === 'true' || forced === 'false') return forced === 'true';
     return (this.config.get<string>('MS_REDIRECT_URI') ?? '').startsWith(
       'https',
     );

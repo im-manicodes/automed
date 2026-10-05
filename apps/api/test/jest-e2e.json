@@ -5,5 +5,10 @@
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@nestjs/config$": "<rootDir>/stubs/nestjs-config.stub.ts",
+    "^@nestjs/schedule$": "<rootDir>/stubs/nestjs-schedule.stub.ts",
+    "^(\\.{1,2}/.*)\\.js$": "$1"
   }
 }

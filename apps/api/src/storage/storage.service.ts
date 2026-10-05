@@ -6,11 +6,12 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class StorageService implements OnModuleInit {
+  private readonly logger = new Logger(StorageService.name);
   private readonly client: S3Client;
   private readonly bucket: string;
 
@@ -28,18 +29,39 @@ export class StorageService implements OnModuleInit {
     });
   }
 
-  /** Crea el bucket si no existe (no falla el arranque si RustFS no está disponible). */
+  /** Crea el bucket si no existe; reintenta unos segundos (RustFS puede tardar en arrancar). No tumba la API. */
   async onModuleInit() {
+    for (let i = 0; i < 6; i++) {
+      if (await this.ensureBucket()) return;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    this.logger.warn('No se pudo verificar/crear el bucket de RustFS');
+  }
+
+  private async ensureBucket(): Promise<boolean> {
     try {
       await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      return true;
     } catch {
       try {
         await this.client.send(
           new CreateBucketCommand({ Bucket: this.bucket }),
         );
+        this.logger.log(`Bucket ${this.bucket} creado`);
+        return true;
       } catch {
-        // Se reintentará en el primer uso.
+        return false;
       }
+    }
+  }
+
+  /** Comprobación ligera para /api/health. */
+  async isHealthy(): Promise<boolean> {
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      return true;
+    } catch {
+      return false;
     }
   }
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import ErrorBox from '../components/ErrorBox'
 import Spinner from '../components/Spinner'
-import { useSession } from '../context/session'
-import { useToast } from '../context/toasts'
+import { useSession } from '../context/session-context'
+import { useToast } from '../context/toasts-context'
 import { jobsApi, mailApi, type JobsStatus, type MailStatus } from '../lib/api'
 import { errorMessage, formatDate, plural } from '../lib/format'
 import { usePolling } from '../lib/usePolling'
@@ -27,6 +27,7 @@ export default function Ajustes() {
   }, [])
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
     void load()
   }, [load])
 

@@ -8,7 +8,7 @@ import Spinner from '../components/Spinner'
 import StatusBadge from '../components/StatusBadge'
 import Switch from '../components/Switch'
 import VersionHistory from '../components/VersionHistory'
-import { useToast } from '../context/toasts'
+import { useToast } from '../context/toasts-context'
 import { threadsApi, type SynthesisResponse, type ThreadDetail } from '../lib/api'
 import { errorMessage, formatDate, plural, slugify } from '../lib/format'
 import { canAnalyze, isBusy } from '../lib/status'
@@ -46,6 +46,7 @@ export default function TicketDetalle() {
   )
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
     void load()
   }, [load])
 

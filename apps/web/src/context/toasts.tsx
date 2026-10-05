@@ -1,10 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { ToastContext as Ctx, type ToastKind as Kind } from './toasts-context'
 
-type Kind = 'ok' | 'error' | 'info'
 interface Toast { id: number; kind: Kind; text: string }
-interface ToastCtx { toast: (text: string, kind?: Kind) => void }
 
-const Ctx = createContext<ToastCtx>({ toast: () => {} })
 let nextId = 1
 
 const STYLE: Record<Kind, string> = {
@@ -40,8 +38,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       </div>
     </Ctx.Provider>
   )
-}
-
-export function useToast(): ToastCtx {
-  return useContext(Ctx)
 }

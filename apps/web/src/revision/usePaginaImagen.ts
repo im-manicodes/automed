@@ -14,6 +14,7 @@ export function usePaginaImagen(attachmentId: string, pageNumber: number | undef
     if (pageNumber === undefined) return;
     const hit = cache.get(clave);
     if (hit) {
+      // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
       setImg(hit);
       setError(false);
       return;

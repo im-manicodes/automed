@@ -15,4 +15,4 @@ ENV NODE_ENV=production
 COPY --from=build /repo /repo
 WORKDIR /repo/apps/api
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

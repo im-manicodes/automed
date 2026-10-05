@@ -45,6 +45,8 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    // JOBS_ENABLED=false (pruebas/despliegues de verificación) también apaga el polling del sync.
+    if (this.config.get('JOBS_ENABLED') === 'false') return;
     const minutes = Number(this.config.get('SYNC_INTERVAL_MIN') ?? 5);
     if (!(minutes > 0)) return;
     const timer = setInterval(() => void this.syncNow(), minutes * 60_000);

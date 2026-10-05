@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ErrorBox from '../components/ErrorBox'
 import Spinner from '../components/Spinner'
 import TicketCard from '../components/TicketCard'
-import { useToast } from '../context/toasts'
+import { useToast } from '../context/toasts-context'
 import { mailApi, threadsApi, type ProcessStatus, type ThreadListItem } from '../lib/api'
 import { errorMessage, plural } from '../lib/format'
 import { canAnalyze, FILTERS, isBusy } from '../lib/status'
@@ -42,6 +42,7 @@ export default function Tickets() {
   }, [])
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
     void load()
   }, [load])
 

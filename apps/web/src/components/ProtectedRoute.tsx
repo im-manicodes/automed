@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom'
-import { useSession } from '../context/session'
+import { useSession } from '../context/session-context'
 import Login from '../pages/Login'
 import Spinner from './Spinner'
 

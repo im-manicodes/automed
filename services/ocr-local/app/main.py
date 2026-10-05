@@ -6,6 +6,7 @@ GET  /health
 """
 from fastapi import FastAPI, HTTPException, Request
 
+from . import engines
 from .engines import get_engine, load_image
 
 app = FastAPI(title="auto-med ocr-local")
@@ -13,7 +14,7 @@ app = FastAPI(title="auto-med ocr-local")
 
 @app.get("/health")
 def health():
-    return {"ok": True, "engine": get_engine().name}
+    return {"ok": True, "engine": get_engine().name, "fallback_reason": engines.fallback_reason}
 
 
 @app.post("/ocr")

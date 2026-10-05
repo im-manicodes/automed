@@ -3,7 +3,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import ErrorBox from '../components/ErrorBox'
 import Markdown from '../components/Markdown'
 import Spinner from '../components/Spinner'
-import { useToast } from '../context/toasts'
+import { useToast } from '../context/toasts-context'
 import { templatesApi, type Template } from '../lib/api'
 import { errorMessage, formatDate } from '../lib/format'
 
@@ -31,6 +31,7 @@ export default function Plantilla() {
   }, [])
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
     void load()
   }, [load])
 

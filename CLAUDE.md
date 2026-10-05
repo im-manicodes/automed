@@ -15,12 +15,14 @@ Para reducir costo de LLM, un hilo ya analizado **nunca** se reenvía completo. 
 - Monorepo pnpm (`pnpm-workspace.yaml`): `apps/api` (NestJS + Prisma 7 + PostgreSQL), `apps/web` (Vite + React + TS + Tailwind 4 + react-router).
 - Almacenamiento de PDFs/páginas: RustFS (S3 compatible) vía `@aws-sdk/client-s3`, path-style, módulo `storage`. En BD solo `storageKey` + `sha256`.
 - Interfaces intercambiables: `OcrEngine` (`OCR_ENGINE=local|textract`) y `LlmProvider` (`LLM_PROVIDER=bedrock|anthropic|openai`).
-- docker-compose: rustfs, api, web (PostgreSQL es externo, vía DATABASE_URL) y ocr-local (perfil `ocr`, solo dev).
+- docker-compose: rustfs, api (healthcheck `GET /api/health`), web y ocr-local (perfil `ocr`, solo dev). PostgreSQL es externo (`DATABASE_URL_DOCKER` desde el contenedor). Despliegue: `docs/despliegue.md`; benchmark OCR: `docs/benchmark-ocr.md`.
 
 ## Comandos
 - `pnpm install` · `pnpm dev` · `pnpm build` · `pnpm lint` · `pnpm test`
 - API: `pnpm --filter api prisma:migrate` (dev), `prisma:deploy`, `prisma:generate`. Cliente Prisma generado en `apps/api/src/generated/prisma` (ignorado en git; `pnpm build` lo regenera).
-- `docker compose up --build` (web en :8080, api en :3000, rustfs consola :9001).
+- `docker compose up --build` (web en :8080, api en :3000, rustfs consola :9001; api/rustfs/ocr solo en 127.0.0.1).
+- Tests: `pnpm test` (unit + e2e HTTP sin BD con supertest); flujo completo con mocks (sync -> OCR -> síntesis -> corrección -> incremental): `pnpm --filter api test:e2e-flow` (crea y borra un esquema temporal en la BD de `DATABASE_URL`; sin red).
+- El build emite `apps/api/dist/main.js` (`tsconfig.build.json` fija `rootDir: src`); `start:prod` = `node dist/main.js`.
 - Config por env: `.env` único en la raíz del monorepo (copiar de `.env.example`; lo leen api, Prisma, web y docker compose).
 
 ## Reglas de trabajo (OBLIGATORIAS)
@@ -35,5 +37,7 @@ Para reducir costo de LLM, un hilo ya analizado **nunca** se reenvía completo. 
 - Código y comentarios técnicos en inglés o español consistente; textos de UI siempre en español sencillo ("Listo", "Necesita tu ayuda").
 - Botones táctiles ≥ 44px (clases `.btn`); diseño mobile-first.
 - Sin logs de contenido de correos/PDFs. Tokens cifrados AES-GCM (`TOKEN_ENC_KEY`).
+- Seguridad (fase 7): toda ruta de `/api` exige sesión salvo `auth/login`, `auth/callback`, `auth/me` (solo informa si hay sesión), `auth/logout` y `health`. `configureApp` (`app.setup.ts`) aplica helmet, CORS solo a `WEB_ORIGIN`, límite JSON 256 kb. Cookie HttpOnly + SameSite=Lax (+ Secure por `COOKIE_SECURE` o `MS_REDIRECT_URI` https).
+- Servicio OCR local: PaddleOCR exige `paddlex==3.0.3` y `langchain<0.3` (fijados en `requirements.txt`); si no carga cae a Tesseract y lo indica en `/health` (`fallback_reason`).
 - Idempotencia por hash de contenido (no reprocesar hilos/PDFs sin cambios).
 - Modelo de datos: `MailAccount → Thread → Message → Attachment → OcrPage → OcrRegion`, más `Synthesis`, `Template`, `Setting` (`apps/api/prisma/schema.prisma`).

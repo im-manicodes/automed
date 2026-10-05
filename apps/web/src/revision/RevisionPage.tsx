@@ -39,6 +39,7 @@ export default function RevisionPage() {
 
   useEffect(() => {
     let cancelado = false;
+    // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
     setErrorCarga(null);
     obtenerPaginas(attachmentId)
       .then((d) => !cancelado && setDatos(d))
@@ -95,6 +96,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
 
   // Al cambiar de duda, la vista de página sigue a la duda y el foco vuelve al encabezado (anuncia el avance).
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
     setPaginaVista(null);
     titulo.current?.focus({ preventScroll: true });
   }, [flujo.indice]);
