@@ -1,0 +1,269 @@
+import { ConfigService } from '@nestjs/config';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { createHash } from 'crypto';
+import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { DeltaExpiredError, GraphService } from './graph.service';
+import { MailSyncService } from './mail-sync.service';
+import { msg, pdfAtt } from './fixtures/graph.fixtures';
+
+/** Prisma en memoria con solo lo que usa MailSyncService. */
+function fakePrisma() {
+  let n = 0;
+  const id = () => `id${++n}`;
+  const db = {
+    account: {
+      id: 'acc',
+      email: 'yo@x.com',
+      tokenEnc: 'enc',
+      deltaLink: null as string | null,
+      lastSyncAt: null as Date | null,
+    },
+    threads: [] as any[],
+    messages: [] as any[],
+    attachments: [] as any[],
+  };
+  const prisma = {
+    mailAccount: {
+      findFirst: async () => db.account,
+      update: async ({ data }: any) => Object.assign(db.account, data),
+    },
+    thread: {
+      upsert: async ({ where, create }: any) => {
+        const k = where.accountId_conversationId;
+        let t = db.threads.find(
+          (x) =>
+            x.accountId === k.accountId &&
+            x.conversationId === k.conversationId,
+        );
+        if (!t) db.threads.push((t = { id: id(), status: 'listo', ...create }));
+        return t;
+      },
+      findUnique: async ({ where }: any) =>
+        db.threads.find((t) => t.id === where.id) ?? null,
+      update: async ({ where, data }: any) =>
+        Object.assign(
+          db.threads.find((t) => t.id === where.id),
+          data,
+        ),
+    },
+    message: {
+      findUnique: async ({ where }: any) =>
+        db.messages.find((m) => m.graphId === where.graphId) ?? null,
+      create: async ({ data }: any) => {
+        const m = { id: id(), ...data };
+        db.messages.push(m);
+        return m;
+      },
+    },
+    attachment: {
+      findFirst: async ({ where }: any) =>
+        db.attachments.find((a) =>
+          Object.entries(where).every(([k, v]) => a[k] === v),
+        ) ?? null,
+      create: async ({ data }: any) => {
+        const a = { id: id(), ...data };
+        db.attachments.push(a);
+        return a;
+      },
+    },
+  };
+  return { db, prisma: prisma as unknown as PrismaService };
+}
+
+const bytesOf = (s: string) => Buffer.from(s);
+const sha = (s: string) =>
+  createHash('sha256').update(bytesOf(s)).digest('hex');
+
+function setup(graphOverrides: Partial<Record<keyof GraphService, any>> = {}) {
+  const { db, prisma } = fakePrisma();
+  const puts: string[] = [];
+  const storage = {
+    put: jest.fn(async (k: string) => {
+      puts.push(k);
+    }),
+  } as unknown as StorageService;
+  const graph = {
+    deltaMessages: jest.fn(),
+    listAttachments: jest.fn().mockResolvedValue([]),
+    downloadAttachment: jest.fn(),
+    ...graphOverrides,
+  } as unknown as GraphService;
+  const svc = new MailSyncService(
+    { get: () => '5' } as unknown as ConfigService,
+    prisma,
+    graph,
+    storage,
+    {
+      addInterval: jest.fn(),
+      doesExist: () => false,
+    } as unknown as SchedulerRegistry,
+  );
+  return { svc, db, graph: graph as any, puts, storage };
+}
+
+async function* pages(...p: any[]) {
+  for (const x of p) yield x;
+}
+
+describe('MailSyncService', () => {
+  it('agrupa mensajes por conversationId en un Thread y guarda deltaLink', async () => {
+    const { svc, db, graph } = setup();
+    graph.deltaMessages.mockReturnValue(
+      pages(
+        {
+          messages: [
+            msg('1', 'cA'),
+            msg('2', 'cA', { receivedDateTime: '2026-10-02T10:00:00Z' }),
+          ],
+        },
+        { messages: [msg('3', 'cB')], deltaLink: 'https://g/delta1' },
+      ),
+    );
+    const r = await svc.syncNow();
+    expect(r).toMatchObject({ started: true, messages: 3, newMessages: 3 });
+    expect(db.threads).toHaveLength(2);
+    expect(
+      db.messages.filter((m) => m.threadId === db.threads[0].id),
+    ).toHaveLength(2);
+    expect(db.threads[0].lastMessageAt.toISOString()).toBe(
+      '2026-10-02T10:00:00.000Z',
+    );
+    expect(db.account.deltaLink).toBe('https://g/delta1');
+  });
+
+  it('es idempotente: repetir el mismo mensaje no duplica', async () => {
+    const { svc, db, graph } = setup();
+    graph.deltaMessages.mockImplementation(() =>
+      pages({ messages: [msg('1', 'c')], deltaLink: 'd' }),
+    );
+    await svc.syncNow();
+    const r = await svc.syncNow();
+    expect(r.newMessages).toBe(0);
+    expect(db.messages).toHaveLength(1);
+    expect(graph.deltaMessages).toHaveBeenLastCalledWith('d');
+  });
+
+  it('guarda todos los PDFs de un mensaje, ignora no-PDF y borradores', async () => {
+    const { svc, db, graph, puts } = setup();
+    graph.deltaMessages.mockReturnValue(
+      pages({
+        messages: [
+          msg('1', 'c', { hasAttachments: true }),
+          msg('2', 'c', { isDraft: true }),
+          msg('3', 'c', { '@removed': { reason: 'deleted' } }),
+        ],
+        deltaLink: 'd',
+      }),
+    );
+    graph.listAttachments.mockResolvedValue([
+      pdfAtt('a1', 'uno.pdf'),
+      pdfAtt('a2', 'dos.pdf'),
+      { id: 'a3', name: 'x.png', contentType: 'image/png' },
+    ]);
+    graph.downloadAttachment.mockImplementation(async (_m: string, a: string) =>
+      bytesOf(`pdf-${a}`),
+    );
+    const r = await svc.syncNow();
+    expect(r.attachments).toBe(2);
+    expect(db.messages).toHaveLength(1);
+    expect(db.attachments.map((a) => a.filename)).toEqual([
+      'uno.pdf',
+      'dos.pdf',
+    ]);
+    expect(db.attachments[0]).toMatchObject({
+      sha256: sha('pdf-a1'),
+      storageKey: `attachments/${sha('pdf-a1')}.pdf`,
+    });
+    expect(puts).toHaveLength(2);
+    expect(db.threads[0].status).toBe('pendiente');
+  });
+
+  it('deduplica por hash: mismo PDF reenviado no se vuelve a subir', async () => {
+    const { svc, db, graph, puts } = setup();
+    graph.deltaMessages.mockReturnValue(
+      pages({
+        messages: [
+          msg('1', 'c', { hasAttachments: true }),
+          msg('2', 'c', { hasAttachments: true }),
+        ],
+        deltaLink: 'd',
+      }),
+    );
+    graph.listAttachments.mockImplementation(async (m: string) => [
+      pdfAtt(`att-${m}`),
+    ]);
+    graph.downloadAttachment.mockResolvedValue(bytesOf('mismo contenido'));
+    const r = await svc.syncNow();
+    expect(db.attachments).toHaveLength(2); // una fila por mensaje
+    expect(puts).toHaveLength(1); // una sola subida
+    expect(r.deduped).toBe(1);
+    expect(db.attachments[0].storageKey).toBe(db.attachments[1].storageKey);
+  });
+
+  it('no re-descarga adjuntos ya guardados', async () => {
+    const { svc, graph } = setup();
+    graph.deltaMessages.mockImplementation(() =>
+      pages({
+        messages: [msg('1', 'c', { hasAttachments: true })],
+        deltaLink: 'd',
+      }),
+    );
+    graph.listAttachments.mockResolvedValue([pdfAtt('a1')]);
+    graph.downloadAttachment.mockResolvedValue(bytesOf('x'));
+    await svc.syncNow();
+    await svc.syncNow();
+    expect(graph.downloadAttachment).toHaveBeenCalledTimes(1);
+  });
+
+  it('deltaLink expirado: reinicia con delta completo', async () => {
+    const { svc, db, graph } = setup();
+    db.account.deltaLink = 'https://g/viejo';
+    graph.deltaMessages
+      .mockImplementationOnce(() =>
+        (async function* () {
+          throw new DeltaExpiredError('x');
+          yield undefined;
+        })(),
+      )
+      .mockImplementationOnce(() =>
+        pages({ messages: [msg('1', 'c')], deltaLink: 'nuevo' }),
+      );
+    const r = await svc.syncNow();
+    expect(r.resetDelta).toBe(true);
+    expect(graph.deltaMessages).toHaveBeenLastCalledWith(null);
+    expect(db.account.deltaLink).toBe('nuevo');
+  });
+
+  it('no se solapa: segunda llamada concurrente no arranca', async () => {
+    const { svc, graph } = setup();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    graph.deltaMessages.mockImplementation(() =>
+      (async function* () {
+        await gate;
+        yield { messages: [], deltaLink: 'd' };
+      })(),
+    );
+    const first = svc.syncNow();
+    await Promise.resolve();
+    expect(svc.isRunning()).toBe(true);
+    expect((await svc.syncNow()).started).toBe(false);
+    release();
+    expect((await first).started).toBe(true);
+    expect(svc.isRunning()).toBe(false);
+  });
+
+  it('reporta error sin lanzar y libera el candado', async () => {
+    const { svc, graph } = setup();
+    graph.deltaMessages.mockImplementation(() =>
+      (async function* () {
+        throw new Error('boom');
+        yield undefined;
+      })(),
+    );
+    const r = await svc.syncNow();
+    expect(r.error).toBe('boom');
+    expect(svc.isRunning()).toBe(false);
+  });
+});

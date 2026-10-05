@@ -1,0 +1,12 @@
+{
+  "name": "auto-med",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.15.1",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  }
+}

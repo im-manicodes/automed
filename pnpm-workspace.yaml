@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+allowBuilds:
+  '@parcel/watcher': true
+  unrs-resolver: true
+  '@prisma/engines': true
+  prisma: true
+  '@prisma/client': true
+  esbuild: true
+  '@nestjs/core': true
+  '@swc/core': true
+  workerd: set this to true or false

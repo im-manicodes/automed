@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RegionStatus {
+  ok
+  dudoso
+  corregido
+}
+
+enum ProcessStatus {
+  pendiente
+  procesando
+  listo
+  necesita_ayuda
+  error
+}
+
+model MailAccount {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  /// Refresh token cifrado (AES-GCM)
+  tokenEnc     String?
+  deltaLink    String?
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  threads      Thread[]
+}
+
+model Thread {
+  id             String        @id @default(uuid())
+  accountId      String
+  conversationId String
+  subject        String
+  status         ProcessStatus @default(pendiente)
+  contentHash    String?
+  lastMessageAt  DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  account        MailAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  syntheses      Synthesis[]
+
+  @@unique([accountId, conversationId])
+}
+
+model Message {
+  id          String       @id @default(uuid())
+  threadId    String
+  graphId     String       @unique
+  from        String
+  to          String[]
+  cc          String[]
+  subject     String
+  bodyText    String
+  receivedAt  DateTime
+  createdAt   DateTime     @default(now())
+  thread      Thread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
+
+  @@index([threadId, receivedAt])
+}
+
+model Attachment {
+  id         String        @id @default(uuid())
+  messageId  String
+  graphId    String?
+  filename   String
+  mimeType   String
+  size       Int
+  storageKey String
+  sha256     String
+  status     ProcessStatus @default(pendiente)
+  createdAt  DateTime      @default(now())
+  message    Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  pages      OcrPage[]
+
+  @@index([sha256])
+}
+
+model OcrPage {
+  id            String      @id @default(uuid())
+  attachmentId  String
+  pageNumber    Int
+  imageKey      String
+  width         Int
+  height        Int
+  text          String?
+  attachment    Attachment  @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  regions       OcrRegion[]
+
+  @@unique([attachmentId, pageNumber])
+}
+
+model OcrRegion {
+  id          String       @id @default(uuid())
+  pageId      String
+  /// Caja normalizada 0..1
+  x           Float
+  y           Float
+  w           Float
+  h           Float
+  text        String
+  confidence  Float
+  status      RegionStatus @default(ok)
+  userText    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  page        OcrPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, status])
+}
+
+model Synthesis {
+  id        String   @id @default(uuid())
+  threadId  String
+  version   Int
+  markdown  String
+  inputHash String
+  createdAt DateTime @default(now())
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, version])
+}
+
+model Template {
+  id        String   @id @default(uuid())
+  name      String
+  markdown  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
