@@ -1,7 +1,7 @@
-import { fakePrisma } from '../../test/helpers/fake-prisma';
-import { PasswordService } from '../../src/auth/password.service';
-import { DEFAULT_TEMPLATE_MARKDOWN } from '../../src/templates/default-template';
-import { DEFAULT_SETTINGS, seedBase } from './base';
+import { fakePrisma } from '../test/helpers/fake-prisma';
+import { PasswordService } from '../src/auth/password.service';
+import { DEFAULT_TEMPLATE_MARKDOWN } from '../src/templates/default-template';
+import { DEFAULT_SETTINGS, seedBase } from './seed';
 
 const asDb = (d: unknown) => d as any;
 const PW = 'contraseña-secreta-123';
