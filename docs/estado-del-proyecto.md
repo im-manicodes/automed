@@ -9,11 +9,12 @@
 
 - [x] Fase 3 — Jobs y pipeline: cola en PostgreSQL (modelo `Job`, migración `jobs_cola`; claim atómico `FOR UPDATE SKIP LOCKED`, reintentos con backoff exponencial, recuperación de locks vencidos al arrancar y en cada barrido), worker (`apps/api/src/jobs`, `JOBS_CONCURRENCY`, polling), orquestador `process_thread` -> N x `process_attachment` (dedupe por sha256) -> `synthesize_thread`, idempotencia por hash de contenido del hilo, estados de Thread centralizados en `ThreadStateService` (pendiente -> procesando -> listo | necesita_revision | error; el valor `necesita_ayuda` del enum se renombró a `necesita_revision`), endpoints `GET /api/jobs/status` y `POST /api/threads/:id/reprocess`, `GET /api/threads` expone `status`/`updatedAt`. Enganches para fases 4 y 5: tokens `ATTACHMENT_PROCESSOR` y `THREAD_SYNTHESIZER` (hoy no-op) en `JobsModule`. Tests unitarios + integración opcional con PostgreSQL real (`TEST_DATABASE_URL`, `pnpm --filter api test:integration`).
 
+- [x] Fase 4 — OCR: rasterizado con pdfjs-dist + @napi-rs/canvas (sin binarios del sistema, `OCR_RENDER_DPI`=250) a `pages/{sha256}/{n}.png` en RustFS; `OcrEngine` con salida por línea/palabra (bbox normalizada, confianza 0..1) y adaptadores `local` (HTTP a `services/ocr-local`: FastAPI + PaddleOCR CPU, Tesseract como fallback; perfil `ocr` en docker-compose) y `textract` (DetectDocumentText/AnalyzeDocument, SDK v3); selección por `OCR_ENGINE`. `OcrService` reemplaza al no-op de `ATTACHMENT_PROCESSOR` (dedupe por sha256, regiones `ok|dudoso` por `OCR_CONFIDENCE_THRESHOLD`, reintento opcional con visión `OCR_VISION_RETRY` vía `LlmProvider`, hoy `NoopLlmProvider`). Migración `ocr_paginas_regiones` (OcrPage.sha256 + unique sha256/página, engine; OcrRegion.source). Endpoints: `GET /api/attachments/:id/pages`, `GET /api/attachments/:id/pages/:n/image`, `PATCH /api/ocr/regions/:id` (marca `corregido` y reencola la síntesis de los hilos con ese sha256). Benchmark: `pnpm --filter api ocr:benchmark -- <dir>`. Ver pendientes de la fase 4.
+
 ## En curso
 - Nada.
 
 ## Falta
-- [ ] Fase 4 — OCR (local + Textract, regiones, reintento visión)
 - [ ] Fase 5 — Síntesis (LlmProvider Bedrock/API key, plantilla)
 - [ ] Fase 6 — UI completa (login, visor PDF, corrección)
 - [ ] Fase 7 — Hardening y entrega
@@ -30,3 +31,14 @@
 - Mientras sean no-op, un hilo nuevo pasa solo a `listo` sin síntesis real.
 - El worker corre dentro del proceso de la API (varias réplicas son seguras gracias a SKIP LOCKED).
 - Los tests de integración de la cola requieren `NODE_OPTIONS=--experimental-vm-modules` (Prisma 7 + Jest CJS) y se saltan sin `TEST_DATABASE_URL`.
+
+## Pendientes de la fase 4
+- No probado en este entorno: PaddleOCR (sin pip/Docker build), Tesseract (no instalado) ni Textract real (sin credenciales); el servicio `services/ocr-local` está escrito contra la API de PaddleOCR 3.x (`predict`, claves `rec_texts/rec_scores/rec_polys`) y debe validarse con `docker compose --profile ocr up --build`.
+- Validado: rasterizado real de PDF (pdfjs + canvas), tests unitarios, build, lint, migración aplicada.
+- Fijar el umbral (`OCR_CONFIDENCE_THRESHOLD`) y elegir motor local con el benchmark sobre PDFs reales (fase 7).
+- El reintento con visión es no-op hasta la fase 5 (`LLM_PROVIDER` real sustituye a `NoopLlmProvider` en `LlmModule`; debe aceptar `images`).
+- El test del rasterizador necesita `pnpm --filter api test:raster` (pdfjs es ESM; Jest necesita `--experimental-vm-modules`); en `pnpm test` se omite.
+- Textract síncrono limita a 10 MB por imagen; si una página PNG lo supera hay que bajar `OCR_RENDER_DPI`.
+- Si se corrige una región mientras el hilo está `procesando`, no se reencola (la síntesis en curso podría no verla); reprocesar el hilo lo resuelve.
+- Las correcciones del usuario no se editan una segunda vez en estado `corregido` salvo que se vuelva a llamar al PATCH (permitido).
+- Cómo correr el benchmark: `pnpm --filter api ocr:benchmark -- /ruta/a/pdfs --engine local|textract [--dpi 250] [--threshold 0.85] [--max-pages N] [--csv salida.csv]` (usa el `.env` raíz; no guarda nada ni imprime texto de los documentos). Para `local` levantar antes `docker compose --profile ocr up -d ocr-local`.

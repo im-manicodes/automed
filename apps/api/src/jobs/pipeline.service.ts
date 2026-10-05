@@ -123,6 +123,42 @@ export class PipelineService implements OnModuleInit {
     return { threadId, status: 'pendiente' as const };
   }
 
+  /**
+   * Una región se corrigió: recalcula el estado de los adjuntos con ese sha256 (sin dudosas ->
+   * listo) y reencola la síntesis de cada hilo afectado. Un hilo en 'procesando' se omite (su
+   * síntesis en curso o pendiente ya leerá las correcciones).
+   */
+  async onRegionsChanged(sha256: string): Promise<string[]> {
+    const doubtful = await this.prisma.ocrRegion.count({
+      where: { status: 'dudoso', page: { sha256 } },
+    });
+    await this.prisma.attachment.updateMany({
+      where: { sha256, status: { in: DONE } },
+      data: { status: doubtful > 0 ? 'necesita_revision' : 'listo' },
+    });
+    const threads = await this.prisma.thread.findMany({
+      where: { messages: { some: { attachments: { some: { sha256 } } } } },
+      select: { id: true },
+    });
+    const queued: string[] = [];
+    const stamp = Date.now();
+    for (const t of threads) {
+      // listo/necesita_revision -> pendiente -> procesando (únicas transiciones válidas)
+      if (!(await this.state.transition(t.id, 'pendiente'))) continue;
+      if (!(await this.state.transition(t.id, 'procesando'))) continue;
+      const hash = await this.computeThreadHash(t.id);
+      await this.queue.enqueue(
+        JOB_TYPES.synthesizeThread,
+        { threadId: t.id, hash },
+        {
+          dedupeKey: `synthesize_thread:${t.id}:${hash}:correccion:${stamp}`,
+        },
+      );
+      queued.push(t.id);
+    }
+    return queued;
+  }
+
   // ---- handlers ----
 
   async processThread(job: JobRecord) {

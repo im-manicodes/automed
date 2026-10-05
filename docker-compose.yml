@@ -25,6 +25,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
       S3_FORCE_PATH_STYLE: "true"
       WEB_ORIGIN: http://localhost:8080
+      OCR_LOCAL_URL: http://ocr-local:8000
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -42,11 +43,19 @@ services:
     ports:
       - "8080:80"
 
-  # Pendiente (fase 4): OCR local en CPU solo para desarrollo.
-  # ocr-local:
-  #   build: ./services/ocr-local
-  #   ports:
-  #     - "8000:8000"
+  # OCR local en CPU, solo desarrollo: arranca con `docker compose --profile ocr up`
+  # (con OCR_ENGINE=local; en producción se usa OCR_ENGINE=textract y este servicio no corre).
+  ocr-local:
+    profiles: ["ocr"]
+    build: ./services/ocr-local
+    environment:
+      OCR_LOCAL_ENGINE: ${OCR_LOCAL_ENGINE:-paddle}
+      OCR_LANG: ${OCR_LANG:-es}
+    volumes:
+      - ocrmodels:/models
+    ports:
+      - "8000:8000"
 
 volumes:
   rustfsdata:
+  ocrmodels:

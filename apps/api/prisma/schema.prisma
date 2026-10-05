@@ -127,15 +127,20 @@ model Attachment {
 model OcrPage {
   id            String      @id @default(uuid())
   attachmentId  String
+  /// Denormalizado de Attachment.sha256: un PDF repetido comparte un solo juego de páginas
+  sha256        String
   pageNumber    Int
   imageKey      String
   width         Int
   height        Int
   text          String?
+  /// Motor que produjo el OCR (local | textract)
+  engine        String?
   attachment    Attachment  @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
   regions       OcrRegion[]
 
   @@unique([attachmentId, pageNumber])
+  @@unique([sha256, pageNumber])
 }
 
 model OcrRegion {
@@ -150,6 +155,8 @@ model OcrRegion {
   confidence  Float
   status      RegionStatus @default(ok)
   userText    String?
+  /// Origen del texto vigente: ocr | vision | usuario
+  source      String       @default("ocr")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   page        OcrPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)

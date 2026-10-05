@@ -1,4 +1,4 @@
-/** Caja normalizada (0..1) respecto al tamaño de la página. */
+/** Caja normalizada (0..1) respecto al tamaño de la página; origen arriba a la izquierda. */
 export interface OcrBox {
   x: number;
   y: number;
@@ -14,11 +14,15 @@ export interface OcrWord {
 
 export interface OcrPageResult {
   pageNumber: number;
+  /** Palabras (si el motor las entrega; PaddleOCR solo entrega líneas). */
   words: OcrWord[];
+  /** Líneas de texto (unidad de región para revisión). Si falta, se usan `words`. */
+  lines?: OcrWord[];
 }
 
-/** Motor OCR intercambiable (OCR_ENGINE=local|textract). Implementaciones en fase 4. */
+/** Motor OCR intercambiable (OCR_ENGINE=local|textract). */
 export interface OcrEngine {
+  readonly name: string;
   recognize(image: Uint8Array, pageNumber: number): Promise<OcrPageResult>;
 }
 

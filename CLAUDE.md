@@ -9,7 +9,7 @@ Plan completo: `/home/mani/.claude/plans/necesito-un-peque-o-software-swirling-t
 - Monorepo pnpm (`pnpm-workspace.yaml`): `apps/api` (NestJS + Prisma 7 + PostgreSQL), `apps/web` (Vite + React + TS + Tailwind 4 + react-router).
 - Almacenamiento de PDFs/páginas: RustFS (S3 compatible) vía `@aws-sdk/client-s3`, path-style, módulo `storage`. En BD solo `storageKey` + `sha256`.
 - Interfaces intercambiables: `OcrEngine` (`OCR_ENGINE=local|textract`) y `LlmProvider` (`LLM_PROVIDER=bedrock|anthropic|openai`).
-- docker-compose: rustfs, api, web (PostgreSQL es externo, vía DATABASE_URL) (ocr-local pendiente, fase 4).
+- docker-compose: rustfs, api, web (PostgreSQL es externo, vía DATABASE_URL) y ocr-local (perfil `ocr`, solo dev).
 
 ## Comandos
 - `pnpm install` · `pnpm dev` · `pnpm build` · `pnpm lint` · `pnpm test`
