@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import ConectarOutlookButton from '../components/ConectarOutlookButton'
 import ErrorBox from '../components/ErrorBox'
 import Spinner from '../components/Spinner'
 import TicketCard from '../components/TicketCard'
 import { useToast } from '../context/toasts-context'
-import { mailApi, threadsApi, type ProcessStatus, type ThreadListItem } from '../lib/api'
+import { ApiError, mailApi, threadsApi, type ProcessStatus, type ThreadListItem } from '../lib/api'
 import { errorMessage, plural } from '../lib/format'
 import { canAnalyze, FILTERS, isBusy } from '../lib/status'
 import { usePolling } from '../lib/usePolling'
@@ -20,6 +21,7 @@ export default function Tickets() {
   const { toast } = useToast()
   const [tickets, setTickets] = useState<ThreadListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [connected, setConnected] = useState<boolean | null>(null)
   const [filter, setFilter] = useState<Filter>(undefined)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [syncing, setSyncing] = useState(false)
@@ -40,6 +42,19 @@ export default function Tickets() {
       if (!silent) setError(errorMessage(e))
     }
   }, [])
+
+  const loadConnection = useCallback(async () => {
+    try {
+      setConnected((await mailApi.status()).connected)
+    } catch {
+      setConnected(null) // si no se sabe, no se bloquea nada
+    }
+  }, [])
+
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
+    void loadConnection()
+  }, [loadConnection])
 
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- patrón de carga inicial / sincronización con la red o la imagen; no cambia el comportamiento
@@ -67,7 +82,10 @@ export default function Tickets() {
       else toast(r.newMessages > 0 ? `Listo: ${plural(r.newMessages, 'correo nuevo', 'correos nuevos')}.` : 'Listo: no hay correos nuevos.', 'ok')
       await load(true)
     } catch (e) {
-      toast(errorMessage(e), 'error')
+      if (e instanceof ApiError && e.status === 409) {
+        setConnected(false)
+        toast('Conecta tu Outlook primero.', 'info')
+      } else toast(errorMessage(e), 'error')
     } finally {
       setSyncing(false)
     }
@@ -95,7 +113,7 @@ export default function Tickets() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold">Tus tickets</h2>
-        <button type="button" className="btn btn-secondary" onClick={() => void sync()} disabled={syncing}>
+        <button type="button" className="btn btn-secondary" onClick={() => void sync()} disabled={syncing || connected === false}>
           <span aria-hidden className={syncing ? 'animate-spin' : ''}>🔄</span>
           {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
         </button>
@@ -116,7 +134,15 @@ export default function Tickets() {
 
       {error && <ErrorBox message={error} onRetry={() => void load()} />}
       {!error && tickets === null && <Spinner text="Cargando tus tickets…" />}
-      {tickets && tickets.length === 0 && (
+      {connected === false && (
+        <div className="space-y-3 rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center">
+          <p className="text-3xl" aria-hidden>🔌</p>
+          <p className="font-semibold">Conecta tu Outlook para empezar</p>
+          <p className="text-slate-700">Aún no hay un correo conectado, por eso no podemos traer tus mensajes. Solo pedimos permiso de lectura.</p>
+          <ConectarOutlookButton />
+        </div>
+      )}
+      {tickets && tickets.length === 0 && connected !== false && (
         <div className="space-y-2 rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center">
           <p className="text-3xl" aria-hidden>📭</p>
           <p className="font-semibold">Todavía no hay tickets</p>

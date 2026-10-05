@@ -25,7 +25,9 @@
     "prisma:deploy": "prisma migrate deploy",
     "test:e2e-flow": "ts-node scripts/e2e-flow.ts",
     "ocr:benchmark": "ts-node scripts/ocr-benchmark.ts",
-    "test:raster": "NODE_OPTIONS=--experimental-vm-modules jest src/ocr/pdf-rasterizer"
+    "test:raster": "NODE_OPTIONS=--experimental-vm-modules jest src/ocr/pdf-rasterizer",
+    "user:create": "pnpm build && node dist/cli/user.js create",
+    "user:reset-password": "pnpm build && node dist/cli/user.js reset-password"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
@@ -37,8 +39,11 @@
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^12.0.2",
+    "@nestjs/throttler": "^6.7.1",
+    "@node-rs/argon2": "^2.2.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "dotenv": "^18.0.5",

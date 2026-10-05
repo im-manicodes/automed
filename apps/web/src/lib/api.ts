@@ -114,9 +114,17 @@ export interface SyncResult {
 }
 
 export interface MailStatus {
-  connectedEmail: string | null
-  running: boolean
-  last: (SyncResult & { at: string }) | null
+  connected: boolean
+  email?: string
+  lastSyncAt?: string | null
+  syncing: boolean
+  error?: string | null
+}
+
+export interface User {
+  id: string
+  email: string
+  nombre: string
 }
 
 export interface JobsStatus {
@@ -145,7 +153,7 @@ export class ApiError extends Error {
 type UnauthorizedHandler = () => void
 let onUnauthorized: UnauthorizedHandler | null = null
 
-/** La sesión registra aquí qué hacer ante un 401 (volver a la pantalla de entrada). */
+/** La sesión registra aquí qué hacer cuando ya no hay sesión (volver al login). */
 export function setUnauthorizedHandler(h: UnauthorizedHandler | null) {
   onUnauthorized = h
 }
@@ -156,14 +164,12 @@ function messageFor(status: number, body: unknown): string {
   if (Array.isArray(m) && m.length) return m.join('. ')
   if (status === 401) return 'Tu sesión terminó. Entra de nuevo.'
   if (status === 404) return 'No se encontró lo que buscabas.'
+  if (status === 429) return 'Hubo demasiados intentos. Espera un minuto y vuelve a intentar.'
   if (status >= 500) return 'Algo falló en el servidor. Intenta de nuevo en un momento.'
   return 'No se pudo completar la acción.'
 }
 
-export async function api<T>(
-  path: string,
-  opts: { method?: string; body?: unknown } = {},
-): Promise<T> {
+async function rawRequest(path: string, opts: { method?: string; body?: unknown }): Promise<{ res: Response; data: unknown }> {
   let res: Response
   try {
     res = await fetch(`/api${path}`, {
@@ -184,24 +190,59 @@ export async function api<T>(
       data = null
     }
   }
-  if (!res.ok) {
-    if (res.status === 401) onUnauthorized?.()
-    throw new ApiError(res.status, messageFor(res.status, data))
+  return { res, data }
+}
+
+// Un único refresh en vuelo: las peticiones concurrentes con 401 lo comparten.
+let refreshing: Promise<boolean> | null = null
+
+function refreshSession(): Promise<boolean> {
+  if (!refreshing) {
+    refreshing = rawRequest('/auth/refresh', { method: 'POST' })
+      .then(({ res }) => res.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshing = null
+      })
   }
+  return refreshing
+}
+
+// Rutas de autenticación: un 401 aquí significa "datos incorrectos" o "sin sesión", no se reintenta.
+const NO_REFRESH = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/me']
+
+export async function api<T>(
+  path: string,
+  opts: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  let { res, data } = await rawRequest(path, opts)
+  if (res.status === 401 && !NO_REFRESH.includes(path)) {
+    if (await refreshSession()) {
+      ;({ res, data } = await rawRequest(path, opts))
+    }
+    if (res.status === 401) onUnauthorized?.()
+  }
+  if (!res.ok) throw new ApiError(res.status, messageFor(res.status, data))
   return data as T
 }
 
 const enc = encodeURIComponent
 
 export const authApi = {
-  me: () => api<{ authenticated: boolean; email?: string }>('/auth/me'),
-  logout: () => api<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
-  loginUrl: '/api/auth/login',
+  me: () => api<{ authenticated: boolean; user?: User }>('/auth/me'),
+  login: (email: string, password: string) =>
+    api<{ user: User }>('/auth/login', { method: 'POST', body: { email, password } }),
+  refresh: () => api<{ user: User }>('/auth/refresh', { method: 'POST' }),
+  logout: () => api<void>('/auth/logout', { method: 'POST' }),
+  changePassword: (actual: string, nueva: string) =>
+    api<void>('/auth/change-password', { method: 'POST', body: { actual, nueva } }),
 }
 
 export const mailApi = {
   sync: () => api<SyncResult>('/mail/sync', { method: 'POST' }),
   status: () => api<MailStatus>('/mail/status'),
+  connect: () => api<{ url: string }>('/mail/connect', { method: 'POST' }),
+  disconnect: () => api<void>('/mail/connection', { method: 'DELETE' }),
 }
 
 export const jobsApi = { status: () => api<JobsStatus>('/jobs/status') }

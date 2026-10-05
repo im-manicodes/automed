@@ -1,12 +1,14 @@
 import { createContext, useContext } from 'react'
+import type { User } from '../lib/api'
 
 export type SessionState =
   | { status: 'loading' }
   | { status: 'anonymous'; error?: string }
-  | { status: 'authenticated'; email: string }
+  | { status: 'authenticated'; user: User }
 
 export interface SessionCtx {
   session: SessionState
+  login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
 }
 

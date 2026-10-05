@@ -33,7 +33,16 @@ Guía completa (variables, Entra ID, Textract/Bedrock, backups, problemas): `doc
 `pnpm build` · `pnpm lint` · `pnpm test` · `pnpm --filter api test:e2e-flow` (flujo completo con mocks, esquema temporal) · `pnpm --filter web test` (vitest) · `pnpm --filter api prisma:migrate`
 
 ## Configuración
-Ver `.env.example` (raíz) (BD, S3/RustFS, Microsoft Graph, `OCR_ENGINE`, `LLM_PROVIDER`).
+Ver `.env.example` (raíz) (BD, S3/RustFS, `JWT_SECRET`, Microsoft Graph, `OCR_ENGINE`, `LLM_PROVIDER`). `JWT_SECRET` es obligatorio (`openssl rand -base64 48`).
+
+## Primer usuario y conexión con Outlook
+La app tiene su propio login (correo + contraseña); Outlook se conecta después desde **Ajustes -> Conectar Outlook**.
+```bash
+pnpm --filter api prisma:deploy
+pnpm --filter api user:create -- --email tu@correo.com --nombre "Tu nombre"   # pide la contraseña (sin eco)
+# con Docker: docker compose exec api node dist/cli/user.js create --email tu@correo.com --nombre "Tu nombre"
+```
+Olvidaste la contraseña: `pnpm --filter api user:reset-password -- --email tu@correo.com`.
 
 ## Estado
 Ver `docs/estado-del-proyecto.md`. Convenciones y reglas para agentes: `CLAUDE.md` / `AGENTS.md`.

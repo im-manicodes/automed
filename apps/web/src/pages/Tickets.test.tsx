@@ -29,6 +29,7 @@ afterEach(() => vi.restoreAllMocks())
 describe('lista de tickets', () => {
   beforeEach(() => {
     vi.spyOn(apiLib.threadsApi, 'list').mockResolvedValue(list)
+    vi.spyOn(apiLib.mailApi, 'status').mockResolvedValue({ connected: true, email: 'a@b.c', syncing: false })
   })
 
   it('muestra etiquetas y aviso de mensajes nuevos', async () => {
@@ -64,5 +65,35 @@ describe('lista de tickets', () => {
     await user.click(screen.getByRole('button', { name: 'Listos' }))
     expect(screen.queryByText('Ticket A')).not.toBeInTheDocument()
     expect(screen.getByText('Ticket C')).toBeInTheDocument()
+  })
+})
+
+describe('sin Outlook conectado', () => {
+  it('muestra estado vacío amable y deshabilita sincronizar', async () => {
+    vi.spyOn(apiLib.threadsApi, 'list').mockResolvedValue([])
+    vi.spyOn(apiLib.mailApi, 'status').mockResolvedValue({ connected: false, syncing: false })
+    renderPage()
+    expect(await screen.findByText('Conecta tu Outlook para empezar')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Conectar con Outlook' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Sincronizar ahora/ })).toBeDisabled()
+    expect(screen.queryByText('Todavía no hay tickets')).not.toBeInTheDocument()
+  })
+
+  it('conectado y sin tickets pide sincronizar', async () => {
+    vi.spyOn(apiLib.threadsApi, 'list').mockResolvedValue([])
+    vi.spyOn(apiLib.mailApi, 'status').mockResolvedValue({ connected: true, email: 'a@b.c', syncing: false })
+    renderPage()
+    expect(await screen.findByText('Todavía no hay tickets')).toBeInTheDocument()
+  })
+
+  it('un 409 al sincronizar muestra el estado de conexión', async () => {
+    vi.spyOn(apiLib.threadsApi, 'list').mockResolvedValue([])
+    vi.spyOn(apiLib.mailApi, 'status').mockResolvedValue({ connected: true, email: 'a@b.c', syncing: false })
+    vi.spyOn(apiLib.mailApi, 'sync').mockRejectedValue(new apiLib.ApiError(409, 'Conecta tu Outlook primero'))
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Todavía no hay tickets')
+    await user.click(screen.getByRole('button', { name: /Sincronizar ahora/ }))
+    expect(await screen.findByText('Conecta tu Outlook para empezar')).toBeInTheDocument()
   })
 })

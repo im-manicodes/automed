@@ -1,6 +1,6 @@
 # Registrar la app en Microsoft Entra ID
 
-Necesitas una app registrada para que auto-med lea tu buzón con Microsoft Graph. Se usa OAuth **delegado** (inicias sesión una vez; la app guarda un refresh token cifrado) con permisos `Mail.Read` y `offline_access`.
+Necesitas una app registrada para que auto-med lea tu buzón con Microsoft Graph. Se usa OAuth **delegado** (conectas Outlook una vez; la app guarda un refresh token cifrado) con permisos `Mail.Read` y `offline_access`.
 
 ## 1. Crear el registro
 1. Entra a <https://entra.microsoft.com> con tu cuenta de la organización.
@@ -35,7 +35,11 @@ MS_CLIENT_SECRET=<valor del secreto>
 MS_REDIRECT_URI=http://localhost:3000/api/auth/callback
 TOKEN_ENC_KEY=<salida de: openssl rand -base64 32>
 ```
-Arranca la API y abre `http://localhost:3000/api/auth/login`. Tras aceptar los permisos volverás a `WEB_ORIGIN` con la sesión iniciada. Luego `POST /api/mail/sync` (o espera el intervalo `SYNC_INTERVAL_MIN`).
+Define también `JWT_SECRET` (obligatorio; `openssl rand -base64 48`). El flujo ahora es:
+1. Crea tu usuario de la app: `pnpm --filter api user:create -- --email <correo> --nombre <nombre>` (pide la contraseña por prompt).
+2. **Inicia sesión en la app** (correo + contraseña; el login de la app ya no usa Microsoft).
+3. Ve a **Ajustes -> Conectar Outlook**: la app llama a `POST /api/mail/connect`, te lleva a Microsoft y, tras aceptar los permisos, Microsoft vuelve a `MS_REDIRECT_URI` (`/api/auth/callback`; misma URI de siempre). Ese retorno exige que sigas con sesión iniciada en la app (cookie SameSite=Lax) y que sea el mismo usuario que inició la conexión; luego te devuelve a `WEB_ORIGIN/ajustes?outlook=conectado`.
+4. Sincroniza (botón o cada `SYNC_INTERVAL_MIN`). **Desconectar** (Ajustes) borra solo los tokens de Microsoft y detiene la sincronización; conserva tickets, mensajes, adjuntos y síntesis.
 
 ## Fallback: acceso app-only (si el tenant bloquea el consentimiento de usuario)
 Si aparece "Se necesita aprobación del administrador" y el admin no habilita el consentimiento delegado, se puede usar un permiso de **aplicación** (`Mail.Read` de tipo *Aplicación*, flujo client-credentials) **limitado a tu buzón** con una política de acceso a aplicaciones de Exchange. Este modo aún no está implementado en el código; se añadiría en un adaptador alterno de `AuthService`.
@@ -45,6 +49,6 @@ Texto sugerido para el administrador:
 > Hola, necesito registrar la aplicación interna "auto-med" para leer (solo lectura) mi propio buzón con Microsoft Graph. Por favor: (1) concede consentimiento de administrador al permiso delegado `Mail.Read` (y `offline_access`) para la app con Id `<MS_CLIENT_ID>`; o, si la política no lo permite, (2) concede el permiso de aplicación `Mail.Read` y restríngelo únicamente a mi buzón (`<mi-correo>`) con una Application Access Policy de Exchange Online (`New-ApplicationAccessPolicy -AppId <MS_CLIENT_ID> -PolicyScopeGroupId <grupo-con-mi-buzón> -AccessRight RestrictAccess`). La app no escribe ni envía correos. Gracias.
 
 ## Notas de seguridad
-- El refresh token se guarda cifrado con AES-256-GCM (`TOKEN_ENC_KEY`); si cambias la clave tendrás que volver a iniciar sesión.
-- `ALLOWED_EMAIL` (opcional) restringe qué cuenta puede entrar; por defecto, la primera cuenta que inicia sesión queda como la única.
+- El refresh token se guarda cifrado con AES-256-GCM (`TOKEN_ENC_KEY`); si cambias la clave tendrás que volver a conectar Outlook.
+- Cada usuario de la app tiene una sola cuenta de Outlook; una misma cuenta de Outlook no puede conectarse a dos usuarios. `ALLOWED_EMAIL` y `SESSION_SECRET` ya no existen (quien entra a la app es quien tiene usuario y contraseña).
 - Renueva el secreto de cliente antes de que caduque.

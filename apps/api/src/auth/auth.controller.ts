@@ -1,22 +1,30 @@
 import {
+  Body,
   Controller,
   Get,
+  HttpCode,
   Post,
   Query,
   Req,
   Res,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Request, Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
-import { SessionService } from './session.service';
+import type { AuthedRequest, AuthUser } from './auth.types';
+import { CurrentUser } from './current-user.decorator';
+import { ACCESS_COOKIE, REFRESH_COOKIE, parseCookie } from './cookies';
+import { LoginThrottlerGuard } from './login-throttler.guard';
+import { MicrosoftService, OutlookConnectError } from './microsoft.service';
+import { SessionGuard } from './session.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
-    private readonly sessions: SessionService,
+    private readonly microsoft: MicrosoftService,
     private readonly config: ConfigService,
   ) {}
 
@@ -29,43 +37,118 @@ export class AuthController {
     );
   }
 
-  @Get('login')
-  login(@Res() res: Response) {
-    res.redirect(this.auth.buildLoginUrl());
+  private ua(req: AuthedRequest) {
+    return req.headers['user-agent'];
   }
 
-  @Get('callback')
-  async callback(
-    @Query('code') code: string,
-    @Query('state') state: string,
-    @Query('error') error: string | undefined,
-    @Res() res: Response,
+  private publicUser(u: AuthUser) {
+    return { id: u.id, email: u.email, nombre: u.nombre };
+  }
+
+  @Post('login')
+  @HttpCode(200)
+  @UseGuards(LoginThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async login(
+    @Body() body: { email?: unknown; password?: unknown },
+    @Req() req: AuthedRequest,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    if (error || !code) throw new UnauthorizedException('Login cancelado');
-    const email = await this.auth.handleCallback(code, state);
-    res.setHeader(
-      'Set-Cookie',
-      this.sessions.cookieHeader(this.sessions.create(email), this.secure()),
-    );
-    res.redirect(this.config.get<string>('WEB_ORIGIN') ?? '/');
+    const t = await this.auth.login(body?.email, body?.password, this.ua(req));
+    res.setHeader('Set-Cookie', this.auth.cookies(t, this.secure()));
+    return { user: this.publicUser(t.user) };
   }
 
-  @Get('me')
-  me(@Req() req: Request) {
-    const s = this.sessions.verify(
-      this.sessions.parseCookie(req.headers.cookie),
-    );
-    return s
-      ? { authenticated: true, email: s.email }
-      : { authenticated: false };
+  @Post('refresh')
+  @HttpCode(200)
+  async refresh(
+    @Req() req: AuthedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    try {
+      const t = await this.auth.refresh(
+        parseCookie(req.headers.cookie, REFRESH_COOKIE),
+        this.ua(req),
+      );
+      res.setHeader('Set-Cookie', this.auth.cookies(t, this.secure()));
+      return { user: this.publicUser(t.user) };
+    } catch (e) {
+      res.setHeader('Set-Cookie', this.auth.clearCookies(this.secure()));
+      throw e;
+    }
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) res: Response) {
-    res.setHeader(
-      'Set-Cookie',
-      this.sessions.cookieHeader('', this.secure(), true),
+  @HttpCode(204)
+  async logout(
+    @Req() req: AuthedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.auth.logout(parseCookie(req.headers.cookie, REFRESH_COOKIE));
+    res.setHeader('Set-Cookie', this.auth.clearCookies(this.secure()));
+  }
+
+  /** Público: solo informa si hay sesión (nunca 401). */
+  @Get('me')
+  me(@Req() req: AuthedRequest) {
+    const user = this.auth.verifyAccess(
+      parseCookie(req.headers.cookie, ACCESS_COOKIE),
     );
-    return { ok: true };
+    return user
+      ? { authenticated: true, user: this.publicUser(user) }
+      : { authenticated: false };
+  }
+
+  @Post('change-password')
+  @HttpCode(204)
+  @UseGuards(SessionGuard)
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() body: { actual?: unknown; nueva?: unknown },
+    @Req() req: AuthedRequest,
+  ) {
+    await this.auth.changePassword(
+      user.id,
+      body?.actual,
+      body?.nueva,
+      parseCookie(req.headers.cookie, REFRESH_COOKIE),
+    );
+  }
+
+  /**
+   * Retorno de Microsoft (misma URI registrada en Entra). Exige sesión de la app del mismo
+   * usuario que inició la conexión; siempre redirige a Ajustes con el resultado.
+   */
+  @Get('callback')
+  async callback(
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') error: string | undefined,
+    @Req() req: AuthedRequest,
+    @Res() res: Response,
+  ) {
+    const web = this.config.get<string>('WEB_ORIGIN') ?? '';
+    const fail = (motivo: string) =>
+      res.redirect(
+        `${web}/ajustes?outlook=error&motivo=${encodeURIComponent(motivo)}`,
+      );
+    const user = this.auth.verifyAccess(
+      parseCookie(req.headers.cookie, ACCESS_COOKIE),
+    );
+    if (!user)
+      return fail('Tu sesión caducó; inicia sesión e inténtalo de nuevo');
+    if (error || typeof code !== 'string' || !code) {
+      return fail('Se canceló la conexión con Outlook');
+    }
+    try {
+      await this.microsoft.handleCallback(user.id, code, state);
+    } catch (e) {
+      return fail(
+        e instanceof OutlookConnectError
+          ? e.message
+          : 'No se pudo conectar con Outlook',
+      );
+    }
+    return res.redirect(`${web}/ajustes?outlook=conectado`);
   }
 }

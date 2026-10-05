@@ -1,4 +1,4 @@
-import { AuthService } from '../auth/auth.service';
+import { MicrosoftService } from '../auth/microsoft.service';
 import { DeltaExpiredError, GraphService } from './graph.service';
 import { msg } from './fixtures/graph.fixtures';
 
@@ -15,7 +15,7 @@ describe('GraphService', () => {
 
   beforeEach(() => {
     fetchMock = jest.spyOn(global, 'fetch');
-    svc = new GraphService(auth as unknown as AuthService);
+    svc = new GraphService(auth as unknown as MicrosoftService);
     jest.spyOn(svc, 'sleep').mockResolvedValue();
     auth.getAccessToken.mockClear();
   });

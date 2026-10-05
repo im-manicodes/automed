@@ -49,8 +49,42 @@ model Job {
   @@index([status, runAt])
 }
 
+/// Usuario de la app (login con correo + contraseña, independiente de Microsoft).
+model User {
+  id                String         @id @default(uuid())
+  /// Siempre en minúsculas
+  email             String         @unique
+  nombre            String
+  /// argon2id
+  passwordHash      String
+  createdAt         DateTime       @default(now())
+  passwordChangedAt DateTime       @default(now())
+  mailAccount       MailAccount?
+  refreshTokens     RefreshToken[]
+}
+
+/// Refresh token opaco de la sesión (solo se guarda su hash SHA-256). Rotación por familia.
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  familyId   String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
 model MailAccount {
   id          String           @id @default(uuid())
+  /// Dueño (una cuenta de Outlook por usuario). Nulo en cuentas previas a la fase 8: se adopta con el CLI user:create.
+  userId      String?          @unique
+  user        User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   email       String           @unique
   /// Refresh token cifrado (AES-GCM)
   tokenEnc    String?

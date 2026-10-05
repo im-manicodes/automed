@@ -6,7 +6,12 @@ import type { App } from 'supertest/types';
 import { AppController } from '../src/app.controller';
 import { AppService } from '../src/app.service';
 import { configureApp } from '../src/app.setup';
-import { SessionService } from '../src/auth/session.service';
+import { JwtModule, JwtService } from '@nestjs/jwt';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { PasswordService } from '../src/auth/password.service';
+import { MicrosoftService } from '../src/auth/microsoft.service';
+import { LoginThrottlerGuard } from '../src/auth/login-throttler.guard';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { SessionGuard } from '../src/auth/session.guard';
 import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
@@ -22,7 +27,9 @@ import { SynthesisController } from '../src/synthesis/synthesis.controller';
 /** e2e HTTP sin BD ni red: controladores reales, servicios simulados. */
 describe('API (e2e, sin BD)', () => {
   let app: INestApplication<App>;
-  let sessions: SessionService;
+  let jwt: JwtService;
+  const accessCookie = () =>
+    `am_access=${jwt.sign({ email: 'yo@x.com', nombre: 'Yo' }, { subject: 'u1', audience: 'access' })}`;
   const config = {
     get: (k: string, def?: unknown) =>
       ({
@@ -33,6 +40,10 @@ describe('API (e2e, sin BD)', () => {
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({
+      imports: [
+        JwtModule.register({ secret: 's'.repeat(48) }),
+        ThrottlerModule.forRoot([{ ttl: 60_000, limit: 5 }]),
+      ],
       controllers: [
         AppController,
         AuthController,
@@ -46,13 +57,13 @@ describe('API (e2e, sin BD)', () => {
       ],
       providers: [
         AppService,
-        SessionService,
+        AuthService,
+        PasswordService,
+        LoginThrottlerGuard,
         SessionGuard,
         { provide: ConfigService, useValue: config },
-        {
-          provide: AuthService,
-          useValue: { buildLoginUrl: () => 'https://login.example/authorize' },
-        },
+        { provide: PrismaService, useValue: {} },
+        { provide: MicrosoftService, useValue: {} },
         {
           provide: TemplatesService,
           useValue: { getActive: () => Promise.resolve({ name: 'x' }) },
@@ -72,7 +83,7 @@ describe('API (e2e, sin BD)', () => {
     app = mod.createNestApplication();
     configureApp(app, 'http://localhost:8080');
     await app.init();
-    sessions = mod.get(SessionService);
+    jwt = mod.get(JwtService);
   });
 
   afterAll(async () => {
@@ -95,13 +106,6 @@ describe('API (e2e, sin BD)', () => {
     expect(res.body).toEqual({ authenticated: false });
   });
 
-  it('GET /api/auth/login redirige a Microsoft (público)', async () => {
-    await request(app.getHttpServer())
-      .get('/api/auth/login')
-      .expect(302)
-      .expect('Location', 'https://login.example/authorize');
-  });
-
   it.each([
     ['get', '/api/threads'],
     ['post', '/api/threads/analyze'],
@@ -112,6 +116,9 @@ describe('API (e2e, sin BD)', () => {
     ['post', '/api/templates/reset'],
     ['post', '/api/templates/preview'],
     ['post', '/api/mail/sync'],
+    ['post', '/api/mail/connect'],
+    ['delete', '/api/mail/connection'],
+    ['post', '/api/auth/change-password'],
     ['get', '/api/mail/status'],
     ['get', '/api/jobs/status'],
     ['get', '/api/attachments/abc/pages'],
@@ -123,7 +130,7 @@ describe('API (e2e, sin BD)', () => {
   });
 
   it('con sesión válida pasa el guard (200)', async () => {
-    const cookie = `am_session=${sessions.create('yo@x.com')}`;
+    const cookie = accessCookie();
     await request(app.getHttpServer())
       .get('/api/templates/active')
       .set('Cookie', cookie)
@@ -133,12 +140,12 @@ describe('API (e2e, sin BD)', () => {
   it('una cookie falsificada no pasa', async () => {
     await request(app.getHttpServer())
       .get('/api/templates/active')
-      .set('Cookie', 'am_session=abc.def')
+      .set('Cookie', 'am_access=abc.def')
       .expect(401);
   });
 
   it('cuerpos JSON mayores a 256kb se rechazan (413)', async () => {
-    const cookie = `am_session=${sessions.create('yo@x.com')}`;
+    const cookie = accessCookie();
     await request(app.getHttpServer())
       .put('/api/templates/active')
       .set('Cookie', cookie)

@@ -24,11 +24,11 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `DATABASE_URL` | Conexión a PostgreSQL **desde tu máquina** (desarrollo, migraciones, benchmark, tests). Usa `localhost`. |
 | `DATABASE_URL_DOCKER` | La misma BD **vista desde el contenedor de la api**: normalmente `host.docker.internal` en lugar de `localhost` (compose añade `extra_hosts: host.docker.internal:host-gateway`). Es obligatoria para `docker compose up`. |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE` | RustFS (S3 compatible). Con compose el endpoint se fuerza a `http://rustfs:9000`. **Cambia las claves por defecto** (`rustfsadmin`) fuera de tu máquina. El bucket se crea solo al arrancar. |
-| `TOKEN_ENC_KEY` | Clave AES-GCM (32 bytes en base64) para cifrar el refresh token de Microsoft. Si la cambias, hay que volver a iniciar sesión. También deriva la firma de la cookie si no hay `SESSION_SECRET`. |
-| `SESSION_SECRET` | (opcional) secreto propio para firmar la cookie de sesión. |
-| `COOKIE_SECURE` | (opcional) `true`/`false` fuerza el atributo `Secure` de la cookie; vacío = se deduce de `MS_REDIRECT_URI` (https => Secure). En producción tras HTTPS: `true`. |
+| `TOKEN_ENC_KEY` | Clave AES-GCM (32 bytes en base64) para cifrar el refresh token de Microsoft. Si la cambias, hay que volver a conectar Outlook (Ajustes). |
+| `JWT_SECRET` | **Obligatorio**, mínimo 32 caracteres (`openssl rand -base64 48`). Firma el JWT de sesión; sin él la API no arranca. Si lo cambias, todas las sesiones se cierran. |
+| `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL` | Duración del JWT de acceso (`15m`) y del refresh token (`30d`, rotativo). |
+| `COOKIE_SECURE` | (opcional) `true`/`false` fuerza el atributo `Secure` de las cookies de sesión; vacío = se deduce de `MS_REDIRECT_URI` (https => Secure). En producción tras HTTPS: `true`. |
 | `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` | Registro en Entra ID (ver sección 6). |
-| `ALLOWED_EMAIL` | (opcional) único correo autorizado a entrar; si está vacío, la primera cuenta que entra queda como la única. Recomendado fijarlo. |
 | `SYNC_INTERVAL_MIN` | Cada cuántos minutos se sincroniza el correo (solo descarga/guarda; nunca analiza). `0` lo desactiva. |
 | `JOBS_ENABLED`, `JOBS_CONCURRENCY`, `JOBS_POLL_MS`, `JOBS_MAX_ATTEMPTS`, `JOBS_BACKOFF_*`, `JOBS_LOCK_TIMEOUT_SEC` | Cola de trabajos en PostgreSQL. `JOBS_ENABLED=false` apaga el worker **y** el polling del sync (útil para verificar el despliegue sin tocar nada externo). |
 | `OCR_ENGINE` | `local` (servicio `ocr-local`) o `textract` (AWS). |
@@ -110,12 +110,18 @@ Con un perfil de inferencia entre regiones, el permiso debe cubrir el perfil **y
 Sigue `docs/entra-id-registro.md` (crear registro, secreto, permisos delegados `Mail.Read` + `offline_access`, redirect URI). Rellena `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` y `MS_REDIRECT_URI` (`http://localhost:3000/api/auth/callback` con compose; en producción la URL pública HTTPS, que debe coincidir con la registrada en Entra). Si el tenant exige aprobación de administrador, el documento incluye el texto para pedirla.
 
 ## 7. Primer arranque
-1. `docker compose up -d --build` y abre http://localhost:8080.
-2. **Entrar con Microsoft** y aceptar permisos (la primera cuenta, o `ALLOWED_EMAIL`, queda autorizada).
-3. **Sincronizar** (botón en Tickets, o espera `SYNC_INTERVAL_MIN`). Los hilos aparecen como *Sin analizar*; no se ha enviado nada a OCR ni al LLM.
-4. Abre **un hilo de prueba** (de preferencia sin datos sensibles) y pulsa **Analizar**. Espera a *Listo* o *Necesita tu ayuda*.
-5. Si hay dudas, abre la revisión, corrige y verifica que la síntesis se actualiza (solo con lo nuevo).
-6. Revisa y ajusta la plantilla en **Plantilla**.
+1. `docker compose up -d --build` (la API aplica las migraciones al arrancar; requiere `JWT_SECRET` en `.env`).
+2. **Crea tu usuario** (la contraseña se pide por prompt, sin eco, mín. 10 caracteres; nunca por argumentos):
+   ```bash
+   docker compose exec api node dist/cli/user.js create --email tu@correo.com --nombre "Tu nombre"
+   # sin Docker (desde la raíz): pnpm --filter api user:create -- --email tu@correo.com --nombre "Tu nombre"
+   ```
+   Si ya existía una cuenta de Outlook de antes de la fase 8, queda asignada a este primer usuario (con sus tickets). Para restablecer una contraseña: `docker compose exec api node dist/cli/user.js reset-password --email tu@correo.com` (cierra todas sus sesiones).
+3. Abre http://localhost:8080, **inicia sesión** con ese correo y contraseña, ve a **Ajustes -> Conectar Outlook** y acepta los permisos de Microsoft. Volverás a Ajustes con "Outlook conectado".
+4. **Sincronizar** (botón en Tickets, o espera `SYNC_INTERVAL_MIN`). Los hilos aparecen como *Sin analizar*; no se ha enviado nada a OCR ni al LLM.
+5. Abre **un hilo de prueba** (de preferencia sin datos sensibles) y pulsa **Analizar**. Espera a *Listo* o *Necesita tu ayuda*.
+6. Si hay dudas, abre la revisión, corrige y verifica que la síntesis se actualiza (solo con lo nuevo).
+7. Revisa y ajusta la plantilla en **Plantilla**.
 
 ## 8. Backups
 - **PostgreSQL**: `pg_dump -Fc -h <host> -U <usuario> automed > automed-$(date +%F).dump`; restaurar con `pg_restore -c -d automed archivo.dump`. Incluye correos, OCR, correcciones, síntesis y el refresh token cifrado (guarda también `TOKEN_ENC_KEY` en un lugar seguro: sin ella los tokens guardados no se pueden descifrar).
@@ -138,9 +144,12 @@ Haz backup de la BD antes de actualizar si hay migraciones nuevas (`apps/api/pri
 | api no queda `healthy`; logs: "Can't reach database server" | Postgres del host no acepta conexiones desde Docker: ver "PostgreSQL del host"; revisa usuario/clave y `host.docker.internal`. |
 | `/api/health` responde `db:false` | Igual que arriba, o la BD cambió de contraseña. |
 | `storage:false` | RustFS no arrancó o las claves S3 no coinciden con las del volumen existente (RustFS conserva las claves con las que se creó). |
-| Login: `redirect_uri` no coincide | `MS_REDIRECT_URI` debe ser idéntica a la registrada en Entra. |
-| Tras login vuelve a la pantalla de entrada | Cookie no enviada: con HTTPS pon `COOKIE_SECURE=true` y usa el mismo host; revisa `WEB_ORIGIN`. |
-| "La sesión de Microsoft caducó" | Vuelve a iniciar sesión (token revocado, o cambiaste `TOKEN_ENC_KEY`). |
+| Conectar Outlook: `redirect_uri` no coincide | `MS_REDIRECT_URI` debe ser idéntica a la registrada en Entra. |
+| Tras iniciar sesión vuelve a la pantalla de entrada | Cookie no enviada: con HTTPS pon `COOKIE_SECURE=true` y usa el mismo host; revisa `WEB_ORIGIN`. |
+| "La conexión con Outlook caducó" | Ajustes -> Conectar Outlook de nuevo (token revocado, o cambiaste `TOKEN_ENC_KEY`). |
+| La API no arranca: "JWT_SECRET falta o es demasiado corto" | Define `JWT_SECRET` (>= 32 caracteres) en `.env`. |
+| "Demasiados intentos" al iniciar sesión | Límite de 5 intentos por minuto por IP y correo; espera un minuto. |
+| Login 403 "Origen no permitido" | El navegador envía un `Origin` distinto de `WEB_ORIGIN`; ajústalo al origen real del front. |
 | Hilos siempre en *Sin analizar* | Es lo esperado: el análisis es solo bajo petición (botón **Analizar**). |
 | Análisis en *Error* | Mira `GET /api/jobs/status` y los logs de la api (no contienen contenido de correos). Reintenta con Analizar. |
 | OCR local devuelve `engine: tesseract` | PaddleOCR no cargó: lee `fallback_reason` en `/health`. Funciona, pero con menos precisión en manuscrito. |

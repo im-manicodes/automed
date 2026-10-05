@@ -75,9 +75,15 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return result;
     this.running = true;
     result.started = true;
+    let record = true;
     try {
-      const account = await this.prisma.mailAccount.findFirst();
+      const account = await this.prisma.mailAccount.findFirst({
+        where: { tokenEnc: { not: null } },
+      });
       if (!account?.tokenEnc) {
+        // Sin cuenta conectada no hay nada que hacer (y no se ensucia lastResult con un "error").
+        record = false;
+        result.started = false;
         result.error = 'No hay cuenta conectada';
         return result;
       }
@@ -114,7 +120,7 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`Sync falló: ${result.error}`);
     } finally {
       this.running = false;
-      this.lastResult = { ...result, at: new Date() };
+      if (record) this.lastResult = { ...result, at: new Date() };
     }
     return result;
   }

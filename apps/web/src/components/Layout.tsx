@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useSession } from '../context/session-context'
+import CambiarPasswordDialog from './CambiarPasswordDialog'
 
 const items = [
   { to: '/tickets', label: 'Tickets', icon: '📋' },
@@ -11,6 +12,7 @@ const items = [
 function UserMenu() {
   const { session, logout } = useSession()
   const [open, setOpen] = useState(false)
+  const [changing, setChanging] = useState(false)
   if (session.status !== 'authenticated') return null
   return (
     <div className="relative">
@@ -19,10 +21,13 @@ function UserMenu() {
       </button>
       {open && (
         <div role="menu" className="absolute right-0 mt-2 w-64 space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-          <p className="break-all text-sm text-slate-700">{session.email}</p>
+          <p className="text-base font-semibold">{session.user.nombre}</p>
+          <p className="break-all text-sm text-slate-700">{session.user.email}</p>
+          <button type="button" role="menuitem" className="btn btn-secondary w-full" onClick={() => { setOpen(false); setChanging(true) }}>Cambiar contraseña</button>
           <button type="button" role="menuitem" className="btn btn-secondary w-full" onClick={() => void logout()}>Salir</button>
         </div>
       )}
+      {changing && <CambiarPasswordDialog onClose={() => setChanging(false)} />}
     </div>
   )
 }

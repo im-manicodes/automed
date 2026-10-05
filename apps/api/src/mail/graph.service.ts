@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AuthService } from '../auth/auth.service';
+import { MicrosoftService } from '../auth/microsoft.service';
 import { GraphAttachment, GraphMessage, GraphPage } from './graph-mapper';
 
 const BASE = 'https://graph.microsoft.com/v1.0';
@@ -23,7 +23,7 @@ export interface DeltaPage {
 export class GraphService {
   private readonly logger = new Logger(GraphService.name);
 
-  constructor(private readonly auth: AuthService) {}
+  constructor(private readonly auth: MicrosoftService) {}
 
   /** Espera entre reintentos; se puede sustituir en tests. */
   sleep(ms: number) {
