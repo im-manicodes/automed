@@ -123,6 +123,31 @@ Sigue `docs/entra-id-registro.md` (crear registro, secreto, permisos delegados `
 6. Si hay dudas, abre la revisión, corrige y verifica que la síntesis se actualiza (solo con lo nuevo).
 7. Revisa y ajusta la plantilla en **Plantilla**.
 
+## 7b. Scripts de base de datos (`db:*`)
+
+| Script (raíz) | Qué hace |
+|---|---|
+| `pnpm db:generate` | `prisma generate` (cliente en `apps/api/src/generated/prisma`) |
+| `pnpm db:migrate [-- --name x]` | `prisma migrate dev` (crea y aplica migración; solo desarrollo) |
+| `pnpm db:migrate:create [-- --name x]` | `migrate dev --create-only` (genera el SQL sin aplicarlo) |
+| `pnpm db:deploy` | `prisma migrate deploy` (producción/CI; solo aplica pendientes) |
+| `pnpm db:status` | `prisma migrate status` (solo lectura; sale con 1 si hay migraciones pendientes) |
+| `pnpm db:seed` | seed base idempotente: plantilla activa, ajustes y usuario de desarrollo opcional (`SEED_*`) |
+| `pnpm db:seed:demo` | datos FICTICIOS (ids `demo-`, asuntos `[DEMO]`) + imágenes en RustFS; solo desarrollo |
+| `pnpm db:seed:demo:clean` | borra solo lo demo (BD por prefijo de id y objetos S3 `demo/`) |
+| `pnpm db:reset` | PELIGROSO: borra todo el esquema destino, reaplica migraciones y corre el seed base |
+| `pnpm db:studio` · `db:validate` · `db:format` | `prisma studio` / `validate` / `format` |
+
+Se ejecutan desde la raíz (o desde cualquier subcarpeta con `pnpm -w db:status`) y delegan a `apps/api`; leen el `.env` raíz. Argumentos: `pnpm run db:migrate -- --name mi_cambio`. Los scripts `db:seed*` y `db:reset` compilan antes (`pnpm build`) y corren `dist/cli/db-*.js` (en Docker: `docker compose exec api node dist/cli/db-seed.js`). `prisma.config.ts` registra el seed (`migrations.seed`, relativo a `apps/api`) para `prisma db seed`.
+
+Variables del seed (todas opcionales, ver `.env.example`): `SEED_USER_EMAIL`, `SEED_USER_NAME`, `SEED_USER_PASSWORD`. Si están las tres y no es `NODE_ENV=production`, `db:seed` crea un usuario de DESARROLLO con las mismas validaciones/argon2id que `user:create` (si ya existe no lo toca; adopta la cuenta de Outlook huérfana igual que `user:create`, y lo avisa). Nunca imprime contraseñas ni hashes.
+
+`db:seed:demo`: los tickets demo NO son correos reales; su cuenta `demo@demo.invalid` no tiene tokens de Microsoft, así que el sync no los toca ni los mezcla. No lo corras junto a datos reales con el sync activo salvo para probar la UI; límpialo con `db:seed:demo:clean`. Se niega en producción.
+
+`db:reset`: muestra servidor, puerto, base y esquema (sin contraseña), se niega con `NODE_ENV=production`, y exige escribir el nombre exacto de la base. `--force --i-understand` existe solo para CI/esquemas temporales y se rechaza sobre `public`. Prisma además bloquea el reset si lo lanza un agente de IA: solo lo ejecuta el usuario.
+
+En producción usa solo `db:deploy` (y `db:seed` si quieres la plantilla/ajustes por defecto; el usuario se crea con `user:create`).
+
 ## 8. Backups
 - **PostgreSQL**: `pg_dump -Fc -h <host> -U <usuario> automed > automed-$(date +%F).dump`; restaurar con `pg_restore -c -d automed archivo.dump`. Incluye correos, OCR, correcciones, síntesis y el refresh token cifrado (guarda también `TOKEN_ENC_KEY` en un lugar seguro: sin ella los tokens guardados no se pueden descifrar).
 - **RustFS**: los PDFs y páginas viven en el volumen `auto-med_rustfsdata`. Copia en frío: `docker run --rm -v auto-med_rustfsdata:/data -v "$PWD":/backup alpine tar czf /backup/rustfs-$(date +%F).tgz -C /data .` (detén `rustfs` antes para consistencia). Alternativa: `mc mirror`/`aws s3 sync --endpoint-url http://localhost:9000 s3://automed ./backup-s3`.

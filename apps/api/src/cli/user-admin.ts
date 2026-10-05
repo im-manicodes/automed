@@ -1,5 +1,6 @@
 import type { PrismaClient } from '../generated/prisma/client';
 import type { PasswordService } from '../auth/password.service';
+import { DEMO_PREFIX } from '../seed/demo-constants';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,7 +24,10 @@ export async function createUser(
   const user = await db.user.create({
     data: { email, nombre, passwordHash: await passwords.hash(input.password) },
   });
-  const orphan = await db.mailAccount.findFirst({ where: { userId: null } });
+  // Nunca se adopta la cuenta ficticia del seed demo (ids con prefijo demo-).
+  const orphan = await db.mailAccount.findFirst({
+    where: { userId: null, NOT: { id: { startsWith: DEMO_PREFIX } } },
+  });
   let adopted: string | null = null;
   if (orphan) {
     await db.mailAccount.update({

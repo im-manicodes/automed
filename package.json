@@ -7,6 +7,18 @@
     "dev": "pnpm -r --parallel --filter ./apps/* dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter api db:generate",
+    "db:migrate": "pnpm --filter api db:migrate",
+    "db:migrate:create": "pnpm --filter api db:migrate:create",
+    "db:deploy": "pnpm --filter api db:deploy",
+    "db:status": "pnpm --filter api db:status",
+    "db:seed": "pnpm --filter api db:seed",
+    "db:seed:demo": "pnpm --filter api db:seed:demo",
+    "db:seed:demo:clean": "pnpm --filter api db:seed:demo:clean",
+    "db:reset": "pnpm --filter api db:reset",
+    "db:studio": "pnpm --filter api db:studio",
+    "db:validate": "pnpm --filter api db:validate",
+    "db:format": "pnpm --filter api db:format"
   }
 }

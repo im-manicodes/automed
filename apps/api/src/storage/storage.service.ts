@@ -2,6 +2,8 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -81,6 +83,36 @@ export class StorageService implements OnModuleInit {
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
     );
     return res.Body!.transformToByteArray();
+  }
+
+  /** Borra solo los objetos cuya clave empieza por `prefix` (no vacío). Devuelve cuántos borró. */
+  async deleteByPrefix(prefix: string): Promise<number> {
+    if (!prefix) throw new Error('El prefijo no puede estar vacío');
+    let deleted = 0;
+    let token: string | undefined;
+    do {
+      const res = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
+      const keys = (res.Contents ?? [])
+        .map((o) => o.Key)
+        .filter((k): k is string => !!k && k.startsWith(prefix));
+      if (keys.length) {
+        await this.client.send(
+          new DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+          }),
+        );
+        deleted += keys.length;
+      }
+      token = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (token);
+    return deleted;
   }
 
   presignedGetUrl(key: string, expiresIn = 300) {

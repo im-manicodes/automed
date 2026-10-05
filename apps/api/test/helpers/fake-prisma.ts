@@ -4,9 +4,12 @@ type Row = Record<string, any>;
 
 function matches(row: Row, where: Row = {}): boolean {
   return Object.entries(where).every(([k, cond]) => {
+    if (k === 'NOT') return !matches(row, cond);
     if (cond && typeof cond === 'object' && !(cond instanceof Date)) {
       if ('not' in cond) return row[k] !== cond.not && row[k] != cond.not;
       if ('lt' in cond) return row[k] < cond.lt;
+      if ('startsWith' in cond)
+        return typeof row[k] === 'string' && row[k].startsWith(cond.startsWith);
     }
     return row[k] === cond || (cond === null && row[k] == null);
   });
@@ -67,5 +70,12 @@ export function fakePrisma() {
     ),
     mailFolderSync: table(),
     thread: table(),
+    message: table(),
+    attachment: table(),
+    ocrPage: table(),
+    ocrRegion: table(),
+    synthesis: table(),
+    template: table(() => ({ isActive: true, version: 1 })),
+    setting: table(() => ({}), ['key']),
   };
 }
