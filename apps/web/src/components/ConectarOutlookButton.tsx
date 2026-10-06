@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { mailApi } from '../lib/api'
+import { useConnectOutlook } from '../hooks/useMail'
 import { errorMessage } from '../lib/format'
 import { LuTriangleAlert } from 'react-icons/lu'
 
@@ -7,11 +7,12 @@ import { LuTriangleAlert } from 'react-icons/lu'
 export default function ConectarOutlookButton({ label = 'Conectar con Outlook', secondary = false, className = '' }: { label?: string; secondary?: boolean; className?: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { mutate: connect } = useConnectOutlook()
   const go = async () => {
     setBusy(true)
     setError(null)
     try {
-      const { url } = await mailApi.connect()
+      const { url } = await connect()
       window.location.assign(url)
     } catch (e) {
       setError(errorMessage(e))

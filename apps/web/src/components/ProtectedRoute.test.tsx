@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { SessionProvider } from '../context/session'
 import * as apiLib from '../lib/api'
+import { mockFetch } from '../test/mockFetch'
 import ProtectedRoute from './ProtectedRoute'
 
 function renderApp() {
@@ -18,24 +19,26 @@ function renderApp() {
   )
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => vi.unstubAllGlobals())
+
+const yo = { id: '1', email: 'a@b.c', nombre: 'Ana' }
 
 describe('ruta protegida', () => {
   it('sin sesión muestra la pantalla de entrada', async () => {
-    vi.spyOn(apiLib.authApi, 'me').mockResolvedValue({ authenticated: false })
+    mockFetch({ 'GET /api/auth/me': { body: { authenticated: false } }, 'POST /api/auth/refresh': { status: 401, body: {} } })
     renderApp()
     expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument()
     expect(screen.queryByText('Contenido privado')).not.toBeInTheDocument()
   })
 
   it('con sesión muestra el contenido', async () => {
-    vi.spyOn(apiLib.authApi, 'me').mockResolvedValue({ authenticated: true, user: { id: '1', email: 'a@b.c', nombre: 'Ana' } })
+    mockFetch({ 'GET /api/auth/me': { body: { authenticated: true, user: yo } } })
     renderApp()
     await waitFor(() => expect(screen.getByText('Contenido privado')).toBeInTheDocument())
   })
 
   it('un 401 posterior devuelve a la pantalla de entrada', async () => {
-    vi.spyOn(apiLib.authApi, 'me').mockResolvedValue({ authenticated: true, user: { id: '1', email: 'a@b.c', nombre: 'Ana' } })
+    mockFetch({ 'GET /api/auth/me': { body: { authenticated: true, user: yo } } })
     renderApp()
     await screen.findByText('Contenido privado')
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(new Response('{}', { status: 401 }))))

@@ -248,6 +248,10 @@ export class ApiError extends Error {
     this.name = 'ApiError'
     this.status = status
   }
+  /** Errores que no mejoran reintentando (sesión vencida, datos inválidos, no existe). */
+  get definitivo(): boolean {
+    return this.status >= 400 && this.status < 500 && this.status !== 408 && this.status !== 429
+  }
 }
 
 type UnauthorizedHandler = () => void
@@ -327,10 +331,15 @@ export async function api<T>(
 }
 
 /** Descarga un archivo autenticado por cookie como Blob (reintenta una vez si la sesión caducó). */
-export async function apiBlob(path: string): Promise<Blob> {
+export async function apiBlob(path: string, opts: { method?: string; body?: unknown } = {}): Promise<Blob> {
   const pedir = async () => {
     try {
-      return await fetch(`/api${path}`, { credentials: 'include' })
+      return await fetch(`/api${path}`, {
+        method: opts.method ?? 'GET',
+        credentials: 'include',
+        headers: opts.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      })
     } catch {
       throw new ApiError(0, 'No hay conexión con el servidor. Revisa tu internet.')
     }
@@ -352,95 +361,4 @@ export async function apiBlob(path: string): Promise<Blob> {
     throw new ApiError(res.status, messageFor(res.status, data))
   }
   return res.blob()
-}
-
-const enc = encodeURIComponent
-
-export const authApi = {
-  me: () => api<{ authenticated: boolean; user?: User }>('/auth/me'),
-  login: (email: string, password: string) =>
-    api<{ user: User }>('/auth/login', { method: 'POST', body: { email, password } }),
-  refresh: () => api<{ user: User }>('/auth/refresh', { method: 'POST' }),
-  logout: () => api<void>('/auth/logout', { method: 'POST' }),
-  changePassword: (actual: string, nueva: string) =>
-    api<void>('/auth/change-password', { method: 'POST', body: { actual, nueva } }),
-}
-
-export const mailApi = {
-  sync: () => api<SyncResult>('/mail/sync', { method: 'POST' }),
-  status: () => api<MailStatus>('/mail/status'),
-  connect: () => api<{ url: string }>('/mail/connect', { method: 'POST' }),
-  disconnect: () => api<void>('/mail/connection', { method: 'DELETE' }),
-}
-
-export const jobsApi = { status: () => api<JobsStatus>('/jobs/status') }
-
-export const threadsApi = {
-  list: (status?: ProcessStatus) =>
-    api<ThreadListItem[]>(status ? `/threads?status=${enc(status)}` : '/threads'),
-  get: (id: string) => api<ThreadDetail>(`/threads/${enc(id)}`),
-  analyze: (id: string, seguimiento?: boolean) =>
-    api<{ threadId: string; status: ProcessStatus }>(`/threads/${enc(id)}/analyze`, {
-      method: 'POST',
-      body: seguimiento === undefined ? {} : { seguimiento },
-    }),
-  analyzeMany: (ids: string[], seguimiento?: boolean) =>
-    api<{ results: AnalyzeResult[] }>('/threads/analyze', {
-      method: 'POST',
-      body: seguimiento === undefined ? { ids } : { ids, seguimiento },
-    }),
-  setSeguimiento: (id: string, seguimiento: boolean) =>
-    api<{ id: string; seguimiento: boolean }>(`/threads/${enc(id)}/seguimiento`, {
-      method: 'PATCH',
-      body: { seguimiento },
-    }),
-  reprocess: (id: string) =>
-    api<{ threadId: string; status: ProcessStatus }>(`/threads/${enc(id)}/reprocess`, {
-      method: 'POST',
-    }),
-  reanalyzeLast: (id: string) =>
-    api<{ threadId: string; status: ProcessStatus; mode: 'incremental'; messageId: string }>(
-      `/threads/${enc(id)}/reanalyze-last`,
-      { method: 'POST' },
-    ),
-  /** Mensaje de WhatsApp redactado por IA solo con el último correo (no guarda nada). */
-  whatsappLast: (id: string) => api<{ texto: string }>(`/threads/${enc(id)}/whatsapp-last`, { method: 'POST' }),
-  /** Borrador del evento propuesto por IA con la síntesis vigente (no guarda nada). */
-  eventDraft: (id: string) => api<EventoBorrador>(`/threads/${enc(id)}/event-draft`, { method: 'POST' }),
-  createEvent: (id: string, evento: EventoNuevo) =>
-    api<Evento>(`/threads/${enc(id)}/events`, { method: 'POST', body: evento }),
-  events: (id: string) => api<{ eventos: Evento[]; synthesisId: string | null }>(`/threads/${enc(id)}/events`),
-  synthesis: (id: string) => api<SynthesisResponse>(`/threads/${enc(id)}/synthesis`),
-  regenerate: (id: string) =>
-    api<RegenerateResponse>(`/threads/${enc(id)}/synthesis/regenerate`, { method: 'POST' }),
-}
-
-export const attachmentsApi = {
-  pages: (id: string) => api<AttachmentPages>(`/attachments/${enc(id)}/pages`),
-}
-
-export const templatesApi = {
-  active: (kind: TemplateKind = 'resumen') => api<Template>(`/templates/active?kind=${kind}`),
-  save: (markdown: string, kind: TemplateKind = 'resumen') =>
-    api<Template>(`/templates/active?kind=${kind}`, { method: 'PUT', body: { markdown } }),
-  reset: (kind: TemplateKind = 'resumen') => api<Template>(`/templates/reset?kind=${kind}`, { method: 'POST' }),
-  preview: (markdown?: string, kind: TemplateKind = 'resumen') =>
-    api<{ markdown: string; columnas?: ColumnaReporte[]; error?: string | null }>('/templates/preview', {
-      method: 'POST',
-      body: markdown ? { markdown, kind } : { kind },
-    }),
-}
-
-export const reportsApi = {
-  list: () => api<{ reportes: Reporte[] }>('/reports'),
-  create: () => api<{ reporte: Reporte; reutilizado: boolean }>('/reports', { method: 'POST' }),
-  get: (id: string) => api<ReporteDetalle>(`/reports/${enc(id)}`),
-  download: (id: string) => apiBlob(`/reports/${enc(id)}/download`),
-  settings: () => api<ReporteAjustes>('/reports/settings'),
-  saveSettings: (cambios: Partial<Pick<ReporteAjustes, 'programado' | 'hora'>>) =>
-    api<ReporteAjustes>('/reports/settings', { method: 'PUT', body: cambios }),
-}
-
-export const eventsApi = {
-  remove: (id: string) => api<void>(`/events/${enc(id)}`, { method: 'DELETE' }),
 }

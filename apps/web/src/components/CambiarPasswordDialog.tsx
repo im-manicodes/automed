@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useToast } from '../context/toasts-context'
-import { ApiError, authApi } from '../lib/api'
+import { useMutation } from '../hooks/useMutation'
+import { ApiError } from '../lib/api'
 import { MIN_PASSWORD, validarNuevaPassword } from '../lib/password'
 import { LuTriangleAlert } from 'react-icons/lu'
 
@@ -12,6 +13,7 @@ export default function CambiarPasswordDialog({ onClose }: { onClose: () => void
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { mutate: cambiar } = useMutation<void, { actual: string; nueva: string }>({ url: '/auth/change-password' })
   const first = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function CambiarPasswordDialog({ onClose }: { onClose: () => void
     setBusy(true)
     setError(null)
     try {
-      await authApi.changePassword(actual, nueva)
+      await cambiar({ body_params: { actual, nueva } })
       toast('Listo: tu contraseña se cambió.', 'ok')
       onClose()
     } catch (err) {

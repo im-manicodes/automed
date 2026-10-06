@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { useSession } from '../context/session-context'
-import Login from '../pages/Login'
+import Login from '../pages/login/page'
 import Spinner from './Spinner'
 
 /** Muestra la pantalla de entrada si no hay sesión (también tras un 401). */

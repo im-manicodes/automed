@@ -3,14 +3,14 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Spinner from './components/Spinner'
-import Ajustes from './pages/Ajustes'
-import Plantilla from './pages/Plantilla'
-import Reportes from './pages/Reportes'
-import TicketDetalle from './pages/TicketDetalle'
-import Tickets from './pages/Tickets'
+import Ajustes from './pages/ajustes/page'
+import Plantilla from './pages/plantilla/page'
+import Reportes from './pages/reportes/page'
+import TicketDetalle from './pages/ticket-detalle/page'
+import Tickets from './pages/tickets/page'
 
 // Flujo de corrección de OCR (carga diferida).
-const RevisionPage = lazy(() => import('./revision/RevisionPage'))
+const RevisionPage = lazy(() => import('./pages/revision/page'))
 
 export default function App() {
   return (

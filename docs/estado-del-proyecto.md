@@ -78,6 +78,10 @@
 - Activar `seguimiento` en un hilo con `tieneMensajesNuevos` no dispara el análisis por sí solo; hay que pulsar Analizar.
 - La migración cancela (status `error`) los jobs pendientes de hilos que pasan a `sin_analizar`; un `process_attachment` compartido por sha256 con otro hilo analizado también se cancelaría (caso raro: se resuelve con `reprocess`).
 
+## Reorganización del frontend (hecho)
+- Hecho: `apps/web/src/pages/<página>/{page.tsx,components,hooks,lib}` (login, tickets, ticket-detalle, revision, reportes, plantilla, ajustes) con tests junto a su código; compartido en `components/`, `hooks/` (`useQuery`, `useMutation`, `useMail`, `usePolling`, `useEsEscritorio`, `useRuedaZoom`, `usePaginaImagen`) y `lib/`. Todas las peticiones pasan por `useQuery`/`useMutation` (sobre `api()`/`apiBlob()`); eliminados los objetos `threadsApi/mailApi/...` y `revision/revisionApi.ts`. Tests con `test/mockFetch.ts`. Build, lint y 143 tests en verde.
+- Falta: tests de `useGuardado` y de la página de revisión (no existían).
+
 ## Fase 6A (UI general, `apps/web`)
 - Hecho: cliente API tipado (`src/lib/api.ts`, 401 -> pantalla de entrada), contexto de sesión, `ProtectedRoute`, `ErrorBoundary`, toasts, `react-markdown` + `remark-gfm`; vitest + Testing Library + jsdom (`pnpm --filter web test`, config en `vitest.config.ts`, setup en `src/test/setup.ts`).
 - Pantallas: login ("Entrar con Microsoft"), `/tickets` (tarjetas, chips de estado, selección múltiple + barra "Analizar N", sincronizar, auto-refresco cada 5 s con tickets en marcha), `/tickets/:id` (pestañas Resumen/Correos/Adjuntos, analizar/actualizar, seguimiento, aviso de plantilla desactualizada + regenerar con confirmación, historial, copiar/descargar .md; ruta `/tickets/:id/revision/:attachmentId` carga `revision/RevisionPage` con `React.lazy`), `/plantilla` (editor, restaurar, vista previa), `/ajustes` (buzón, cola, salir).
@@ -85,7 +89,7 @@
 - Notas: la lista del API usa `subject` (no `asunto`). El número de "dudas" por PDF se obtiene con `GET /api/attachments/:id/pages` (una petición por PDF en estado `necesita_revision`, al abrir el ticket) porque el detalle no lo trae. Los filtros se aplican en el cliente (el chip "Analizando" incluye `pendiente` y `procesando`).
 - No probado: no hay prueba visual automatizada (360 px / escritorio revisados solo por clases Tailwind); instalación PWA y sesión real con Microsoft sin probar; los avisos de lint `set-state-in-effect` son de patrón de carga inicial (solo warnings).
 
-## Fase 6B (revisión de dudas, `apps/web/src/revision/`)
+## Fase 6B (revisión de dudas, `apps/web/src/pages/revision/`)
 - Hecho: ruta `/tickets/:id/revision/:attachmentId` (`RevisionPage`, carga perezosa). Flujo "una duda a la vez" con "Duda k de n", barra de progreso, recorte ampliado en canvas (bbox normalizada + margen), campo grande con la sugerencia del OCR, "Guardar y siguiente", "Omitir por ahora", "Anterior" y "No se entiende" (guarda `[ilegible]`).
 - Vista "Página completa": recuadros con número (borde grueso en la actual, discontinuo y verde con ✓ al corregirse), pinch-zoom, arrastre, doble toque, botones +/−/"Ver toda la hoja" y cambio de página; tocar un recuadro salta a esa duda. Implementado a mano con Pointer Events (sin dependencias).
 - Guardado optimista con 3 reintentos automáticos (1 s, 2,5 s, 6 s) ante fallas de red/5xx; errores 4xx no se reintentan. Aviso "No se guardó" con botón de reintento; los borradores se conservan en memoria y `sessionStorage`. Al terminar: pantalla "¡Listo!" (o aviso si nada que revisar).

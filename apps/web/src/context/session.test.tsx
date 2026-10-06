@@ -1,13 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { authApi } from '../lib/api'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { callsOf, mockFetch } from '../test/mockFetch'
 import { SessionProvider } from './session'
 import { useSession } from './session-context'
-
-vi.mock('../lib/api', () => ({
-  authApi: { me: vi.fn(), refresh: vi.fn(), login: vi.fn(), logout: vi.fn() },
-  setUnauthorizedHandler: vi.fn(),
-}))
 
 function Estado() {
   const { session } = useSession()
@@ -23,26 +18,30 @@ const mostrar = () =>
   )
 
 describe('SessionProvider al arrancar', () => {
-  beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.unstubAllGlobals())
 
   it('usa la sesión si /me ya está autenticado y no refresca', async () => {
-    vi.mocked(authApi.me).mockResolvedValue({ authenticated: true, user: usuario })
+    const f = mockFetch({ 'GET /api/auth/me': { body: { authenticated: true, user: usuario } } })
     mostrar()
     await waitFor(() => expect(screen.getByText('hola Ana')).toBeInTheDocument())
-    expect(authApi.refresh).not.toHaveBeenCalled()
+    expect(callsOf(f)).not.toContain('POST /api/auth/refresh')
   })
 
   it('renueva con refresh cuando el access caducó (me no autenticado)', async () => {
-    vi.mocked(authApi.me).mockResolvedValue({ authenticated: false })
-    vi.mocked(authApi.refresh).mockResolvedValue({ user: usuario })
+    const f = mockFetch({
+      'GET /api/auth/me': { body: { authenticated: false } },
+      'POST /api/auth/refresh': { body: { user: usuario } },
+    })
     mostrar()
     await waitFor(() => expect(screen.getByText('hola Ana')).toBeInTheDocument())
-    expect(authApi.refresh).toHaveBeenCalledTimes(1)
+    expect(callsOf(f).filter((c) => c === 'POST /api/auth/refresh')).toHaveLength(1)
   })
 
   it('queda anónimo si el refresh también falla', async () => {
-    vi.mocked(authApi.me).mockResolvedValue({ authenticated: false })
-    vi.mocked(authApi.refresh).mockRejectedValue(new Error('401'))
+    mockFetch({
+      'GET /api/auth/me': { body: { authenticated: false } },
+      'POST /api/auth/refresh': { status: 401, body: {} },
+    })
     mostrar()
     await waitFor(() => expect(screen.getByText('anonymous')).toBeInTheDocument())
   })
