@@ -83,6 +83,12 @@ function fakePrisma() {
         db.attachments.find((a) =>
           Object.entries(where).every(([k, v]) => a[k] === v),
         ) ?? null,
+      findMany: async ({ where }: any) => {
+        const ids = db.messages
+          .filter((m) => m.threadId === where.message.threadId)
+          .map((m) => m.id);
+        return db.attachments.filter((a) => ids.includes(a.messageId));
+      },
       create: async ({ data }: any) => {
         const a = { id: id(), ...data };
         db.attachments.push(a);
@@ -209,14 +215,17 @@ describe('MailSyncService', () => {
     ]);
     expect(db.attachments[0]).toMatchObject({
       sha256: sha('pdf-a1'),
-      storageKey: `attachments/${sha('pdf-a1')}.pdf`,
+      storageKey: `hilos/${db.threads[0].id}/pdf_1/original.pdf`,
     });
-    expect(puts).toHaveLength(2);
+    expect(puts).toEqual([
+      `hilos/${db.threads[0].id}/pdf_1/original.pdf`,
+      `hilos/${db.threads[0].id}/pdf_2/original.pdf`,
+    ]);
     expect(db.threads[0].status).toBe('sin_analizar');
     expect(db.threads[0].tieneMensajesNuevos).toBe(false);
   });
 
-  it('deduplica por hash: mismo PDF reenviado no se vuelve a subir', async () => {
+  it('mismo PDF reenviado: se guarda en su propia carpeta (pdf_n) y cuenta como dedupe de OCR', async () => {
     const { svc, db, graph, puts } = setup();
     mockInbox(
       graph,
@@ -234,9 +243,10 @@ describe('MailSyncService', () => {
     graph.downloadAttachment.mockResolvedValue(bytesOf('mismo contenido'));
     const r = await svc.syncNow();
     expect(db.attachments).toHaveLength(2); // una fila por mensaje
-    expect(puts).toHaveLength(1); // una sola subida
+    expect(puts).toHaveLength(2); // cada adjunto vive en la carpeta de su hilo
     expect(r.deduped).toBe(1);
-    expect(db.attachments[0].storageKey).toBe(db.attachments[1].storageKey);
+    expect(db.attachments[0].storageKey).toMatch(/\/pdf_1\/original\.pdf$/);
+    expect(db.attachments[1].storageKey).toMatch(/\/pdf_2\/original\.pdf$/);
   });
 
   it('no re-descarga adjuntos ya guardados', async () => {
@@ -327,7 +337,7 @@ describe('MailSyncService', () => {
     const r = await svc.syncNow();
     expect(db.attachments).toHaveLength(2);
     expect(db.attachments[1].sha256).toBe(sha('igual'));
-    expect(puts).toHaveLength(1);
+    expect(puts).toHaveLength(2);
     expect(r.deduped).toBe(1);
   });
 

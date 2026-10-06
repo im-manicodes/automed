@@ -1,5 +1,7 @@
 import {
+  CopyObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
   DeleteObjectsCommand,
@@ -10,6 +12,12 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
+/** Los metadatos S3 deben ser ASCII: se codifican en URI (el nombre original sigue en BD). */
+const encodeMetadata = (m: Record<string, string>) =>
+  Object.fromEntries(
+    Object.entries(m).map(([k, v]) => [k, encodeURIComponent(v)]),
+  );
 
 @Injectable()
 export class StorageService implements OnModuleInit {
@@ -67,13 +75,56 @@ export class StorageService implements OnModuleInit {
     }
   }
 
-  async put(key: string, body: Buffer | Uint8Array, contentType?: string) {
+  /** `metadata` (opcional): pares clave/valor ASCII (p. ej. filename, sha256) guardados como metadatos del objeto. */
+  async put(
+    key: string,
+    body: Buffer | Uint8Array,
+    contentType?: string,
+    metadata?: Record<string, string>,
+  ) {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
         Body: body,
         ContentType: contentType,
+        ...(metadata ? { Metadata: encodeMetadata(metadata) } : {}),
+      }),
+    );
+  }
+
+  /** Copia server-side (CopyObject) dentro del mismo bucket. */
+  async copy(srcKey: string, dstKey: string) {
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        Key: dstKey,
+        CopySource: `${this.bucket}/${srcKey
+          .split('/')
+          .map(encodeURIComponent)
+          .join('/')}`,
+      }),
+    );
+  }
+
+  /** ¿Existe el objeto? (HeadObject; false ante cualquier error de no encontrado). */
+  async exists(key: string): Promise<boolean> {
+    try {
+      await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Borra un objeto concreto. */
+  async delete(key: string) {
+    await this.client.send(
+      new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: { Objects: [{ Key: key }], Quiet: true },
       }),
     );
   }

@@ -34,6 +34,7 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `OCR_ENGINE` | `local` (servicio `ocr-local`) o `textract` (AWS). |
 | `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*` | Rasterizado y umbral de dudas; ver `docs/benchmark-ocr.md`. |
 | `OCR_LOCAL_URL`, `OCR_LOCAL_TIMEOUT_MS`, `OCR_LOCAL_ENGINE`, `OCR_LANG` | Servicio OCR local (`paddle` o `tesseract`). |
+| `PDF_TEXT_MODE`, `PDF_EXTRACT_URL`, `PDF_EXTRACT_TIMEOUT_MS`, `PDF_TEXT_MIN_CHARS` | Servicio `pdf-extract` (`auto` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. En compose `PDF_EXTRACT_URL` ya apunta a `http://pdf-extract:8001`. |
 | `TEXTRACT_MODE` | `detect` (DetectDocumentText) o `analyze` (AnalyzeDocument FORMS+TABLES, más caro). |
 | `LLM_PROVIDER` | `anthropic`, `openai` o `bedrock`. |
 | `LLM_MODEL_TEXT`, `LLM_MODEL_VISION` | Modelos; vacío = por defecto del proveedor. En Bedrock pon el ID real (sección 5). |
@@ -70,6 +71,11 @@ COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER}
 - `OCR_ENGINE=local` -> perfil `local` -> `ocr-local`; `textract` no levanta nada. `api` no depende de `ocr-local`.
 - `LLM_PROVIDER=ollama` -> perfil `ollama` -> `ollama` + `ollama-pull`; `anthropic|openai|bedrock` no levantan nada (un perfil sin servicios es válido).
 - Verifica con `docker compose config --services` y `docker compose config --profiles`.
+
+### Servicio `pdf-extract` (PDF digital sin OCR)
+- Se levanta siempre (sin perfil), imagen ligera `python:3.12-slim` con PyMuPDF + pymupdf4llm; healthcheck `GET /health`; puerto `127.0.0.1:8001`. `api` no depende de él: si no responde o `PDF_TEXT_MODE=off`, la API usa el OCR para todas las páginas (con un warning en el log). Tras actualizar: `docker compose up --build` y añade a tu `.env` las variables `PDF_*` nuevas (ver `.env.example`; las existentes no cambian). Prueba: `curl localhost:8001/health`.
+- **Licencia:** PyMuPDF y pymupdf4llm son AGPL-3.0 (o licencia comercial de Artifex). Para uso interno de un solo usuario, sin ofrecer el servicio a terceros por red, es aceptable; si el servicio se expusiera a otros usuarios, revisa las obligaciones de la AGPL o cambia la librería.
+- Las páginas escaneadas conservan el flujo OCR -> regiones -> revisión; su markdown sigue siendo texto plano por líneas (mejora de estructura: siguiente fase).
 
 ### Ollama (solo desarrollo/pruebas; producción: Bedrock)
 LLM local con GPU NVIDIA (runtime nvidia de Docker). El contenido sensible no sale de la máquina. En `.env`: `LLM_PROVIDER=ollama`, `LLM_MODEL_TEXT=qwen2.5vl:3b` (con visión, ~3 GB; cabe en 6 GB de VRAM), `OLLAMA_CONTEXT_LENGTH=8192` y `SYNTH_MAX_INPUT_TOKENS` <= ese contexto menos margen (p. ej. 6000); si no, Ollama trunca. `ollama-pull` descarga los modelos al primer arranque (volumen `ollamamodels`). Dentro de Docker la api usa `OLLAMA_BASE_URL=http://ollama:11434/v1`; desde el host, `http://localhost:11434/v1`.
@@ -164,6 +170,7 @@ En producción usa solo `db:deploy` (y `db:seed` si quieres la plantilla/ajustes
 
 ## 8. Backups
 - **PostgreSQL**: `pg_dump -Fc -h <host> -U <usuario> automed > automed-$(date +%F).dump`; restaurar con `pg_restore -c -d automed archivo.dump`. Incluye correos, OCR, correcciones, síntesis y el refresh token cifrado (guarda también `TOKEN_ENC_KEY` en un lugar seguro: sin ella los tokens guardados no se pueden descifrar).
+- **Layout de RustFS y migración**: los objetos se guardan por hilo: `hilos/<threadId>/pdf_<n>/original.pdf` y `hilos/<threadId>/pdf_<n>/pagina_<k>.png` (bucket `automed`; consola :9001). Lo guardado antes del cambio (`attachments/<sha>.pdf`, `pages/<sha>/<n>.png`) sigue funcionando (el visor cae a la clave antigua), pero conviene migrarlo. Tras actualizar: `docker compose restart api` y luego, en este orden: (1) simulación, no cambia nada: `docker compose exec api node dist/cli/storage-migrate.js`; (2) migrar: `docker compose exec api node dist/cli/storage-migrate.js --apply` (copia y actualiza la BD; idempotente, se puede repetir); (3) cuando verifiques que las imágenes de la revisión cargan, borrar lo antiguo sin referencias: `... --apply --delete-old`. En desarrollo: `pnpm --filter api storage:migrate [-- --apply [--delete-old]]`. Haz antes una copia de la BD y del volumen.
 - **RustFS**: los PDFs y páginas viven en el volumen `auto-med_rustfsdata`. Copia en frío: `docker run --rm -v auto-med_rustfsdata:/data -v "$PWD":/backup alpine tar czf /backup/rustfs-$(date +%F).tgz -C /data .` (detén `rustfs` antes para consistencia). Alternativa: `mc mirror`/`aws s3 sync --endpoint-url http://localhost:9000 s3://automed ./backup-s3`.
 - Las páginas rasterizadas se regeneran desde los PDFs; los PDFs originales también están en Outlook.
 - Prueba restaurar de vez en cuando.

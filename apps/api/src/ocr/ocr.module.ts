@@ -9,6 +9,7 @@ import { PdfRasterizerService } from './pdf-rasterizer.service';
 import { TextractOcrEngineService } from './textract-ocr-engine.service';
 import { VisionRetryService } from './vision-retry.service';
 import { readOcrConfig } from './ocr-config';
+import { PdfExtractClientService } from './pdf-extract-client.service';
 
 @Module({
   imports: [LlmModule],
@@ -28,6 +29,7 @@ import { readOcrConfig } from './ocr-config';
       ) => (readOcrConfig(config).engine === 'textract' ? textract : local),
     },
     { provide: ATTACHMENT_PROCESSOR, useExisting: OcrService },
+    PdfExtractClientService,
   ],
   exports: [ATTACHMENT_PROCESSOR, OCR_ENGINE, PdfRasterizerService],
 })

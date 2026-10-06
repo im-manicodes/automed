@@ -15,6 +15,7 @@ import {
   THREAD_SYNTHESIZER,
 } from './jobs/pipeline-hooks.interface';
 import { OcrService } from './ocr/ocr.service';
+import { PdfExtractClientService } from './ocr/pdf-extract-client.service';
 import { PdfRasterizerService } from './ocr/pdf-rasterizer.service';
 import { VisionRetryService } from './ocr/vision-retry.service';
 import { OCR_ENGINE } from './ocr/ocr-engine.interface';
@@ -55,6 +56,13 @@ class FakeStorage {
     const f = this.files.get(key);
     if (!f) return Promise.reject(new Error('no existe'));
     return Promise.resolve(f);
+  }
+  copy(src: string, dst: string) {
+    this.files.set(dst, this.files.get(src)!);
+    return Promise.resolve();
+  }
+  exists(key: string) {
+    return Promise.resolve(this.files.has(key));
   }
   isHealthy() {
     return Promise.resolve(true);
@@ -131,6 +139,7 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
     OCR_RENDER_DPI: '72',
     OCR_CONFIDENCE_THRESHOLD: '0.85',
     JOBS_BACKOFF_BASE_SEC: '0',
+    PDF_TEXT_MODE: 'off', // sin red: todas las páginas pasan por el OCR simulado
   };
 
   beforeAll(async () => {
@@ -153,6 +162,7 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
         PipelineService,
         PdfRasterizerService,
         VisionRetryService,
+        PdfExtractClientService,
         OcrService,
         TemplatesService,
         SynthesisService,
@@ -215,6 +225,9 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
     expect(ocrCalls).toHaveLength(0);
     expect(llmPrompts).toHaveLength(0);
     expect(storage.files.size).toBe(1); // solo el PDF, sin páginas rasterizadas
+    expect([...storage.files.keys()]).toEqual([
+      `hilos/${thread.id}/pdf_1/original.pdf`,
+    ]);
 
     // 2. analizar: OCR mock + síntesis mock; una duda -> necesita_revision.
     await pipeline.analyze(thread.id);

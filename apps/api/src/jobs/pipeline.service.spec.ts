@@ -31,6 +31,7 @@ interface Att {
   messageId: string;
   sha256: string;
   status: St;
+  storageKey?: string;
 }
 
 /** Mini BD en memoria con solo lo que usa el pipeline. */
@@ -40,6 +41,7 @@ function fakePrisma() {
     messages: [] as Msg[],
     atts: [] as Att[],
     doubtfulShas: new Set<string>(),
+    ocrPages: [] as { sha256: string; pageNumber: number; imageKey: string }[],
     settings: new Map<string, unknown>(),
   };
   const threadOfAtt = (a: Att) =>
@@ -131,6 +133,10 @@ function fakePrisma() {
       count: async ({ where }: any) =>
         db.atts.filter((a) => attMatch(a, where)).length,
     },
+    ocrPage: {
+      findMany: async ({ where }: any) =>
+        db.ocrPages.filter((p) => p.sha256 === where.sha256),
+    },
     ocrRegion: {
       count: async ({ where }: any) =>
         db.doubtfulShas.has(where.page.sha256 ?? where.page.attachment.sha256)
@@ -153,8 +159,10 @@ function setup() {
   const worker = { register: jest.fn(), addPeriodic: jest.fn() };
   const processor = { process: jest.fn().mockResolvedValue(undefined) };
   const synth = { synthesize: jest.fn().mockResolvedValue(undefined) };
+  const storage = { copy: jest.fn().mockResolvedValue(undefined) };
   const pipeline = new PipelineService(
     prisma as any,
+    storage as any,
     queue as any,
     worker as any,
     new ThreadStateService(prisma as any),
@@ -183,9 +191,20 @@ function setup() {
         messageId: `m-${id}`,
         sha256: sha,
         status: 'pendiente',
+        storageKey: `hilos/${id}/pdf_${db.atts.filter((a) => a.messageId === `m-${id}`).length + 1}/original.pdf`,
       });
   };
-  return { db, queued, queue, processor, synth, pipeline, job, addThread };
+  return {
+    db,
+    queued,
+    queue,
+    processor,
+    synth,
+    storage,
+    pipeline,
+    job,
+    addThread,
+  };
 }
 
 describe('PipelineService', () => {
@@ -237,6 +256,48 @@ describe('PipelineService', () => {
     expect(s.db.atts[1].status).toBe('listo');
     expect(s.queued.some((q) => q.type === 'synthesize_thread')).toBe(true);
     expect(s.processor.process).not.toHaveBeenCalled();
+  });
+
+  it('al reutilizar el OCR de un gemelo copia las páginas a la carpeta del adjunto (aislamiento por hilo)', async () => {
+    const s = setup();
+    s.addThread('t1', [['a1', 'shaA']]);
+    s.addThread('t2', [['a2', 'shaA']]);
+    s.db.atts[0].status = 'listo';
+    s.db.ocrPages.push(
+      {
+        sha256: 'shaA',
+        pageNumber: 1,
+        imageKey: 'hilos/t1/pdf_1/pagina_1.png',
+      },
+      {
+        sha256: 'shaA',
+        pageNumber: 2,
+        imageKey: 'hilos/t1/pdf_1/pagina_2.png',
+      },
+    );
+    await s.pipeline.processThread(s.job({ threadId: 't2' }));
+    expect(s.storage.copy).toHaveBeenCalledTimes(2);
+    expect(s.storage.copy).toHaveBeenCalledWith(
+      'hilos/t1/pdf_1/pagina_1.png',
+      'hilos/t2/pdf_1/pagina_1.png',
+    );
+    expect(s.processor.process).not.toHaveBeenCalled();
+  });
+
+  it('un fallo al copiar páginas no tumba el análisis (best-effort)', async () => {
+    const s = setup();
+    s.addThread('t1', [['a1', 'shaA']]);
+    s.addThread('t2', [['a2', 'shaA']]);
+    s.db.atts[0].status = 'listo';
+    s.db.ocrPages.push({
+      sha256: 'shaA',
+      pageNumber: 1,
+      imageKey: 'hilos/t1/pdf_1/pagina_1.png',
+    });
+    s.storage.copy.mockRejectedValue(new Error('s3'));
+    await s.pipeline.processThread(s.job({ threadId: 't2' }));
+    expect(s.db.atts[1].status).toBe('listo');
+    expect(s.queued.some((q) => q.type === 'synthesize_thread')).toBe(true);
   });
 
   it('un PDF repetido en el mismo hilo se procesa una vez y se propaga', async () => {

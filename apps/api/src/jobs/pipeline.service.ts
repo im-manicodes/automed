@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Logger,
   Inject,
   Injectable,
   NotFoundException,
@@ -7,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { ownPageKey } from '../storage/storage-keys';
+import { StorageService } from '../storage/storage.service';
 import { JOB_TYPES, JobRecord } from './job-handler.interface';
 import { JobQueueService } from './job-queue.service';
 import { JobWorkerService } from './job-worker.service';
@@ -32,8 +35,11 @@ const str = (v: unknown) => (typeof v === 'string' ? v : '');
  */
 @Injectable()
 export class PipelineService implements OnModuleInit {
+  private readonly logger = new Logger(PipelineService.name);
+
   constructor(
     private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
     private readonly queue: JobQueueService,
     private readonly worker: JobWorkerService,
     private readonly state: ThreadStateService,
@@ -377,6 +383,7 @@ export class PipelineService implements OnModuleInit {
           where: { id: att.id },
           data: { status: twin.status },
         });
+        await this.copyPagesToAttachment(att);
         continue;
       }
       await this.queue.enqueue(
@@ -387,6 +394,33 @@ export class PipelineService implements OnModuleInit {
       queued++;
     }
     if (queued === 0) await this.checkThreadReady(threadId);
+  }
+
+  /**
+   * Al reutilizar el OCR de un gemelo (mismo sha256), copia server-side las imágenes de página a
+   * la carpeta del adjunto (hilos/<threadId>/pdf_<n>/). Best-effort: un fallo solo da aviso y el
+   * visor cae a OcrPage.imageKey. No registra contenido.
+   */
+  private async copyPagesToAttachment(att: {
+    id: string;
+    sha256: string;
+    storageKey: string;
+  }) {
+    try {
+      const pages = await this.prisma.ocrPage.findMany({
+        where: { sha256: att.sha256 },
+        select: { pageNumber: true, imageKey: true },
+      });
+      for (const p of pages) {
+        const dst = ownPageKey(att.storageKey, p.pageNumber);
+        if (!dst || dst === p.imageKey) continue;
+        await this.storage.copy(p.imageKey, dst);
+      }
+    } catch {
+      this.logger.warn(
+        `No se pudieron copiar las páginas al adjunto ${att.id}; el visor usará la copia original`,
+      );
+    }
   }
 
   async processAttachment(job: JobRecord) {
@@ -409,6 +443,11 @@ export class PipelineService implements OnModuleInit {
       });
       const final: ProcessStatus = doubtful > 0 ? 'necesita_revision' : 'listo';
       await this.finishAttachments(att.sha256, final);
+      // Los gemelos (mismo sha256, otros hilos o el mismo) reciben copia de las páginas.
+      const twins = await this.prisma.attachment.findMany({
+        where: { sha256: att.sha256, id: { not: att.id } },
+      });
+      for (const t of twins) await this.copyPagesToAttachment(t);
     }
     await this.notifyThreadsOfSha(att.sha256);
   }

@@ -5,6 +5,7 @@ import {
   DEMO_S3_PREFIX,
   DEMO_SUBJECT_PREFIX,
 } from './demo-constants';
+import { pageKey, pdfKey } from '../../src/storage/storage-keys';
 
 /** Datos FICTICIOS para probar la UI. Puro: no toca BD ni red. Todo id empieza por `demo-`. */
 
@@ -161,6 +162,10 @@ export function buildDemoDataset(now: Date = new Date()): DemoDataset {
     pageSpecs: DemoLine[][] = [],
   ) => {
     const attId = d(`adj-${n}${letter}`);
+    const threadId = d(`hilo-${n}`);
+    const pdfIdx =
+      attachments.filter((a) => String(a.messageId).startsWith(d(`msg-${n}-`)))
+        .length + 1;
     attachments.push({
       id: attId,
       messageId: d(`msg-${n}-${msgIdx}`),
@@ -168,7 +173,7 @@ export function buildDemoDataset(now: Date = new Date()): DemoDataset {
       filename: `demo-${filename}`,
       mimeType: 'application/pdf',
       size: 48_000 + pageSpecs.length * 1_000,
-      storageKey: `${DEMO_S3_PREFIX}attachments/${attId}.pdf`,
+      storageKey: pdfKey(threadId, pdfIdx, DEMO_S3_PREFIX),
       sha256: d(`sha-${n}${letter}`),
       status,
     });
@@ -179,7 +184,7 @@ export function buildDemoDataset(now: Date = new Date()): DemoDataset {
         id: pageId,
         attachmentId: attId,
         pageNumber,
-        imageKey: `${DEMO_S3_PREFIX}pages/${attId}/${pageNumber}.png`,
+        imageKey: pageKey(pdfKey(threadId, pdfIdx, DEMO_S3_PREFIX), pageNumber),
         width: PAGE_W,
         height: PAGE_H,
         lines: ls,

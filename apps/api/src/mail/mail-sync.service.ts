@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { nextPdfIndex, pdfKey } from '../storage/storage-keys';
 import { StorageService } from '../storage/storage.service';
 import {
   DeltaExpiredError,
@@ -213,7 +214,12 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (m.hasAttachments) {
-      const added = await this.syncAttachments(m.graphId, messageId, result);
+      const added = await this.syncAttachments(
+        m.graphId,
+        messageId,
+        threadId,
+        result,
+      );
       changed = changed || added > 0;
     }
     if (changed) {
@@ -247,6 +253,7 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
   private async syncAttachments(
     graphMessageId: string,
     messageId: string,
+    threadId: string,
     result: SyncResult,
   ) {
     let added = 0;
@@ -260,18 +267,24 @@ export class MailSyncService implements OnModuleInit, OnModuleDestroy {
       if (known) continue;
       const bytes = await this.graph.downloadAttachment(graphMessageId, att.id);
       const sha256 = createHash('sha256').update(bytes).digest('hex');
-      // Dedupe por hash: si el mismo PDF ya está guardado se reutiliza su storageKey.
+      // Cada hilo guarda su propia copia en hilos/<threadId>/pdf_<n>/original.pdf. El dedupe por
+      // sha256 aplica al OCR (no se reprocesa), no al archivo. n = siguiente índice libre del hilo.
       const sameHash = await this.prisma.attachment.findFirst({
         where: { sha256 },
       });
-      let storageKey: string;
-      if (sameHash) {
-        storageKey = sameHash.storageKey;
-        result.deduped++;
-      } else {
-        storageKey = `attachments/${sha256}.pdf`;
-        await this.storage.put(storageKey, bytes, 'application/pdf');
-      }
+      if (sameHash) result.deduped++;
+      const siblings = await this.prisma.attachment.findMany({
+        where: { message: { threadId } },
+        select: { storageKey: true },
+      });
+      const storageKey = pdfKey(
+        threadId,
+        nextPdfIndex(siblings.map((a) => a.storageKey)),
+      );
+      await this.storage.put(storageKey, bytes, 'application/pdf', {
+        filename: att.name ?? 'adjunto.pdf',
+        sha256,
+      });
       await this.prisma.attachment.create({
         data: {
           messageId,

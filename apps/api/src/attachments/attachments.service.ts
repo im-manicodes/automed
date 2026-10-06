@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ownPageKey } from '../storage/storage-keys';
 import { StorageService } from '../storage/storage.service';
 
 @Injectable()
@@ -31,7 +32,13 @@ export class AttachmentsService {
           pageNumber: p.pageNumber,
           width: p.width,
           height: p.height,
-          imageUrl: await this.storage.presignedGetUrl(p.imageKey),
+          imageUrl: await this.storage.presignedGetUrl(
+            await this.resolveImageKey(
+              att.storageKey,
+              p.pageNumber,
+              p.imageKey,
+            ),
+          ),
           regions: p.regions.map((r) => ({
             id: r.id,
             x: r.x,
@@ -56,7 +63,23 @@ export class AttachmentsService {
       select: { imageKey: true },
     });
     if (!page) throw new NotFoundException('Página no encontrada');
-    return this.storage.get(page.imageKey);
+    return this.storage.get(
+      await this.resolveImageKey(att.storageKey, pageNumber, page.imageKey),
+    );
+  }
+
+  /**
+   * Imagen de la página: primero la copia en la carpeta del propio adjunto; si no existe (datos
+   * antiguos o copia fallida) cae a OcrPage.imageKey (la del dueño del OCR).
+   */
+  private async resolveImageKey(
+    storageKey: string,
+    pageNumber: number,
+    imageKey: string,
+  ) {
+    const own = ownPageKey(storageKey, pageNumber);
+    if (!own || own === imageKey) return imageKey;
+    return (await this.storage.exists(own)) ? own : imageKey;
   }
 
   private async findAttachment(id: string) {

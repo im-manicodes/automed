@@ -9,6 +9,7 @@ Síntesis con IA de hilos de Outlook (tickets), con OCR de PDFs escaneados y cor
 apps/api   NestJS + Prisma + PostgreSQL
 apps/web   Vite + React + Tailwind (mobile-first, español)
 docs/      estado-del-proyecto.md, despliegue.md, benchmark-ocr.md, entra-id-registro.md
+services/pdf-extract  PDF digital -> markdown con PyMuPDF (sin OCR; siempre activo en compose)
 services/ocr-local  OCR local (PaddleOCR/Tesseract, perfil `ocr`, solo pruebas)
 docker-compose.yml  rustfs, api, web (Postgres externo vía DATABASE_URL_DOCKER en .env)
 docker-compose.dev.yml  hot reload en Docker (solo desarrollo, se activa con COMPOSE_FILE en .env)
@@ -27,6 +28,7 @@ pnpm dev                                  # api :3000, web :5173
 ```bash
 docker compose up -d --build   # web http://localhost:8080; api healthy en /api/health
 # Con OCR_ENGINE=local en .env levanta también ocr-local; con LLM_PROVIDER=ollama, ollama + ollama-pull (GPU).
+# `pdf-extract` (PDF digital -> markdown sin OCR) se levanta siempre; la API usa OCR solo en páginas escaneadas.
 # Requiere COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER} en .env (ver .env.example).
 ```
 ### Desarrollo con Docker y hot reload

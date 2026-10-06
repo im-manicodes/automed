@@ -26,6 +26,7 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       WEB_ORIGIN: http://localhost:8080
       OCR_LOCAL_URL: http://ocr-local:8000
+      PDF_EXTRACT_URL: http://pdf-extract:8001
       # Con LLM_PROVIDER=ollama, dentro de Docker el servicio se llama `ollama` (no localhost).
       OLLAMA_BASE_URL: http://ollama:11434/v1
     extra_hosts:
@@ -52,6 +53,21 @@ services:
         condition: service_healthy
     ports:
       - "8080:80"
+
+  # PDF digital -> markdown con PyMuPDF (sin OCR). Sin perfil: siempre activo, es ligero. `api` no depende de
+  # él: si no responde, la API cae al OCR completo (degradación segura). PyMuPDF es AGPL-3.0 (ver docs/despliegue.md).
+  pdf-extract:
+    build: ./services/pdf-extract
+    environment:
+      PDF_TEXT_MIN_CHARS: ${PDF_TEXT_MIN_CHARS:-60}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "127.0.0.1:8001:8001"
 
   # OCR local en CPU, solo desarrollo. Se activa solo con OCR_ENGINE=local: el .env raíz define
   # COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER} y este servicio pertenece al perfil `local`.

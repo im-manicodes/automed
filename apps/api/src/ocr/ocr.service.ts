@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { pageKey } from '../storage/storage-keys';
 import { StorageService } from '../storage/storage.service';
 import type { AttachmentProcessor } from '../jobs/pipeline-hooks.interface';
 import { classifyRegions, regionsOf } from './ocr-classifier';
@@ -8,11 +9,12 @@ import type { ClassifiedRegion } from './ocr-classifier';
 import { OcrConfig, readOcrConfig } from './ocr-config';
 import { OCR_ENGINE } from './ocr-engine.interface';
 import type { OcrEngine } from './ocr-engine.interface';
+import { PdfExtractClientService } from './pdf-extract-client.service';
 import { PdfRasterizerService } from './pdf-rasterizer.service';
 import { VisionRetryService } from './vision-retry.service';
 
-export const pageImageKey = (sha256: string, pageNumber: number) =>
-  `pages/${sha256}/${pageNumber}.png`;
+/** Valor de OcrPage.engine para páginas digitales (texto del PDF -> markdown, sin OCR). */
+export const PDF_TEXT_ENGINE = 'pdf-text';
 
 export type StoredRegion = ClassifiedRegion & { source: 'ocr' | 'vision' };
 
@@ -33,6 +35,7 @@ export class OcrService implements AttachmentProcessor {
     private readonly rasterizer: PdfRasterizerService,
     @Inject(OCR_ENGINE) private readonly engine: OcrEngine,
     private readonly vision: VisionRetryService,
+    private readonly pdfText: PdfExtractClientService,
   ) {
     this.cfg = readOcrConfig(config);
   }
@@ -49,6 +52,14 @@ export class OcrService implements AttachmentProcessor {
     if (existing > 0) return;
 
     const pdf = await this.storage.get(att.storageKey);
+    // Híbrido: las páginas con capa de texto se convierten a markdown sin OCR; el resto va a OCR.
+    // Si el servicio no responde (o PDF_TEXT_MODE=off) -> null y todas las páginas pasan por OCR.
+    const textPages = await this.pdfText.extract(pdf);
+    const digital = new Map(
+      (textPages ?? [])
+        .filter((p) => p.kind === 'digital' && p.markdown.trim() !== '')
+        .map((p) => [p.pageNumber, p.markdown]),
+    );
     const rasters = await this.rasterizer.rasterize(pdf);
 
     const built: {
@@ -56,14 +67,27 @@ export class OcrService implements AttachmentProcessor {
       width: number;
       height: number;
       text: string;
+      engine: string;
       regions: StoredRegion[];
     }[] = [];
     for (const page of rasters) {
       await this.storage.put(
-        pageImageKey(att.sha256, page.pageNumber),
+        pageKey(att.storageKey, page.pageNumber),
         page.png,
         'image/png',
       );
+      const markdown = digital.get(page.pageNumber);
+      if (markdown !== undefined) {
+        built.push({
+          pageNumber: page.pageNumber,
+          width: page.width,
+          height: page.height,
+          text: markdown,
+          engine: PDF_TEXT_ENGINE,
+          regions: [],
+        });
+        continue;
+      }
       const result = await this.engine.recognize(page.png, page.pageNumber);
       const lines = regionsOf(result);
       let regions: StoredRegion[] = classifyRegions(
@@ -76,6 +100,7 @@ export class OcrService implements AttachmentProcessor {
         width: page.width,
         height: page.height,
         text: lines.map((l) => l.text).join('\n'),
+        engine: this.engine.name,
         regions,
       });
     }
@@ -88,11 +113,11 @@ export class OcrService implements AttachmentProcessor {
               attachmentId: att.id,
               sha256: att.sha256,
               pageNumber: p.pageNumber,
-              imageKey: pageImageKey(att.sha256, p.pageNumber),
+              imageKey: pageKey(att.storageKey, p.pageNumber),
               width: p.width,
               height: p.height,
               text: p.text,
-              engine: this.engine.name,
+              engine: p.engine,
               regions: {
                 create: p.regions.map((r) => ({
                   x: r.box.x,
@@ -114,7 +139,7 @@ export class OcrService implements AttachmentProcessor {
       if ((e as { code?: string }).code !== 'P2002') throw e;
     }
     this.logger.log(
-      `OCR listo: adjunto ${att.id}, ${built.length} páginas, motor ${this.engine.name}`,
+      `OCR listo: adjunto ${att.id}, ${built.length} páginas (${digital.size} digitales sin OCR), motor ${this.engine.name}`,
     );
   }
 

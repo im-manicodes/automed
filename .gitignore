@@ -6,3 +6,9 @@ coverage
 .DS_Store
 src/generated
 apps/api/src/generated/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

@@ -38,6 +38,7 @@
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
     "db:format": "prisma format",
+    "storage:migrate": "pnpm build && node dist/cli/storage-migrate.js",
     "user:create": "pnpm build && node dist/cli/user.js create",
     "user:reset-password": "pnpm build && node dist/cli/user.js reset-password"
   },
