@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import type { ThreadSynthesizer } from '../jobs/pipeline-hooks.interface';
+import { parseReportColumns } from '../templates/report-columns';
 import { LLM_PROVIDER } from '../llm/llm-provider.interface';
 import type { LlmProvider } from '../llm/llm-provider.interface';
 import { PrismaService } from '../prisma/prisma.service';
@@ -283,6 +284,17 @@ export class SynthesisService implements ThreadSynthesizer {
   async preview(markdown?: string, kind: TemplateKind = 'resumen') {
     const tpl =
       markdown?.trim() || (await this.templates.getActive(kind)).markdown;
+    if (kind === 'reporte') {
+      // Sin LLM: solo muestra las columnas que se leyeron de la plantilla (o el error de formato).
+      const { columnas, error } = parseReportColumns(tpl);
+      return {
+        markdown: columnas
+          .map((c) => `- ${c.nombre}: ${c.instruccion}`)
+          .join('\n'),
+        columnas,
+        error,
+      };
+    }
     if (kind === 'whatsapp') {
       const out = await this.llm.text(
         WHATSAPP_SYSTEM_PROMPT,

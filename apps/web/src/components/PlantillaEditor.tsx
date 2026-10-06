@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { LuInfo, LuTriangleAlert } from 'react-icons/lu'
 import { useToast } from '../context/toasts-context'
-import { templatesApi, type Template } from '../lib/api'
+import { templatesApi, type ColumnaReporte, type Template } from '../lib/api'
 import { errorMessage, formatDate } from '../lib/format'
 import type { PlantillaTipo } from '../lib/plantillas'
 import ConfirmDialog from './ConfirmDialog'
@@ -19,6 +19,8 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
   const [busy, setBusy] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const [columnas, setColumnas] = useState<ColumnaReporte[] | null>(null)
+  const [errorColumnas, setErrorColumnas] = useState<string | null>(null)
   const [previewing, setPreviewing] = useState(false)
 
   const load = useCallback(async () => {
@@ -45,7 +47,7 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
   const hasTitle = /^#{1,3}\s+\S/m.test(text)
   const problem = tooLong
     ? `La plantilla es demasiado larga (máximo ${tipo.max.toLocaleString('es')} letras).`
-    : text.trim().length < 20
+    : text.trim().length < tipo.min
       ? 'La plantilla es demasiado corta.'
       : tipo.exigeTitulos && !hasTitle
         ? 'Escribe al menos un título de sección, por ejemplo: ## Resumen'
@@ -72,6 +74,8 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
       setTpl(t)
       setText(t.markdown)
       setPreview(null)
+      setColumnas(null)
+      setErrorColumnas(null)
       toast('Plantilla restaurada.', 'ok')
     } catch (e) {
       toast(errorMessage(e), 'error')
@@ -84,7 +88,10 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
   const makePreview = async () => {
     setPreviewing(true)
     try {
-      setPreview((await templatesApi.preview(text, kind)).markdown)
+      const r = await templatesApi.preview(text, kind)
+      setPreview(r.markdown)
+      setColumnas(r.columnas ?? null)
+      setErrorColumnas(r.error ?? null)
     } catch (e) {
       toast(errorMessage(e), 'error')
     } finally {
@@ -101,6 +108,10 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
         {kind === 'resumen' ? (
           <>
             Cambiar la plantilla <strong>no rehace</strong> los tickets que ya tienen resumen. En cada ticket verás un aviso y podrás regenerarlo si quieres.
+          </>
+        ) : kind === 'reporte' ? (
+          <>
+            Esta plantilla se usa <strong>en cada reporte nuevo</strong>. Los reportes que ya generaste no cambian.
           </>
         ) : (
           <>
@@ -138,11 +149,38 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
 
         <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
           <h4 className="text-lg font-bold">Vista previa</h4>
-          <p className="text-sm text-slate-700">{tipo.textoVistaPrevia} Usa inteligencia artificial (consume un poco) y puede tardar unos segundos. Funciona con el texto de arriba, aunque no lo hayas guardado.</p>
+          <p className="text-sm text-slate-700">{tipo.textoVistaPrevia}{' '}
+            {tipo.usaIA ? 'Usa inteligencia artificial (consume un poco) y puede tardar unos segundos. ' : 'No usa inteligencia artificial ni gasta nada. '}
+            Funciona con el texto de arriba, aunque no lo hayas guardado.</p>
           <button type="button" className="btn btn-secondary w-full" disabled={previewing || !!problem} onClick={() => void makePreview()}>
             {previewing ? 'Generando vista previa…' : 'Ver vista previa'}
           </button>
-          {preview && (
+          {kind === 'reporte' && errorColumnas && (
+            <p className="rounded-lg border border-red-300 bg-red-50 p-3 text-red-900" data-testid="error-columnas">
+              <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />{errorColumnas}
+            </p>
+          )}
+          {kind === 'reporte' && !errorColumnas && columnas && (
+            <div className="space-y-2">
+              <p className="font-semibold">{columnas.length === 1 ? '1 columna' : `${columnas.length} columnas`} en el Excel</p>
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-100">
+                    <tr><th className="px-3 py-2">Columna</th><th className="px-3 py-2">Qué busca la IA</th></tr>
+                  </thead>
+                  <tbody>
+                    {columnas.map((c) => (
+                      <tr key={c.nombre} className="border-t border-slate-200 align-top">
+                        <th scope="row" className="px-3 py-2 font-semibold">{c.nombre}</th>
+                        <td className="px-3 py-2 text-slate-700">{c.instruccion}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {kind !== 'reporte' && preview && (
             <div className="rounded-lg bg-slate-50 p-3">
               {tipo.vistaPreviaComoMarkdown ? <Markdown>{preview}</Markdown> : <pre className="whitespace-pre-wrap break-words font-sans text-sm" data-testid="vista-previa">{preview}</pre>}
             </div>

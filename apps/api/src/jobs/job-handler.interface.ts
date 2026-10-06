@@ -1,5 +1,8 @@
 export type JobType =
-  'process_thread' | 'process_attachment' | 'synthesize_thread';
+  | 'process_thread'
+  | 'process_attachment'
+  | 'synthesize_thread'
+  | 'generate_report';
 
 export interface JobRecord {
   id: string;
@@ -31,4 +34,5 @@ export const JOB_TYPES = {
   processThread: 'process_thread',
   processAttachment: 'process_attachment',
   synthesizeThread: 'synthesize_thread',
+  generateReport: 'generate_report',
 } as const;

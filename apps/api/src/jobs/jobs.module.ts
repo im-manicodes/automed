@@ -21,6 +21,6 @@ import { THREAD_SYNTHESIZER } from './pipeline-hooks.interface';
     { provide: THREAD_SYNTHESIZER, useExisting: SynthesisService },
   ],
   controllers: [JobsController],
-  exports: [PipelineService, JobQueueService],
+  exports: [PipelineService, JobQueueService, JobWorkerService],
 })
 export class JobsModule {}

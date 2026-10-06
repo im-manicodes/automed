@@ -441,4 +441,23 @@ describe('SynthesisService', () => {
     expect(stripFences('```markdown\n## A\n```')).toBe('## A');
     expect(stripFences('## A')).toBe('## A');
   });
+
+  it('preview del tipo reporte devuelve las columnas parseadas sin llamar al LLM', async () => {
+    const { svc, llm } = setup();
+    const r = await svc.preview(
+      '- Paciente: Nombre\n- Hospital: Dónde',
+      'reporte',
+    );
+    expect(r).toMatchObject({
+      columnas: [
+        { nombre: 'Paciente', instruccion: 'Nombre' },
+        { nombre: 'Hospital', instruccion: 'Dónde' },
+      ],
+      error: null,
+    });
+    const bad = await svc.preview('sin viñetas', 'reporte');
+    expect(bad).toMatchObject({ columnas: [] });
+    expect((bad as { error: string }).error).toContain('al menos una');
+    expect(llm.text).not.toHaveBeenCalled();
+  });
 });

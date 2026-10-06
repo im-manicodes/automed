@@ -3,10 +3,11 @@ import type { IconType } from 'react-icons'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useSession } from '../context/session-context'
 import CambiarPasswordDialog from './CambiarPasswordDialog'
-import { LuClipboardList, LuFileText, LuSettings, LuUser } from 'react-icons/lu'
+import { LuClipboardList, LuFileSpreadsheet, LuFileText, LuSettings, LuUser } from 'react-icons/lu'
 
 const items: { to: string; label: string; icon: IconType }[] = [
   { to: '/tickets', label: 'Tickets', icon: LuClipboardList },
+  { to: '/reportes', label: 'Reportes', icon: LuFileSpreadsheet },
   { to: '/plantilla', label: 'Plantillas', icon: LuFileText },
   { to: '/ajustes', label: 'Ajustes', icon: LuSettings },
 ]

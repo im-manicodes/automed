@@ -86,3 +86,34 @@ describe('Plantillas', () => {
     expect(reset).toHaveBeenCalledWith('whatsapp')
   })
 })
+
+describe('Plantilla de reporte Excel', () => {
+  it('?tipo=reporte abre la pestaña, avisa que aplica a reportes nuevos y muestra las columnas', async () => {
+    vi.spyOn(apiLib.templatesApi, 'active').mockResolvedValue(tpl('reporte', '- Paciente: nombre\n- Hospital: nombre del hospital'))
+    const preview = vi.spyOn(apiLib.templatesApi, 'preview').mockResolvedValue({
+      markdown: '',
+      columnas: [{ nombre: 'Paciente', instruccion: 'nombre' }, { nombre: 'Hospital', instruccion: 'nombre del hospital' }],
+      error: null,
+    })
+    renderPage('/plantilla?tipo=reporte')
+    const user = userEvent.setup()
+    expect(await screen.findByLabelText('Texto de la plantilla')).toHaveValue('- Paciente: nombre\n- Hospital: nombre del hospital')
+    expect(screen.getByRole('tab', { name: 'Reporte Excel' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText(/en cada reporte nuevo/)).toBeInTheDocument()
+    expect(screen.queryByText(/consume un poco/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Ver vista previa' }))
+    expect(preview).toHaveBeenCalledWith('- Paciente: nombre\n- Hospital: nombre del hospital', 'reporte')
+    expect(await screen.findByText('2 columnas en el Excel')).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: 'Hospital' })).toBeInTheDocument()
+  })
+
+  it('muestra el error de formato de la vista previa', async () => {
+    vi.spyOn(apiLib.templatesApi, 'active').mockResolvedValue(tpl('reporte', '- Paciente: nombre'))
+    vi.spyOn(apiLib.templatesApi, 'preview').mockResolvedValue({ markdown: '', columnas: [], error: 'Hay nombres de columna repetidos.' })
+    renderPage('/plantilla?tipo=reporte')
+    const user = userEvent.setup()
+    await screen.findByLabelText('Texto de la plantilla')
+    await user.click(screen.getByRole('button', { name: 'Ver vista previa' }))
+    expect(await screen.findByTestId('error-columnas')).toHaveTextContent('repetidos')
+  })
+})

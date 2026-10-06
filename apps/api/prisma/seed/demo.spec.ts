@@ -124,7 +124,7 @@ describe('seedDemo / cleanDemo', () => {
     const b = await seedDemo(asDb(db), st, {}, noop, render);
     expect(db.thread.rows).toHaveLength(n);
     expect(db.ocrRegion.rows).toHaveLength(b.regiones);
-    for (const kind of ['resumen', 'whatsapp'])
+    for (const kind of ['resumen', 'whatsapp', 'reporte'])
       expect(
         db.template.rows.filter((t) => t.isActive && t.kind === kind),
       ).toHaveLength(1);
@@ -162,10 +162,11 @@ describe('seedDemo / cleanDemo', () => {
     await cleanDemo(asDb(db), st, noop);
     expect(db.thread.rows.map((t) => t.id)).toEqual([realThread.id]);
     expect(db.mailAccount.rows.map((a) => a.id)).toEqual([real.id]);
-    // 'Mía' (resumen) intacta; la de whatsapp la creó el seed base (no es demo) y se conserva
+    // 'Mía' (resumen) intacta; las de whatsapp y reporte las creó el seed base (no es demo) y se conserva
     expect(db.template.rows.map((t) => t.name)).toEqual([
       'Mía',
       'Formato de WhatsApp estándar',
+      'Columnas del reporte estándar',
     ]);
     for (const t of [
       db.message,

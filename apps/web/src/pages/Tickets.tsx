@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import ConectarOutlookButton from '../components/ConectarOutlookButton'
 import ErrorBox from '../components/ErrorBox'
 import Spinner from '../components/Spinner'
@@ -8,7 +9,7 @@ import { ApiError, mailApi, threadsApi, type ProcessStatus, type ThreadListItem 
 import { errorMessage, plural } from '../lib/format'
 import { canAnalyze, FILTERS, isBusy } from '../lib/status'
 import { usePolling } from '../lib/usePolling'
-import { LuRefreshCw, LuInfo, LuPlug, LuInbox } from 'react-icons/lu'
+import { LuRefreshCw, LuFileSpreadsheet, LuInfo, LuPlug, LuInbox } from 'react-icons/lu'
 
 type Filter = ProcessStatus | undefined
 
@@ -114,10 +115,16 @@ export default function Tickets() {
     <section className="space-y-4 md:pb-20">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold">Tus tickets</h2>
-        <button type="button" className="btn btn-secondary" onClick={() => void sync()} disabled={syncing || connected === false}>
-          <LuRefreshCw className={`size-5 ${syncing ? 'animate-spin' : ''}`} aria-hidden />
-          {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/reportes?generar=1" className="btn btn-secondary">
+            <LuFileSpreadsheet className="size-5" aria-hidden />
+            Generar Excel
+          </Link>
+          <button type="button" className="btn btn-secondary" onClick={() => void sync()} disabled={syncing || connected === false}>
+            <LuRefreshCw className={`size-5 ${syncing ? 'animate-spin' : ''}`} aria-hidden />
+            {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
+          </button>
+        </div>
       </div>
 
       <p className="rounded-xl bg-blue-50 p-3 text-sm text-blue-900">

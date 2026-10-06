@@ -24,6 +24,9 @@ export type SeedEnv = Record<string, string | undefined>;
 export const DEFAULT_SETTINGS: Record<string, unknown> = {
   'app.idioma': 'es',
   'analisis.modo': 'bajo_peticion',
+  'reporte.programado': false,
+  'reporte.hora': '07:00',
+  'reporte.zona': 'America/Mexico_City',
 };
 
 export interface SeedReport {
@@ -34,7 +37,7 @@ export interface SeedReport {
 }
 
 /**
- * Crea la plantilla activa por defecto de CADA tipo (resumen, whatsapp) si el tipo no tiene ninguna
+ * Crea la plantilla activa por defecto de CADA tipo (resumen, whatsapp, reporte) si el tipo no tiene ninguna
  * activa (misma versión inicial que TemplatesService, que numera por tipo). Idempotente.
  */
 export async function ensureActiveTemplate(

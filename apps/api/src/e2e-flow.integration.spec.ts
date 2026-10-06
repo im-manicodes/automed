@@ -25,6 +25,9 @@ import type { LlmProvider } from './llm/llm-provider.interface';
 import { SynthesisService } from './synthesis/synthesis.service';
 import { TemplatesService } from './templates/templates.service';
 import { ReviewService } from './review/review.service';
+import { ReportsService } from './reports/reports.service';
+import { GeneratorService } from './reports/generator.service';
+import { EventsService } from './events/events.service';
 import { msg, pdfAtt } from './mail/fixtures/graph.fixtures';
 import type { GraphMessage } from './mail/graph-mapper';
 
@@ -94,10 +97,13 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
   const storage = new FakeStorage();
   const ocrCalls: number[] = [];
   const llmPrompts: string[] = [];
+  const reportPrompts: string[] = [];
   let prisma: PrismaService;
   let sync: MailSyncService;
   let pipeline: PipelineService;
   let review: ReviewService;
+  let reports: ReportsService;
+  let events: EventsService;
   let worker: JobWorkerService;
   let queue: JobQueueService;
   let close: () => Promise<void>;
@@ -129,6 +135,19 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
     complete: () => Promise.resolve(''),
     vision: () => Promise.resolve('{"text":"x","confidence":0.1}'),
     text: (_system, user) => {
+      if (user.includes('Devuelve un JSON con esta forma exacta')) {
+        reportPrompts.push(user);
+        return Promise.resolve(
+          JSON.stringify({
+            estado: 'hospitalizado',
+            novedad_texto: 'Resultados de laboratorio recibidos',
+            columnas: {
+              Paciente: 'Paciente de prueba',
+              Hospital: 'Hospital X',
+            },
+          }),
+        );
+      }
       llmPrompts.push(user);
       return Promise.resolve(`# Síntesis mock ${++n}\n\nContenido.`);
     },
@@ -167,6 +186,9 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
         TemplatesService,
         SynthesisService,
         ReviewService,
+        ReportsService,
+        GeneratorService,
+        EventsService,
         { provide: OCR_ENGINE, useValue: ocrEngine },
         { provide: LLM_PROVIDER, useValue: llm },
         { provide: ATTACHMENT_PROCESSOR, useExisting: OcrService },
@@ -177,6 +199,8 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
     sync = mod.get(MailSyncService);
     pipeline = mod.get(PipelineService);
     review = mod.get(ReviewService);
+    reports = mod.get(ReportsService);
+    events = mod.get(EventsService);
     worker = mod.get(JobWorkerService);
     queue = mod.get(JobQueueService);
     await prisma.mailAccount.create({
@@ -294,5 +318,116 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
     ]);
     t = await prisma.thread.findUniqueOrThrow({ where: { id: thread.id } });
     expect(t.status).toBe('listo');
+  });
+
+  it('reporte diario: usa la síntesis vigente, no dispara análisis y se puede descargar', async () => {
+    const before = {
+      llm: llmPrompts.length,
+      ocr: ocrCalls.length,
+      syn: await prisma.synthesis.count(),
+    };
+    // un segundo hilo sin analizar no entra en el reporte ni se procesa
+    const t2 = await prisma.thread.create({
+      data: {
+        accountId: (await prisma.mailAccount.findFirstOrThrow()).id,
+        conversationId: 'C2',
+        subject: 'Hilo sin analizar',
+      },
+    });
+
+    const { reporte, reutilizado } = await reports.createManual();
+    expect(reutilizado).toBe(false);
+    expect((await reports.createManual()).reporte.id).toBe(reporte.id);
+    await drain();
+
+    const done = await reports.detail(reporte.id);
+    expect(done.status).toBe('listo');
+    expect(done.progreso).toEqual({ procesados: 1, total: 1 });
+    expect(done.totales).toMatchObject({
+      hospitalizados: 1,
+      conNovedad: 1,
+      altas: 0,
+    });
+    expect(done.totales).not.toHaveProperty('sinAnalizar');
+    expect(done.filasConNovedad[0].datos.Paciente).toBe('Paciente de prueba');
+    // una sola llamada de extracción, con la síntesis vigente y sin correos del hilo
+    expect(reportPrompts).toHaveLength(1);
+    expect(reportPrompts[0]).toContain('Síntesis mock');
+    expect(reportPrompts[0]).not.toContain('cuerpo-dos');
+    // ningún análisis nuevo
+    expect(llmPrompts).toHaveLength(before.llm);
+    expect(ocrCalls).toHaveLength(before.ocr);
+    expect(await prisma.synthesis.count()).toBe(before.syn);
+    expect(
+      (await prisma.thread.findUniqueOrThrow({ where: { id: t2.id } })).status,
+    ).toBe('sin_analizar');
+
+    const file = await reports.download(reporte.id);
+    expect(file.getHeaders().type).toContain('spreadsheetml');
+    expect(
+      [...storage.files.keys()].some((k) => k.startsWith('reportes/')),
+    ).toBe(true);
+
+    // segundo reporte del mismo día: misma síntesis => caché, sin otra llamada al LLM
+    await reports.createManual();
+    await drain();
+    expect(reportPrompts).toHaveLength(1);
+  });
+
+  it('eventos: borrador con la síntesis vigente (sin guardar), alta única, Excel con hoja Eventos y baja', async () => {
+    const thread = await prisma.thread.findFirstOrThrow({
+      where: { conversationId: { not: 'C2' } },
+    });
+    const before = {
+      llm: llmPrompts.length,
+      ocr: ocrCalls.length,
+      syn: await prisma.synthesis.count(),
+      rep: reportPrompts.length,
+    };
+    const draft = await events.draft(thread.id);
+    expect(reportPrompts).toHaveLength(before.rep + 1);
+    expect(reportPrompts[before.rep]).toContain('Síntesis mock');
+    expect(reportPrompts[before.rep]).not.toContain('cuerpo-dos');
+    expect(await prisma.hospitalEvent.count()).toBe(0); // el borrador no guarda
+    expect(draft.yaRegistrado).toBeNull();
+    expect(draft.datos.Paciente).toBe('Paciente de prueba');
+
+    const ev = await events.create(thread.id, {
+      synthesisId: draft.synthesisId,
+      datos: draft.datos,
+      estado: draft.estado,
+      novedadTexto: draft.novedadTexto,
+      fechaEvento: draft.fechaEvento,
+    });
+    expect(ev.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await expect(
+      events.create(thread.id, {
+        synthesisId: draft.synthesisId,
+        datos: draft.datos,
+        estado: draft.estado,
+        fechaEvento: draft.fechaEvento,
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect((await events.list(thread.id)).eventos).toHaveLength(1);
+
+    const { reporte } = await reports.createManual();
+    await drain();
+    const keys = [...storage.files.keys()].filter((k) =>
+      k.startsWith('reportes/'),
+    );
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    const last = storage.files.get(keys[keys.length - 1])!;
+    await wb.xlsx.load(last as unknown as ArrayBuffer);
+    expect(wb.getWorksheet('Eventos')!.rowCount).toBe(2);
+    expect(reporte.id).toBeTruthy();
+
+    // ni OCR, ni síntesis, ni LLM de análisis
+    expect(llmPrompts).toHaveLength(before.llm);
+    expect(ocrCalls).toHaveLength(before.ocr);
+    expect(await prisma.synthesis.count()).toBe(before.syn);
+
+    await events.remove(ev.id);
+    expect((await events.list(thread.id)).eventos).toHaveLength(0);
   });
 });

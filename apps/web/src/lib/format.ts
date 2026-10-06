@@ -22,3 +22,10 @@ export function errorMessage(e: unknown): string {
 export function slugify(s: string): string {
   return (s || 'ticket').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60).toLowerCase() || 'ticket'
 }
+
+/** 'YYYY-MM-DD' -> '6 oct 2026' (sin desfase de zona horaria). */
+export function formatDia(fecha: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(fecha ?? '')
+  if (!m) return ''
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
+}

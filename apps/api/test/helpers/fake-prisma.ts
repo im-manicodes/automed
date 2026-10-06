@@ -77,5 +77,9 @@ export function fakePrisma() {
     synthesis: table(),
     template: table(() => ({ kind: 'resumen', isActive: true, version: 1 })),
     setting: table(() => ({}), ['key']),
+    report: table(() => ({ status: 'generando', createdAt: new Date() })),
+    reportRow: table(() => ({ createdAt: new Date() })),
+    threadReportData: table(),
+    hospitalEvent: table(),
   };
 }

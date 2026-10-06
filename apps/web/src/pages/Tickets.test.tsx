@@ -58,6 +58,12 @@ describe('lista de tickets', () => {
     expect(screen.getByLabelText('Elegir para analizar: Ticket D')).toBeEnabled()
   })
 
+  it('tiene un atajo para generar el Excel', async () => {
+    renderPage()
+    await screen.findByText('Ticket A')
+    expect(screen.getByRole('link', { name: /Generar Excel/ })).toHaveAttribute('href', '/reportes?generar=1')
+  })
+
   it('filtra por estado con chips', async () => {
     const user = userEvent.setup()
     renderPage()

@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Spinner from './components/Spinner'
 import Ajustes from './pages/Ajustes'
 import Plantilla from './pages/Plantilla'
+import Reportes from './pages/Reportes'
 import TicketDetalle from './pages/TicketDetalle'
 import Tickets from './pages/Tickets'
 
@@ -27,6 +28,7 @@ export default function App() {
               </Suspense>
             }
           />
+          <Route path="/reportes" element={<Reportes />} />
           <Route path="/plantilla" element={<Plantilla />} />
           <Route path="/ajustes" element={<Ajustes />} />
           <Route path="*" element={<Navigate to="/tickets" replace />} />

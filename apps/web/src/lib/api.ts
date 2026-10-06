@@ -108,7 +108,7 @@ export interface AnalyzeResult {
   error?: string
 }
 
-export type TemplateKind = 'resumen' | 'whatsapp'
+export type TemplateKind = 'resumen' | 'whatsapp' | 'reporte'
 
 export interface Template {
   id: string
@@ -155,6 +155,90 @@ export interface AttachmentPages {
   filename: string
   status: ProcessStatus
   pages: { pageNumber: number; regions: { id: string; status: 'ok' | 'dudoso' | 'corregido' }[] }[]
+}
+
+export type ReportStatus = 'generando' | 'listo' | 'error'
+
+export interface Reporte {
+  id: string
+  /** YYYY-MM-DD */
+  fecha: string
+  trigger: 'manual' | 'programado'
+  status: ReportStatus
+  fileName: string | null
+  templateVersion: number | null
+  totales: { hospitalizados: number; conNovedad: number; altas: number }
+  progreso: { procesados: number; total: number }
+  error: string | null
+  descargable: boolean
+  createdAt: string
+  finishedAt: string | null
+}
+
+export interface ReporteFila {
+  threadId: string
+  asunto: string
+  estado: string
+  novedadTexto: string
+  desactualizado: boolean
+  extraccionOk: boolean
+  datos: Record<string, string>
+}
+
+export interface ReporteDetalle extends Reporte {
+  columnas: string[]
+  filasConNovedad: ReporteFila[]
+}
+
+export interface ReporteAjustes {
+  programado: boolean
+  /** HH:mm */
+  hora: string
+  zona: string
+}
+
+export interface ColumnaReporte {
+  nombre: string
+  instruccion: string
+}
+
+export type EventoEstado = 'hospitalizado' | 'alta' | 'otro'
+
+/** Evento de la bitácora de hospitalización (viaja en la hoja «Eventos» del Excel). */
+export interface Evento {
+  id: string
+  threadId: string
+  synthesisId: string
+  /** ISO */
+  fechaEvento: string
+  /** YYYY-MM-DD */
+  fecha: string
+  estado: EventoEstado
+  novedadTexto: string
+  datos: Record<string, string>
+  columnas: string[]
+  templateVersion: number | null
+  createdAt: string
+}
+
+export interface EventoBorrador {
+  synthesisId: string
+  templateVersion: number | null
+  columnas: ColumnaReporte[]
+  datos: Record<string, string>
+  estado: EventoEstado
+  novedadTexto: string
+  /** ISO */
+  fechaEvento: string
+  yaRegistrado: Evento | null
+}
+
+export interface EventoNuevo {
+  synthesisId: string
+  datos: Record<string, string>
+  estado: EventoEstado
+  novedadTexto?: string
+  fechaEvento: string
 }
 
 export class ApiError extends Error {
@@ -242,6 +326,34 @@ export async function api<T>(
   return data as T
 }
 
+/** Descarga un archivo autenticado por cookie como Blob (reintenta una vez si la sesión caducó). */
+export async function apiBlob(path: string): Promise<Blob> {
+  const pedir = async () => {
+    try {
+      return await fetch(`/api${path}`, { credentials: 'include' })
+    } catch {
+      throw new ApiError(0, 'No hay conexión con el servidor. Revisa tu internet.')
+    }
+  }
+  let res = await pedir()
+  if (res.status === 401 && (await refreshSession())) res = await pedir()
+  if (res.status === 401) onUnauthorized?.()
+  if (!res.ok) {
+    let data: unknown = null
+    try {
+      data = JSON.parse(await res.text())
+    } catch {
+      data = null
+    }
+    if (res.status === 404 || res.status === 409) {
+      const m = (data as { message?: unknown } | null)?.message
+      throw new ApiError(res.status, typeof m === 'string' && m ? m : 'El archivo todavía no está listo.')
+    }
+    throw new ApiError(res.status, messageFor(res.status, data))
+  }
+  return res.blob()
+}
+
 const enc = encodeURIComponent
 
 export const authApi = {
@@ -293,6 +405,11 @@ export const threadsApi = {
     ),
   /** Mensaje de WhatsApp redactado por IA solo con el último correo (no guarda nada). */
   whatsappLast: (id: string) => api<{ texto: string }>(`/threads/${enc(id)}/whatsapp-last`, { method: 'POST' }),
+  /** Borrador del evento propuesto por IA con la síntesis vigente (no guarda nada). */
+  eventDraft: (id: string) => api<EventoBorrador>(`/threads/${enc(id)}/event-draft`, { method: 'POST' }),
+  createEvent: (id: string, evento: EventoNuevo) =>
+    api<Evento>(`/threads/${enc(id)}/events`, { method: 'POST', body: evento }),
+  events: (id: string) => api<{ eventos: Evento[]; synthesisId: string | null }>(`/threads/${enc(id)}/events`),
   synthesis: (id: string) => api<SynthesisResponse>(`/threads/${enc(id)}/synthesis`),
   regenerate: (id: string) =>
     api<RegenerateResponse>(`/threads/${enc(id)}/synthesis/regenerate`, { method: 'POST' }),
@@ -308,8 +425,22 @@ export const templatesApi = {
     api<Template>(`/templates/active?kind=${kind}`, { method: 'PUT', body: { markdown } }),
   reset: (kind: TemplateKind = 'resumen') => api<Template>(`/templates/reset?kind=${kind}`, { method: 'POST' }),
   preview: (markdown?: string, kind: TemplateKind = 'resumen') =>
-    api<{ markdown: string }>('/templates/preview', {
+    api<{ markdown: string; columnas?: ColumnaReporte[]; error?: string | null }>('/templates/preview', {
       method: 'POST',
       body: markdown ? { markdown, kind } : { kind },
     }),
+}
+
+export const reportsApi = {
+  list: () => api<{ reportes: Reporte[] }>('/reports'),
+  create: () => api<{ reporte: Reporte; reutilizado: boolean }>('/reports', { method: 'POST' }),
+  get: (id: string) => api<ReporteDetalle>(`/reports/${enc(id)}`),
+  download: (id: string) => apiBlob(`/reports/${enc(id)}/download`),
+  settings: () => api<ReporteAjustes>('/reports/settings'),
+  saveSettings: (cambios: Partial<Pick<ReporteAjustes, 'programado' | 'hora'>>) =>
+    api<ReporteAjustes>('/reports/settings', { method: 'PUT', body: cambios }),
+}
+
+export const eventsApi = {
+  remove: (id: string) => api<void>(`/events/${enc(id)}`, { method: 'DELETE' }),
 }

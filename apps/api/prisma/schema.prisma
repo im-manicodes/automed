@@ -108,22 +108,25 @@ model MailFolderSync {
 }
 
 model Thread {
-  id                  String        @id @default(uuid())
+  id                  String             @id @default(uuid())
   accountId           String
   conversationId      String
   subject             String
-  status              ProcessStatus @default(sin_analizar)
+  status              ProcessStatus      @default(sin_analizar)
   /// Reanálisis automático cuando llegan mensajes nuevos a un hilo ya analizado
-  seguimiento         Boolean       @default(false)
+  seguimiento         Boolean            @default(false)
   /// Llegaron mensajes/adjuntos después del último análisis (y no hay seguimiento)
-  tieneMensajesNuevos Boolean       @default(false)
+  tieneMensajesNuevos Boolean            @default(false)
   contentHash         String?
   lastMessageAt       DateTime?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-  account             MailAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  account             MailAccount        @relation(fields: [accountId], references: [id], onDelete: Cascade)
   messages            Message[]
   syntheses           Synthesis[]
+  reportRows          ReportRow[]
+  reportData          ThreadReportData[]
+  hospitalEvents      HospitalEvent[]
 
   @@unique([accountId, conversationId])
 }
@@ -249,4 +252,104 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+/// Reporte diario en Excel (censo de pacientes hospitalizados). El archivo vive en RustFS (`storageKey`).
+model Report {
+  id                  String      @id @default(uuid())
+  /// 'YYYY-MM-DD' en la zona horaria configurada (`reporte.zona`)
+  fecha               String
+  /// 'manual' | 'programado'
+  trigger             String
+  /// 'generando' | 'listo' | 'error'
+  status              String      @default("generando")
+  storageKey          String?
+  fileName            String?
+  /// Versión de la plantilla 'reporte' con la que se generó
+  templateVersion     Int?
+  /// Nombres de las columnas de la plantilla usadas (para mostrar las filas sin abrir el Excel)
+  columnas            Json        @default("[]")
+  totalHospitalizados Int         @default(0)
+  totalConNovedad     Int         @default(0)
+  totalAltas          Int         @default(0)
+  /// En desuso: el reporte solo incluye hilos analizados; ya no se escribe ni se expone (se conserva para no migrar)
+  totalSinAnalizar    Int         @default(0)
+  /// Progreso: hilos procesados / total a procesar
+  procesados          Int         @default(0)
+  total               Int         @default(0)
+  error               String?
+  createdAt           DateTime    @default(now())
+  finishedAt          DateTime?
+  rows                ReportRow[]
+
+  @@index([fecha])
+  @@index([createdAt])
+}
+
+/// Fila del censo: un paciente (hilo) en un reporte. Sin contenido de correos: solo lo extraído de la síntesis.
+model ReportRow {
+  id             String    @id @default(uuid())
+  reportId       String
+  threadId       String
+  synthesisId    String?
+  /// 'hospitalizado' | 'alta' | 'otro' (otro = extracción incompleta)
+  estado         String
+  novedad        Boolean   @default(false)
+  /// Qué cambió respecto al reporte anterior (texto corto)
+  novedadTexto   String?
+  /// El resumen no cubre mensajes recientes (hay mensajes sin analizar)
+  desactualizado Boolean   @default(false)
+  /// columna -> valor
+  data           Json      @default("{}")
+  extraccionOk   Boolean   @default(true)
+  /// Fecha de la síntesis vigente (última actualización del resumen)
+  actualizadoEn  DateTime?
+  createdAt      DateTime  @default(now())
+  report         Report    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  thread         Thread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([threadId, createdAt])
+}
+
+/// Caché de extracción: misma síntesis + mismas columnas => no se vuelve a llamar al LLM.
+model ThreadReportData {
+  id              String   @id @default(uuid())
+  threadId        String
+  synthesisId     String
+  templateVersion Int
+  /// 'hospitalizado' | 'alta' | 'otro'
+  estado          String
+  novedadTexto    String?
+  data            Json     @default("{}")
+  createdAt       DateTime @default(now())
+  thread          Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, synthesisId, templateVersion])
+}
+
+/// Bitácora de eventos de hospitalización: el usuario confirma (tras revisar el borrador de la IA)
+/// una actualización de un hilo analizado; alimenta la hoja «Eventos» del Excel.
+model HospitalEvent {
+  id              String   @id @default(uuid())
+  threadId        String
+  /// Versión de síntesis de origen: un evento por (hilo, síntesis)
+  synthesisId     String
+  fechaEvento     DateTime
+  /// 'YYYY-MM-DD' de fechaEvento en la zona `reporte.zona`
+  fecha           String
+  /// 'hospitalizado' | 'alta' | 'otro'
+  estado          String
+  novedadTexto    String?
+  /// columna -> valor (editado por el usuario)
+  data            Json     @default("{}")
+  /// Nombres de columnas usados al crear el evento (orden de la plantilla)
+  columnas        Json     @default("[]")
+  templateVersion Int?
+  createdAt       DateTime @default(now())
+  thread          Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, synthesisId])
+  @@index([threadId, fechaEvento])
+  @@index([fecha])
 }

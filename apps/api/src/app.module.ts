@@ -16,6 +16,8 @@ import { SettingsModule } from './settings/settings.module';
 import { StorageModule } from './storage/storage.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { JobsModule } from './jobs/jobs.module';
+import { ReportsModule } from './reports/reports.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { JobsModule } from './jobs/jobs.module';
     SettingsModule,
     StorageModule,
     JobsModule,
+    ReportsModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

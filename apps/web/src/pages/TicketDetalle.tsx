@@ -9,14 +9,16 @@ import StatusBadge from '../components/StatusBadge'
 import Switch from '../components/Switch'
 import VersionHistory from '../components/VersionHistory'
 import { useToast } from '../context/toasts-context'
-import { threadsApi, type SynthesisResponse, type ThreadDetail } from '../lib/api'
-import { errorMessage, formatDate, plural, slugify } from '../lib/format'
+import { ApiError, eventsApi, threadsApi, type Evento, type EventoBorrador, type SynthesisResponse, type ThreadDetail } from '../lib/api'
+import { errorMessage, formatDate, formatDia, plural, slugify } from '../lib/format'
 import { canAnalyze, isBusy } from '../lib/status'
 import ProgresoAnalisis from '../components/ProgresoAnalisis'
 import { copiarTexto } from '../lib/clipboard'
 import WhatsappDialog from '../components/WhatsappDialog'
+import EventoDialog from '../components/EventoDialog'
+import EventosRegistrados from '../components/EventosRegistrados'
 import { usePolling } from '../lib/usePolling'
-import { LuArrowLeft, LuHourglass, LuTriangleAlert, LuMail, LuFileText, LuCopy, LuDownload, LuArrowUpRight, LuArrowDownLeft, LuPaperclip, LuMessageCircle, LuRefreshCw, LuRotateCw } from 'react-icons/lu'
+import { LuArrowLeft, LuHourglass, LuTriangleAlert, LuMail, LuFileText, LuCopy, LuDownload, LuArrowUpRight, LuArrowDownLeft, LuPaperclip, LuMessageCircle, LuFilePlus, LuRefreshCw, LuRotateCw } from 'react-icons/lu'
 
 type Tab = 'resumen' | 'correos' | 'adjuntos'
 const TABS: { id: Tab; label: string }[] = [
@@ -39,6 +41,11 @@ export default function TicketDetalle() {
   const [busy, setBusy] = useState(false)
   const [waLoading, setWaLoading] = useState(false)
   const [waTexto, setWaTexto] = useState<string | null>(null)
+  const [eventos, setEventos] = useState<Evento[]>([])
+  const [eventoSynthId, setEventoSynthId] = useState<string | null>(null)
+  const [evLoading, setEvLoading] = useState(false)
+  const [borrador, setBorrador] = useState<EventoBorrador | null>(null)
+  const [yaAnadido, setYaAnadido] = useState<Evento | null>(null)
   const [confirmRegen, setConfirmRegen] = useState(false)
   const [confirmUltimo, setConfirmUltimo] = useState(false)
   const [confirmTodo, setConfirmTodo] = useState(false)
@@ -46,9 +53,18 @@ export default function TicketDetalle() {
   const load = useCallback(
     async (silent = false) => {
       try {
-        const [t, s] = await Promise.all([threadsApi.get(id), threadsApi.synthesis(id)])
+        const [t, s, ev] = await Promise.all([
+          threadsApi.get(id),
+          threadsApi.synthesis(id),
+          // La bitácora no debe tumbar la pantalla si falla (p. ej. API sin actualizar).
+          threadsApi.events(id).catch(() => null),
+        ])
         setThread(t)
         setSynth(s)
+        if (ev) {
+          setEventos(ev.eventos)
+          setEventoSynthId(ev.synthesisId)
+        }
         setError(null)
       } catch (e) {
         if (!silent) setError(errorMessage(e))
@@ -101,6 +117,44 @@ export default function TicketDetalle() {
       toast(errorMessage(e), 'error')
     } finally {
       setWaLoading(false)
+    }
+  }
+  const eventoVigente = eventoSynthId ? eventos.find((e) => e.synthesisId === eventoSynthId) : undefined
+  const evRazon = eventoVigente
+    ? ''
+    : isBusy(thread.status)
+      ? 'Espera a que termine el análisis.'
+      : thread.status === 'necesita_revision'
+        ? 'Resuelve las dudas del PDF primero.'
+        : thread.status === 'error'
+          ? 'El análisis falló. Vuelve a analizar el ticket primero.'
+          : thread.status !== 'listo'
+            ? 'Analiza este ticket primero.'
+            : ''
+  const irAEventos = () => document.getElementById('eventos')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const openEvento = async () => {
+    setEvLoading(true)
+    try {
+      const b = await threadsApi.eventDraft(id)
+      if (b.yaRegistrado) setYaAnadido(b.yaRegistrado)
+      else setBorrador(b)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        toast('Ahora no se puede añadir: el ticket debe estar listo y con resumen.', 'error')
+        void load(true)
+      } else toast(errorMessage(e), 'error')
+    } finally {
+      setEvLoading(false)
+    }
+  }
+  const quitarEvento = async (eid: string) => {
+    try {
+      await eventsApi.remove(eid)
+      toast('Evento quitado del Excel.', 'ok')
+      await load(true)
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+      throw e
     }
   }
   const download = () => {
@@ -228,6 +282,29 @@ export default function TicketDetalle() {
                     </button>
                   </div>
                   {waRazon && <p className="text-sm text-slate-700">{waRazon}</p>}
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {eventoVigente ? (
+                      <button type="button" className="btn btn-secondary flex-1" disabled aria-describedby="ev-ayuda">
+                        <LuFilePlus className="size-5 shrink-0" aria-hidden />Ya añadido el {formatDia(eventoVigente.fecha)}
+                      </button>
+                    ) : (
+                      <button type="button" className="btn btn-secondary flex-1" disabled={evLoading || !!evRazon} aria-describedby={evRazon ? 'ev-ayuda' : undefined} onClick={() => void openEvento()}>
+                        <LuFilePlus className="size-5 shrink-0" aria-hidden />{evLoading ? 'Leyendo la actualización…' : 'Añadir al Excel'}
+                      </button>
+                    )}
+                  </div>
+                  {(evRazon || eventoVigente) && (
+                    <p id="ev-ayuda" className="text-sm text-slate-700">
+                      {evRazon}
+                      {eventoVigente && (
+                        <>
+                          Esta versión del resumen ya está en el Excel.{' '}
+                          <a href="#eventos" onClick={(e) => { e.preventDefault(); irAEventos() }} className="font-semibold text-blue-800 underline">Ver eventos registrados</a>
+                        </>
+                      )}
+                    </p>
+                  )}
+                  <EventosRegistrados eventos={eventos} onRemove={quitarEvento} />
                   <VersionHistory history={synth.history} />
                 </>
               ) : (
@@ -280,6 +357,38 @@ export default function TicketDetalle() {
           )}
         </div>
       </div>
+
+      {borrador && (
+        <EventoDialog
+          threadId={id}
+          asunto={thread.subject}
+          resumen={latest?.markdown ?? null}
+          mensajes={thread.messages}
+          borrador={borrador}
+          onClose={() => setBorrador(null)}
+          onSaved={() => {
+            setBorrador(null)
+            void load(true)
+          }}
+          onConflict={() => void load(true)}
+        />
+      )}
+
+      {yaAnadido && (
+        <ConfirmDialog
+          title={`Ya añadido el ${formatDia(yaAnadido.fecha)}`}
+          confirmLabel="Ver eventos"
+          cancelLabel="Cerrar"
+          onCancel={() => setYaAnadido(null)}
+          onConfirm={() => {
+            setYaAnadido(null)
+            setTimeout(irAEventos, 0)
+            void load(true)
+          }}
+        >
+          <p>Esta versión del resumen ya está en el Excel. Para añadir otra actualización, analiza el ticket de nuevo cuando lleguen novedades.</p>
+        </ConfirmDialog>
+      )}
 
       {waTexto !== null && <WhatsappDialog initial={waTexto} onClose={() => setWaTexto(null)} />}
 

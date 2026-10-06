@@ -11,6 +11,10 @@ export interface PlantillaTipo {
   exigeTitulos: boolean
   textoVistaPrevia: string
   vistaPreviaComoMarkdown: boolean
+  /** Largo mínimo del texto (letras). */
+  min: number
+  /** La vista previa llama a la IA (consume) o es solo local. */
+  usaIA: boolean
 }
 
 export const TIPOS_PLANTILLA: PlantillaTipo[] = [
@@ -24,6 +28,8 @@ export const TIPOS_PLANTILLA: PlantillaTipo[] = [
     exigeTitulos: true,
     textoVistaPrevia: 'Muestra cómo quedaría con un ticket de ejemplo.',
     vistaPreviaComoMarkdown: true,
+    min: 20,
+    usaIA: true,
   },
   {
     id: 'whatsapp',
@@ -35,6 +41,21 @@ export const TIPOS_PLANTILLA: PlantillaTipo[] = [
     exigeTitulos: false,
     textoVistaPrevia: 'Muestra cómo quedaría con un correo de ejemplo.',
     vistaPreviaComoMarkdown: false,
+    min: 20,
+    usaIA: true,
+  },
+  {
+    id: 'reporte',
+    etiqueta: 'Reporte Excel',
+    titulo: 'Columnas del reporte de Excel',
+    ayuda:
+      'Cada línea que empieza con "- " es una columna del Excel, con este formato: - Columna: instrucción para la inteligencia artificial. Puedes tener de 1 a 30 columnas y los nombres no se pueden repetir.',
+    max: 6000,
+    exigeTitulos: false,
+    textoVistaPrevia: 'Muestra las columnas que se leen de tu texto.',
+    vistaPreviaComoMarkdown: false,
+    min: 5,
+    usaIA: false,
   },
 ]
 

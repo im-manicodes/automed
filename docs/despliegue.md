@@ -175,6 +175,9 @@ En producción usa solo `db:deploy` (y `db:seed` si quieres la plantilla/ajustes
 - Las páginas rasterizadas se regeneran desde los PDFs; los PDFs originales también están en Outlook.
 - Prueba restaurar de vez en cuando.
 
+## 8b. Reporte diario en Excel (datos sensibles de salud)
+El reporte (`/api/reports`) contiene nombres, diagnósticos, montos y pendientes de pacientes hospitalizados. Los `.xlsx` se guardan en RustFS bajo `reportes/AAAA-MM-DD/` (incluye esas rutas en tus políticas de acceso y backups) y solo se descargan con sesión. En producción el LLM debe ser Bedrock (`LLM_PROVIDER=bedrock`); con Ollama/API keys son solo pruebas. La API nueva depende de `exceljs`: tras actualizar usa `docker compose up -d --build api` (en dev con hot reload también hay que reconstruir la imagen para instalar la dependencia). La bitácora de eventos (tabla `HospitalEvent`, migración `20261012100000_eventos_hospitalizacion`) también contiene datos de pacientes: inclúyela en los respaldos de la base; la migración se aplica con `prisma:deploy` o reiniciando la api (`docker compose restart api`). La programación diaria usa `Setting` `reporte.programado|hora|zona` (zona por defecto `America/Mexico_City`) y se evalúa en el worker de la API, por lo que la API debe estar encendida a esa hora (si estaba apagada, se genera al volver a arrancar el mismo día).
+
 ## 9. Actualizar
 ```bash
 git pull

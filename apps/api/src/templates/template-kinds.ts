@@ -5,9 +5,15 @@ import {
   MIN_TEMPLATE_CHARS,
   validateTemplateMarkdown,
 } from './default-template';
+import {
+  DEFAULT_REPORT_TEMPLATE_MARKDOWN,
+  DEFAULT_REPORT_TEMPLATE_NAME,
+  MAX_REPORT_TEMPLATE_CHARS,
+  validateReportTemplate,
+} from './report-columns';
 
 /** Tipos de plantilla que usa la IA. Para añadir uno: agregarlo aquí y a `TEMPLATE_KINDS`. */
-export type TemplateKind = 'resumen' | 'whatsapp';
+export type TemplateKind = 'resumen' | 'whatsapp' | 'reporte';
 
 export const DEFAULT_TEMPLATE_KIND: TemplateKind = 'resumen';
 
@@ -71,6 +77,16 @@ export const TEMPLATE_KINDS: Record<TemplateKind, TemplateKindDef> = {
     maxChars: MAX_WHATSAPP_TEMPLATE_CHARS,
     help: 'Formato del mensaje de WhatsApp del último correo. Escribe cómo quieres que se vea y tus instrucciones dentro de <!-- comentarios -->.',
     validate: validateWhatsappTemplate,
+  },
+  reporte: {
+    kind: 'reporte',
+    label: 'Reporte Excel',
+    defaultName: DEFAULT_REPORT_TEMPLATE_NAME,
+    defaultMarkdown: DEFAULT_REPORT_TEMPLATE_MARKDOWN,
+    minChars: 1,
+    maxChars: MAX_REPORT_TEMPLATE_CHARS,
+    help: 'Columnas del Excel diario de pacientes hospitalizados. Una viñeta por columna: "- Nombre: instrucción para la IA" (de 1 a 30 columnas, sin nombres repetidos).',
+    validate: validateReportTemplate,
   },
 };
 
