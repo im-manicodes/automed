@@ -1,8 +1,10 @@
+import type { IconType } from 'react-icons'
 import type { ProcessStatus } from './api'
+import { LuCircle, LuHourglass, LuCheck, LuHand, LuTriangleAlert } from 'react-icons/lu'
 
 export interface StatusInfo {
   label: string
-  icon: string
+  icon: IconType
   /** clases Tailwind: fondo + texto + borde (contraste AA) */
   classes: string
   /** el ticket está en marcha (la lista se refresca sola) */
@@ -10,12 +12,12 @@ export interface StatusInfo {
 }
 
 export const STATUS_INFO: Record<ProcessStatus, StatusInfo> = {
-  sin_analizar: { label: 'Sin analizar', icon: '○', classes: 'bg-slate-100 text-slate-800 border-slate-300', busy: false },
-  pendiente: { label: 'Analizando…', icon: '⏳', classes: 'bg-blue-50 text-blue-900 border-blue-300', busy: true },
-  procesando: { label: 'Analizando…', icon: '⏳', classes: 'bg-blue-50 text-blue-900 border-blue-300', busy: true },
-  listo: { label: 'Listo', icon: '✓', classes: 'bg-green-50 text-green-900 border-green-300', busy: false },
-  necesita_revision: { label: 'Necesita tu ayuda', icon: '✋', classes: 'bg-amber-50 text-amber-900 border-amber-400', busy: false },
-  error: { label: 'Error', icon: '⚠', classes: 'bg-red-50 text-red-900 border-red-300', busy: false },
+  sin_analizar: { label: 'Sin analizar', icon: LuCircle, classes: 'bg-slate-100 text-slate-800 border-slate-300', busy: false },
+  pendiente: { label: 'Analizando…', icon: LuHourglass, classes: 'bg-blue-50 text-blue-900 border-blue-300', busy: true },
+  procesando: { label: 'Analizando…', icon: LuHourglass, classes: 'bg-blue-50 text-blue-900 border-blue-300', busy: true },
+  listo: { label: 'Listo', icon: LuCheck, classes: 'bg-green-50 text-green-900 border-green-300', busy: false },
+  necesita_revision: { label: 'Necesita tu ayuda', icon: LuHand, classes: 'bg-amber-50 text-amber-900 border-amber-400', busy: false },
+  error: { label: 'Error', icon: LuTriangleAlert, classes: 'bg-red-50 text-red-900 border-red-300', busy: false },
 }
 
 export function statusLabel(s: ProcessStatus): string {

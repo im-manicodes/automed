@@ -2,7 +2,10 @@ import { Link } from 'react-router-dom'
 import type { ThreadListItem } from '../lib/api'
 import { formatDate, plural } from '../lib/format'
 import { canAnalyze } from '../lib/status'
+import ProgresoAnalisis from './ProgresoAnalisis'
+import { isBusy } from '../lib/status'
 import StatusBadge from './StatusBadge'
+import { LuMail } from 'react-icons/lu'
 
 interface Props {
   ticket: ThreadListItem
@@ -30,10 +33,11 @@ export default function TicketCard({ ticket: t, selected, onToggle }: Props) {
           <StatusBadge status={t.status} />
           {t.tieneMensajesNuevos && (
             <span className="inline-flex items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-3 py-1 text-sm font-semibold text-violet-900">
-              <span aria-hidden>✉</span>Mensajes nuevos
+              <LuMail className="size-4 shrink-0" aria-hidden />Mensajes nuevos
             </span>
           )}
         </div>
+        {isBusy(t.status) && <ProgresoAnalisis progreso={t.progreso} compact />}
         <p className="text-sm text-slate-700">
           {plural(t.messageCount, 'correo', 'correos')} · {plural(t.attachmentCount, 'PDF', 'PDF')} · {formatDate(t.lastMessageAt)}
         </p>

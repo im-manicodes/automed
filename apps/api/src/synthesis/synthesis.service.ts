@@ -1,17 +1,28 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import type { ThreadSynthesizer } from '../jobs/pipeline-hooks.interface';
 import { LLM_PROVIDER } from '../llm/llm-provider.interface';
 import type { LlmProvider } from '../llm/llm-provider.interface';
 import { PrismaService } from '../prisma/prisma.service';
+import { sanearParaWhatsApp } from './whatsapp-format';
 import { TemplatesService } from '../templates/templates.service';
+import type { TemplateKind } from '../templates/template-kinds';
 import {
   buildInputBlocks,
   chunkBlocks,
   estimateTokens,
+  formatMessage,
   InputMessage,
   InputPage,
+  renderPage,
 } from './thread-input';
 import {
   MAP_SYSTEM_PROMPT,
@@ -25,6 +36,9 @@ import {
   buildFinalPrompt,
   buildMapPrompt,
   buildReducePrompt,
+  buildWhatsappPrompt,
+  SAMPLE_WHATSAPP_EMAIL_TEXT,
+  WHATSAPP_SYSTEM_PROMPT,
 } from './synthesis-prompts';
 
 export interface SynthesisResult {
@@ -43,6 +57,11 @@ export interface GenerateOptions {
   force?: boolean;
   /** sha256 del adjunto cuyas regiones corrigió el usuario (actualización incremental dirigida). */
   correctedSha256?: string;
+  /**
+   * Re-analizar un correo ya cubierto: se trata como NUEVO (sale de la cobertura previa), de modo
+   * que al LLM van la síntesis anterior + ese correo con el OCR de sus adjuntos. Nunca el hilo completo.
+   */
+  reanalyzeMessageId?: string;
 }
 
 interface ThreadData {
@@ -96,7 +115,7 @@ export class SynthesisService implements ThreadSynthesizer {
   ): Promise<SynthesisResult> {
     const data = await this.loadThreadData(threadId);
     const built = buildInputBlocks(data.messages, data.pagesBySha);
-    const template = await this.templates.getActive();
+    const template = await this.templates.getActive('resumen');
     const status = built.doubtfulCount > 0 ? 'necesita_revision' : 'listo';
     const allIds = data.messages.map((m) => m.id as string);
     const last = await this.prisma.synthesis.findFirst({
@@ -105,6 +124,11 @@ export class SynthesisService implements ThreadSynthesizer {
     });
     const covered = new Set(coveredIds(last?.coveredMessageIds));
     const usable = !!last && covered.size > 0 && last.markdown.trim() !== '';
+    const reanalyzeId =
+      opts.reanalyzeMessageId && allIds.includes(opts.reanalyzeMessageId)
+        ? opts.reanalyzeMessageId
+        : undefined;
+    if (reanalyzeId) covered.delete(reanalyzeId);
     const meter = { tokens: 0 };
 
     // ---- incremental ----
@@ -131,7 +155,7 @@ export class SynthesisService implements ThreadSynthesizer {
           inputTokensEstimados: 0,
         };
       }
-      const correctionOnly = newIds.size === 0;
+      const correctionOnly = newIds.size === 0 && !reanalyzeId;
       const tpl = await this.templateFor(last, template);
       const updatesText = updateBlocks.map((b) => b.text).join('\n\n');
       const inputHash = createHash('sha256')
@@ -139,7 +163,7 @@ export class SynthesisService implements ThreadSynthesizer {
           `${INCREMENTAL_PROMPT_VERSION}\n${tpl.markdown}\n---\n${last.markdown}\n---\n${updatesText}`,
         )
         .digest('hex');
-      if (last.inputHash === inputHash) {
+      if (last.inputHash === inputHash && !reanalyzeId) {
         return {
           skipped: true,
           version: last.version,
@@ -252,14 +276,87 @@ export class SynthesisService implements ThreadSynthesizer {
       : active;
   }
 
-  /** Vista previa de una plantilla (activa o una propuesta) con un hilo de ejemplo. */
-  async preview(markdown?: string) {
-    const tpl = markdown?.trim() || (await this.templates.getActive()).markdown;
+  /**
+   * Vista previa de una plantilla (activa o una propuesta) del tipo dado con un ejemplo:
+   * 'resumen' con un hilo de ejemplo; 'whatsapp' con un correo de ejemplo.
+   */
+  async preview(markdown?: string, kind: TemplateKind = 'resumen') {
+    const tpl =
+      markdown?.trim() || (await this.templates.getActive(kind)).markdown;
+    if (kind === 'whatsapp') {
+      const out = await this.llm.text(
+        WHATSAPP_SYSTEM_PROMPT,
+        buildWhatsappPrompt(tpl, SAMPLE_WHATSAPP_EMAIL_TEXT),
+        { maxTokens: 800 },
+      );
+      return { markdown: sanearParaWhatsApp(stripFences(out)) };
+    }
     const out = await this.llm.text(
       SYSTEM_PROMPT,
       buildFinalPrompt(tpl, SAMPLE_THREAD_TEXT, false),
     );
     return { markdown: stripFences(out) };
+  }
+
+  /**
+   * Mensaje de WhatsApp redactado por el LLM SOLO con el último correo del hilo y el OCR ya
+   * existente de sus adjuntos (un adjunto sin OCR se declara «sin leer», no se procesa). No usa
+   * la síntesis ni mensajes anteriores y no guarda nada.
+   */
+  async whatsappLast(threadId: string): Promise<{ texto: string }> {
+    const { messages, pagesBySha } = await this.loadThreadData(threadId);
+    const last = [...messages].sort(
+      (a, b) => b.receivedAt.getTime() - a.receivedAt.getTime(),
+    )[0];
+    if (!last) throw new ConflictException('El ticket no tiene correos');
+    let counter = 0;
+    const seen = new Set<string>();
+    const docs: string[] = [];
+    for (const att of last.attachments) {
+      if (seen.has(att.sha256)) continue;
+      seen.add(att.sha256);
+      const pages = pagesBySha.get(att.sha256) ?? [];
+      if (pages.length === 0) {
+        docs.push(`### Documento: ${att.filename}\n(adjunto sin leer)`);
+        continue;
+      }
+      for (const p of [...pages].sort((a, b) => a.pageNumber - b.pageNumber)) {
+        const r = renderPage(p, att.filename, () => ++counter);
+        docs.push(
+          `### Documento: ${att.filename} · página ${p.pageNumber}\n${r.text || '(página sin texto)'}`,
+        );
+      }
+    }
+    // Respeta SYNTH_MAX_INPUT_TOKENS: se recorta el OCR si no cabe.
+    const maxChars = Math.max(
+      2000,
+      (this.maxInputTokens - PROMPT_OVERHEAD_TOKENS) * 4,
+    );
+    let body = [formatMessage(last, 1), ...docs].join('\n\n');
+    if (body.length > maxChars)
+      body = body.slice(0, maxChars) + '\n[... recortado ...]';
+    const tpl = await this.templates.getActive('whatsapp');
+    let out: string;
+    try {
+      out = await this.llm.text(
+        WHATSAPP_SYSTEM_PROMPT,
+        buildWhatsappPrompt(tpl.markdown, body),
+        { maxTokens: 800 },
+      );
+    } catch {
+      this.logger.warn(
+        `No se pudo redactar el mensaje de WhatsApp (hilo ${threadId})`,
+      );
+      throw new ServiceUnavailableException(
+        'No se pudo preparar el mensaje ahora. Intenta de nuevo en un momento.',
+      );
+    }
+    const texto = sanearParaWhatsApp(stripFences(out));
+    if (!texto)
+      throw new ServiceUnavailableException(
+        'No se pudo preparar el mensaje ahora. Intenta de nuevo en un momento.',
+      );
+    return { texto };
   }
 
   async getForThread(threadId: string) {
@@ -273,7 +370,7 @@ export class SynthesisService implements ThreadSynthesizer {
       orderBy: { version: 'desc' },
     });
     const [latest, ...older] = all;
-    const active = await this.templates.getActive();
+    const active = await this.templates.getActive('resumen');
     return {
       threadId,
       status: thread.status,

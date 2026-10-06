@@ -24,6 +24,7 @@ interface Msg {
   threadId: string;
   graphId: string;
   bodyText: string;
+  receivedAt?: number;
 }
 interface Att {
   id: string;
@@ -39,6 +40,7 @@ function fakePrisma() {
     messages: [] as Msg[],
     atts: [] as Att[],
     doubtfulShas: new Set<string>(),
+    settings: new Map<string, unknown>(),
   };
   const threadOfAtt = (a: Att) =>
     db.messages.find((m) => m.id === a.messageId)!.threadId;
@@ -51,7 +53,8 @@ function fakePrisma() {
         : !f.notIn.includes(s));
   const attMatch = (a: Att, w: any) =>
     (!w.id || (w.id.not ? a.id !== w.id.not : a.id === w.id)) &&
-    (!w.sha256 || a.sha256 === w.sha256) &&
+    (!w.sha256 ||
+      (w.sha256.in ? w.sha256.in.includes(a.sha256) : a.sha256 === w.sha256)) &&
     matchStatus(a.status, w.status) &&
     (!w.message || threadOfAtt(a) === w.message.threadId);
   const prisma = {
@@ -77,7 +80,29 @@ function fakePrisma() {
         return { count: t ? 1 : 0 };
       },
     },
+    setting: {
+      upsert: async ({ where, create, update }: any) => {
+        const cur = db.settings.get(where.key);
+        db.settings.set(where.key, cur ? update.value : create.value);
+      },
+      findUnique: async ({ where }: any) =>
+        db.settings.has(where.key)
+          ? { value: db.settings.get(where.key) }
+          : null,
+      deleteMany: async ({ where }: any) => {
+        db.settings.delete(where.key);
+      },
+    },
     message: {
+      findFirst: async ({ where }: any) => {
+        const ms = db.messages
+          .filter((m) => m.threadId === where.threadId)
+          .sort((a, b) => (b.receivedAt ?? 0) - (a.receivedAt ?? 0));
+        const m = ms[0];
+        return m
+          ? { ...m, attachments: db.atts.filter((a) => a.messageId === m.id) }
+          : null;
+      },
       findMany: async ({ where }: any) =>
         db.messages
           .filter((m) => m.threadId === where.threadId)
@@ -480,6 +505,76 @@ describe('PipelineService', () => {
       expect(q.payload.force).toBe(true);
       await s.pipeline.synthesizeThread(s.job(q.payload));
       expect(s.synth.synthesize).toHaveBeenCalledWith('t1', { force: true });
+    });
+
+    it('reanalyzeLast: reinicia solo los adjuntos del último correo y la síntesis recibe reanalyzeMessageId', async () => {
+      const s = setup();
+      s.addThread('t1', [['a-old', 'shaOld']]);
+      s.db.messages[0].receivedAt = 1;
+      s.db.messages.push({
+        id: 'm-last',
+        threadId: 't1',
+        graphId: 'g-last',
+        bodyText: 'ultimo',
+        receivedAt: 2,
+      });
+      s.db.atts.push({
+        id: 'a-last',
+        messageId: 'm-last',
+        sha256: 'shaLast',
+        status: 'listo',
+      });
+      s.db.atts[0].status = 'listo';
+      s.db.threads[0].status = 'listo';
+      const r = await s.pipeline.reanalyzeLast('t1');
+      expect(r).toMatchObject({ status: 'pendiente', messageId: 'm-last' });
+      expect(s.db.atts.find((a) => a.id === 'a-old')!.status).toBe('listo');
+      expect(s.db.atts.find((a) => a.id === 'a-last')!.status).toBe(
+        'pendiente',
+      );
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      const pa = s.queued.filter((q) => q.type === 'process_attachment');
+      expect(pa.map((q) => q.opts.dedupeKey)).toEqual([
+        'process_attachment:shaLast',
+      ]);
+      await s.pipeline.processAttachment(s.job({ attachmentId: 'a-last' }));
+      const q = s.queued.find((x) => x.type === 'synthesize_thread')!;
+      await s.pipeline.synthesizeThread(s.job(q.payload));
+      expect(s.synth.synthesize).toHaveBeenCalledWith('t1', {
+        force: false,
+        reanalyzeMessageId: 'm-last',
+      });
+      expect(s.db.threads[0].status).toBe('listo');
+      expect(s.db.settings.size).toBe(0);
+    });
+
+    it('reprocess (re-analizar todo): la síntesis se fuerza en modo completo', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      s.db.threads[0].status = 'listo';
+      await s.pipeline.reprocess('t1');
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      const q = s.queued.find((x) => x.type === 'synthesize_thread')!;
+      await s.pipeline.synthesizeThread(s.job(q.payload));
+      expect(s.synth.synthesize).toHaveBeenCalledWith('t1', { force: true });
+      expect(s.db.settings.size).toBe(0);
+    });
+
+    it('reanalyzeLast: 409 si procesa o no hay correos; 404 si no existe', async () => {
+      const s = setup();
+      await expect(s.pipeline.reanalyzeLast('x')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      s.addThread('t1', []);
+      s.db.threads[0].status = 'procesando';
+      await expect(s.pipeline.reanalyzeLast('t1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      s.db.threads[0].status = 'listo';
+      s.db.messages.length = 0;
+      await expect(s.pipeline.reanalyzeLast('t1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('corrección de región: el job lleva el sha256 corregido y no force', async () => {

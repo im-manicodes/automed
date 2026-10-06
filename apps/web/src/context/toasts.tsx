@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { createElement, useCallback, useMemo, useState, type ReactNode } from 'react'
+import type { IconType } from 'react-icons'
 import { ToastContext as Ctx, type ToastKind as Kind } from './toasts-context'
+import { LuCheck, LuTriangleAlert, LuInfo, LuX } from 'react-icons/lu'
 
 interface Toast { id: number; kind: Kind; text: string }
 
@@ -10,7 +12,7 @@ const STYLE: Record<Kind, string> = {
   error: 'bg-red-50 text-red-900 border-red-400',
   info: 'bg-blue-50 text-blue-900 border-blue-400',
 }
-const ICON: Record<Kind, string> = { ok: '✓', error: '⚠', info: 'ℹ' }
+const ICON: Record<Kind, IconType> = { ok: LuCheck, error: LuTriangleAlert, info: LuInfo }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([])
@@ -30,9 +32,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4" role="status" aria-live="polite">
         {items.map((t) => (
           <div key={t.id} className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border p-3 shadow-lg ${STYLE[t.kind]}`}>
-            <span aria-hidden>{ICON[t.kind]}</span>
+            {createElement(ICON[t.kind], { className: 'mt-0.5 size-5 shrink-0', 'aria-hidden': true })}
             <p className="flex-1">{t.text}</p>
-            <button type="button" onClick={() => dismiss(t.id)} aria-label="Cerrar aviso" className="-m-2 min-h-11 min-w-11 rounded-lg">✕</button>
+            <button type="button" onClick={() => dismiss(t.id)} aria-label="Cerrar aviso" className="-m-2 min-h-11 min-w-11 flex items-center justify-center rounded-lg"><LuX className="size-5" aria-hidden /></button>
           </div>
         ))}
       </div>

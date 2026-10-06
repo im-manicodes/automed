@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { attachmentsApi, type AttachmentInfo } from '../lib/api'
 import { formatSize, plural } from '../lib/format'
 import StatusBadge from './StatusBadge'
+import { LuFileText } from 'react-icons/lu'
 
 /** Lista un PDF con su estado; si necesita revisión, cuenta las dudas (bajo demanda) y enlaza a la corrección. */
 export default function AttachmentRow({ threadId, att }: { threadId: string; att: AttachmentInfo }) {
@@ -23,7 +24,7 @@ export default function AttachmentRow({ threadId, att }: { threadId: string; att
 
   return (
     <li className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-      <p className="break-all font-medium">📄 {att.filename}</p>
+      <p className="flex items-start gap-2 break-all font-medium"><LuFileText className="size-5 shrink-0" aria-hidden /><span>{att.filename}</span></p>
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={att.status} />
         <span className="text-sm text-slate-700">{formatSize(att.size)}</span>

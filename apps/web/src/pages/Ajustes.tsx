@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router-dom'
 import { jobsApi, mailApi, type JobsStatus, type MailStatus } from '../lib/api'
 import { errorMessage, plural } from '../lib/format'
 import { usePolling } from '../lib/usePolling'
+import { LuCheck, LuTriangleAlert, LuHourglass } from 'react-icons/lu'
 
 export default function Ajustes() {
   const { session, logout } = useSession()
@@ -57,19 +58,22 @@ export default function Ajustes() {
 
       {aviso && (
         <p role={aviso.ok ? 'status' : 'alert'} className={`rounded-xl border p-3 ${aviso.ok ? 'border-green-300 bg-green-50 text-green-900' : 'border-red-300 bg-red-50 text-red-900'}`}>
-          <span aria-hidden>{aviso.ok ? '✓ ' : '⚠ '}</span>{aviso.text}
+          {aviso.ok ? <LuCheck className="mr-1.5 -mt-0.5 inline size-4" aria-hidden /> : <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />}{aviso.text}
         </p>
       )}
 
-      {mail && <OutlookCard mail={mail} onChanged={() => load(true)} />}
+      <div className="space-y-5 md:grid md:grid-cols-2 md:items-start md:gap-5 md:space-y-0">
+      {mail && <div className="md:col-span-2"><OutlookCard mail={mail} onChanged={() => load(true)} /></div>}
 
       {jobs && (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="space-y-2 md:col-span-2 rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="text-lg font-bold">Trabajo en marcha</h3>
           <p className="text-slate-700">
-            {working > 0 ? `⏳ Hay ${plural(working, 'tarea', 'tareas')} en proceso o en espera.` : '✓ No hay tareas pendientes.'}
+            {working > 0
+              ? <><LuHourglass className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />{`Hay ${plural(working, 'tarea', 'tareas')} en proceso o en espera.`}</>
+              : <><LuCheck className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />No hay tareas pendientes.</>}
           </p>
-          <ul className="grid grid-cols-2 gap-2 text-sm">
+          <ul className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
             <li className="rounded-lg bg-slate-50 p-2">En espera: <strong>{jobs.pendiente}</strong></li>
             <li className="rounded-lg bg-slate-50 p-2">En proceso: <strong>{jobs.procesando}</strong></li>
             <li className="rounded-lg bg-slate-50 p-2">Terminadas: <strong>{jobs.listo}</strong></li>
@@ -82,6 +86,7 @@ export default function Ajustes() {
         <h3 className="text-lg font-bold">Sesión</h3>
         {session.status === 'authenticated' && <p className="break-all text-slate-700">Entraste como {session.user.nombre} ({session.user.email})</p>}
         <button type="button" className="btn btn-secondary w-full" onClick={() => void logout()}>Salir</button>
+      </div>
       </div>
     </section>
   )

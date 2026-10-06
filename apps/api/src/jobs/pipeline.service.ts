@@ -23,6 +23,7 @@ import type { ProcessStatus } from '../generated/prisma/client';
 
 const DONE: ProcessStatus[] = ['listo', 'necesita_revision'];
 const isDone = (s: ProcessStatus) => DONE.includes(s);
+const reanalyzeKey = (threadId: string) => `reanalyze:${threadId}`;
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
 /**
@@ -175,7 +176,7 @@ export class PipelineService implements OnModuleInit {
     return { threadId, status: 'pendiente' as const };
   }
 
-  /** Vuelve a procesar el hilo desde cero (adjuntos incluidos). Acción explícita del usuario. */
+  /** Vuelve a procesar el hilo desde cero (adjuntos/OCR y síntesis COMPLETA). Acción explícita del usuario. */
   async reprocess(threadId: string) {
     const t = await this.prisma.thread.findUnique({
       where: { id: threadId },
@@ -184,6 +185,13 @@ export class PipelineService implements OnModuleInit {
     if (!t) throw new NotFoundException('Ticket no encontrado');
     if (t.status === 'procesando')
       throw new ConflictException('El ticket ya se está procesando');
+    // Marca para que la síntesis de esta pasada sea COMPLETA (re-lee todo el hilo).
+    const key = reanalyzeKey(threadId);
+    await this.prisma.setting.upsert({
+      where: { key },
+      create: { key, value: { full: true } },
+      update: { value: { full: true } },
+    });
     await this.prisma.attachment.updateMany({
       where: { message: { threadId } },
       data: { status: 'pendiente' },
@@ -198,6 +206,67 @@ export class PipelineService implements OnModuleInit {
       { dedupeKey: `process_thread:${threadId}:${hash}`, rearm: true },
     );
     return { threadId, status: 'pendiente' as const };
+  }
+
+  /**
+   * Re-analiza SOLO el último correo del hilo (acción explícita): vuelve a pasar por OCR los
+   * adjuntos de ese correo y genera una versión INCREMENTAL de la síntesis con ese correo tratado
+   * como nuevo (síntesis previa + ese correo + OCR de sus adjuntos; nunca el hilo completo). Sin
+   * síntesis previa utilizable la síntesis cae al modo completo. Pasa por pendiente -> procesando.
+   * Nota: un PDF idéntico ya procesado en OTRO hilo se reutiliza (mismo sha256, mismo OCR).
+   */
+  async reanalyzeLast(threadId: string) {
+    const t = await this.prisma.thread.findUnique({
+      where: { id: threadId },
+      select: { status: true },
+    });
+    if (!t) throw new NotFoundException('Ticket no encontrado');
+    if (t.status === 'procesando' || t.status === 'pendiente')
+      throw new ConflictException('El ticket ya se está procesando');
+    const last = await this.prisma.message.findFirst({
+      where: { threadId },
+      orderBy: { receivedAt: 'desc' },
+      select: { id: true, attachments: { select: { sha256: true } } },
+    });
+    if (!last) throw new ConflictException('El ticket no tiene correos');
+    const key = reanalyzeKey(threadId);
+    await this.prisma.setting.upsert({
+      where: { key },
+      create: { key, value: { messageId: last.id } },
+      update: { value: { messageId: last.id } },
+    });
+    // Se reinician los adjuntos con esos sha256 del hilo para que el OCR se haga otra vez.
+    const shas = [...new Set(last.attachments.map((a) => a.sha256))];
+    if (shas.length)
+      await this.prisma.attachment.updateMany({
+        where: { message: { threadId }, sha256: { in: shas } },
+        data: { status: 'pendiente' },
+      });
+    if (
+      !(await this.state.transition(threadId, 'pendiente', {
+        tieneMensajesNuevos: false,
+      }))
+    ) {
+      await this.prisma.setting.deleteMany({ where: { key } });
+      throw new ConflictException(
+        'El ticket cambió de estado, intenta de nuevo',
+      );
+    }
+    const hash = await this.computeThreadHash(threadId);
+    await this.queue.enqueue(
+      JOB_TYPES.processThread,
+      { threadId },
+      {
+        dedupeKey: `process_thread:${threadId}:${hash}:ultimo:${Date.now()}`,
+        rearm: true,
+      },
+    );
+    return {
+      threadId,
+      status: 'pendiente' as const,
+      mode: 'incremental' as const,
+      messageId: last.id,
+    };
   }
 
   /**
@@ -351,13 +420,25 @@ export class PipelineService implements OnModuleInit {
       where: { id: threadId },
     });
     if (!thread || thread.status !== 'procesando') return;
+    const reKey = reanalyzeKey(threadId);
+    const mark = await this.prisma.setting.findUnique({
+      where: { key: reKey },
+    });
+    const markVal = mark?.value as
+      { messageId?: unknown; full?: unknown } | undefined;
+    const markId = markVal?.messageId;
+    const force = job.payload.force === true || markVal?.full === true;
     await this.synthesizer.synthesize(threadId, {
-      force: job.payload.force === true,
+      force,
+      ...(!force && typeof markId === 'string'
+        ? { reanalyzeMessageId: markId }
+        : {}),
       correctedSha256:
         typeof job.payload.correctedSha256 === 'string'
           ? job.payload.correctedSha256
           : undefined,
     });
+    if (mark) await this.prisma.setting.deleteMany({ where: { key: reKey } });
 
     if ((await this.computeThreadHash(threadId)) !== hash) {
       // Llegó contenido nuevo mientras se procesaba: con seguimiento se reprocesa solo;
@@ -393,7 +474,11 @@ export class PipelineService implements OnModuleInit {
   // ---- fallos definitivos ----
 
   async failThread(threadId: string) {
-    if (threadId) await this.state.transition(threadId, 'error');
+    if (!threadId) return;
+    await this.prisma.setting.deleteMany({
+      where: { key: reanalyzeKey(threadId) },
+    });
+    await this.state.transition(threadId, 'error');
   }
 
   async failAttachment(attachmentId: string) {

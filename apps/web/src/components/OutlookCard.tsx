@@ -4,6 +4,8 @@ import { errorMessage, formatDate } from '../lib/format'
 import { useToast } from '../context/toasts-context'
 import ConectarOutlookButton from './ConectarOutlookButton'
 import ConfirmDialog from './ConfirmDialog'
+import { LuLock, LuTriangleAlert, LuCheck } from 'react-icons/lu'
+import { LuHourglass } from 'react-icons/lu'
 
 interface Props {
   mail: MailStatus
@@ -53,7 +55,7 @@ export default function OutlookCard({ mail, onChanged }: Props) {
         <>
           <p className="text-slate-700">Conecta tu Outlook de la empresa para traer tus correos y convertirlos en tickets.</p>
           <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
-            <span aria-hidden>🔒 </span>Solo pedimos permiso para <strong>leer</strong> tus correos. No enviamos, borramos ni cambiamos nada en tu buzón.
+            <LuLock className="size-4 shrink-0 mt-0.5 inline" aria-hidden /> Solo pedimos permiso para <strong>leer</strong> tus correos. No enviamos, borramos ni cambiamos nada en tu buzón.
           </p>
           <ConectarOutlookButton />
         </>
@@ -62,7 +64,7 @@ export default function OutlookCard({ mail, onChanged }: Props) {
       {mail.connected && mail.error && (
         <>
           <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-red-900">
-            <span aria-hidden>⚠ </span>Hay un problema con tu Outlook{mail.email ? ` (${mail.email})` : ''}: {mail.error}
+            <LuTriangleAlert className="size-4 shrink-0 mr-1.5 inline align-text-bottom" aria-hidden />Hay un problema con tu Outlook{mail.email ? ` (${mail.email})` : ''}: {mail.error}
           </p>
           <p className="text-slate-700">Vuelve a conectarlo para seguir trayendo tus correos.</p>
           <ConectarOutlookButton label="Reconectar" />
@@ -71,10 +73,10 @@ export default function OutlookCard({ mail, onChanged }: Props) {
 
       {mail.connected && !mail.error && (
         <>
-          <p className="break-all">✓ Conectado: <strong>{mail.email}</strong></p>
+          <p className="break-all"><LuCheck className="size-4 shrink-0 mr-1.5 inline align-text-bottom" aria-hidden />Conectado: <strong>{mail.email}</strong></p>
           <p className="text-slate-700">
             {mail.syncing
-              ? '⏳ Sincronizando ahora…'
+              ? <><LuHourglass className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Sincronizando ahora…</>
               : mail.lastSyncAt
                 ? `Última sincronización: ${formatDate(mail.lastSyncAt)}.`
                 : 'Todavía no se ha sincronizado.'}

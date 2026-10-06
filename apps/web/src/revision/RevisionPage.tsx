@@ -20,6 +20,7 @@ import { useGuardado } from './useGuardado';
 import { useEsEscritorio } from './useEsEscritorio';
 import { usePaginaImagen } from './usePaginaImagen';
 import VisorAmpliado from './VisorAmpliado';
+import { LuCheck } from 'react-icons/lu'
 
 const borradores = crearBorradores(
   (() => {
@@ -198,7 +199,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
         </h1>
         <span className="text-base text-slate-700" role="status">
           {guardadoActual === 'guardando' && 'Guardando…'}
-          {guardadoActual === 'guardado' && '✓ Guardado'}
+          {guardadoActual === 'guardado' && <><LuCheck className="mr-1 -mt-0.5 inline size-4" aria-hidden />Guardado</>}
           {guardadoActual === 'error' && 'No se guardó'}
         </span>
       </div>

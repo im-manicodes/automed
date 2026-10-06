@@ -124,7 +124,10 @@ describe('seedDemo / cleanDemo', () => {
     const b = await seedDemo(asDb(db), st, {}, noop, render);
     expect(db.thread.rows).toHaveLength(n);
     expect(db.ocrRegion.rows).toHaveLength(b.regiones);
-    expect(db.template.rows.filter((t) => t.isActive)).toHaveLength(1);
+    for (const kind of ['resumen', 'whatsapp'])
+      expect(
+        db.template.rows.filter((t) => t.isActive && t.kind === kind),
+      ).toHaveLength(1);
   });
 
   it('si RustFS no está disponible omite solo las imágenes y avisa', async () => {
@@ -159,7 +162,11 @@ describe('seedDemo / cleanDemo', () => {
     await cleanDemo(asDb(db), st, noop);
     expect(db.thread.rows.map((t) => t.id)).toEqual([realThread.id]);
     expect(db.mailAccount.rows.map((a) => a.id)).toEqual([real.id]);
-    expect(db.template.rows.map((t) => t.name)).toEqual(['Mía']);
+    // 'Mía' (resumen) intacta; la de whatsapp la creó el seed base (no es demo) y se conserva
+    expect(db.template.rows.map((t) => t.name)).toEqual([
+      'Mía',
+      'Formato de WhatsApp estándar',
+    ]);
     for (const t of [
       db.message,
       db.attachment,

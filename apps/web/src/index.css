@@ -36,3 +36,15 @@
   .md-body th { @apply bg-slate-100; }
   .md-body hr { @apply my-5 border-slate-300; }
 }
+
+/* Barra de progreso indeterminada (ProgresoAnalisis) */
+@keyframes progreso-indeterminado {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+.progreso-indeterminado {
+  animation: progreso-indeterminado 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .progreso-indeterminado { animation: none; left: 0; width: 100%; opacity: 0.6; }
+}

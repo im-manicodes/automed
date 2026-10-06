@@ -1,6 +1,7 @@
 import { fakePrisma } from '../test/helpers/fake-prisma';
 import { PasswordService } from '../src/auth/password.service';
 import { DEFAULT_TEMPLATE_MARKDOWN } from '../src/templates/default-template';
+import { DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN } from '../src/templates/template-kinds';
 import { DEFAULT_SETTINGS, seedBase } from './seed';
 
 const asDb = (d: unknown) => d as any;
@@ -25,14 +26,22 @@ describe('seedBase', () => {
     const db = fakePrisma();
     const a = await run(db, {});
     expect(a.report.template).toBe('creada');
-    expect(db.template.rows).toHaveLength(1);
-    expect(db.template.rows[0].markdown).toBe(DEFAULT_TEMPLATE_MARKDOWN);
+    expect(db.template.rows).toHaveLength(2);
+    const byKind = (k: string) => db.template.rows.filter((t) => t.kind === k);
+    expect(byKind('resumen')).toHaveLength(1);
+    expect(byKind('resumen')[0].markdown).toBe(DEFAULT_TEMPLATE_MARKDOWN);
+    expect(byKind('whatsapp')).toHaveLength(1);
+    expect(byKind('whatsapp')[0]).toMatchObject({
+      isActive: true,
+      version: 1,
+      markdown: DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN,
+    });
     expect(db.setting.rows).toHaveLength(Object.keys(DEFAULT_SETTINGS).length);
 
     const b = await run(db, {});
     expect(b.report.template).toBe('omitida');
     expect(b.report.settingsCreados).toEqual([]);
-    expect(db.template.rows).toHaveLength(1);
+    expect(db.template.rows).toHaveLength(2);
     expect(db.setting.rows).toHaveLength(Object.keys(DEFAULT_SETTINGS).length);
   });
 
@@ -43,8 +52,10 @@ describe('seedBase', () => {
     });
     await db.setting.create({ data: { key: 'app.idioma', value: 'en' } });
     await run(db, {});
-    expect(db.template.rows).toHaveLength(1);
+    // la de resumen del usuario se respeta; solo se añade la de whatsapp que faltaba
+    expect(db.template.rows).toHaveLength(2);
     expect(db.template.rows[0].name).toBe('Mía');
+    expect(db.template.rows[1].kind).toBe('whatsapp');
     expect(db.setting.rows.find((s) => s.key === 'app.idioma')?.value).toBe(
       'en',
     );
@@ -104,7 +115,7 @@ describe('seedBase', () => {
     const { report } = await run(db, { ...USER_ENV, NODE_ENV: 'production' });
     expect(report.user).toBe('rechazado_produccion');
     expect(db.user.rows).toHaveLength(0);
-    expect(db.template.rows).toHaveLength(1);
+    expect(db.template.rows).toHaveLength(2);
   });
 
   it('no imprime contraseñas ni hashes', async () => {

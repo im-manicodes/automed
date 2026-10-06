@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { mailApi } from '../lib/api'
 import { errorMessage } from '../lib/format'
+import { LuTriangleAlert } from 'react-icons/lu'
 
 /** Pide a la API la dirección de Microsoft y navega a ella. */
 export default function ConectarOutlookButton({ label = 'Conectar con Outlook', secondary = false, className = '' }: { label?: string; secondary?: boolean; className?: string }) {
@@ -22,7 +23,7 @@ export default function ConectarOutlookButton({ label = 'Conectar con Outlook', 
       <button type="button" className={`btn w-full text-lg ${secondary ? 'btn-secondary' : ''}`} disabled={busy} onClick={() => void go()}>
         {busy ? 'Abriendo Microsoft…' : label}
       </button>
-      <div aria-live="assertive">{error && <p role="alert" className="text-red-900"><span aria-hidden>⚠ </span>{error}</p>}</div>
+      <div aria-live="assertive">{error && <p role="alert" className="text-red-900"><LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />{error}</p>}</div>
     </div>
   )
 }

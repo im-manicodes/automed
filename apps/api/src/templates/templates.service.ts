@@ -1,65 +1,92 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  DEFAULT_TEMPLATE_MARKDOWN,
-  DEFAULT_TEMPLATE_NAME,
-  validateTemplateMarkdown,
-} from './default-template';
+  DEFAULT_TEMPLATE_KIND,
+  isTemplateKind,
+  TEMPLATE_KINDS,
+  type TemplateKind,
+} from './template-kinds';
 
 export interface ActiveTemplate {
   id: string;
   name: string;
+  kind: string;
   version: number;
   markdown: string;
   updatedAt: Date;
 }
 
-/** Plantilla activa: cada edición crea una versión nueva y desactiva la anterior (historial). */
+function assertKind(kind: unknown): TemplateKind {
+  if (!isTemplateKind(kind))
+    throw new BadRequestException('Tipo de plantilla no válido');
+  return kind;
+}
+
+/**
+ * Plantilla activa por tipo (`kind`): cada edición crea una versión nueva y desactiva la anterior
+ * dentro de su tipo (historial). La versión es incremental por tipo.
+ */
 @Injectable()
 export class TemplatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Devuelve la activa; si no existe aún, crea la versión 1 con la plantilla por defecto. */
-  async getActive(): Promise<ActiveTemplate> {
+  /** Devuelve la activa del tipo; si no existe aún, crea la versión 1 con la plantilla por defecto. */
+  async getActive(
+    kind: TemplateKind = DEFAULT_TEMPLATE_KIND,
+  ): Promise<ActiveTemplate> {
+    const k = assertKind(kind);
     const t = await this.prisma.template.findFirst({
-      where: { isActive: true },
+      where: { kind: k, isActive: true },
       orderBy: { version: 'desc' },
     });
     if (t) return t;
-    return this.createVersion(DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_MARKDOWN);
+    const def = TEMPLATE_KINDS[k];
+    return this.createVersion(k, def.defaultName, def.defaultMarkdown);
   }
 
   async updateActive(
+    kind: TemplateKind,
     markdown: unknown,
     name?: unknown,
   ): Promise<ActiveTemplate> {
-    const err = validateTemplateMarkdown(markdown);
+    const k = assertKind(kind);
+    const err = TEMPLATE_KINDS[k].validate(markdown);
     if (err) throw new BadRequestException(err);
-    const current = await this.getActive();
+    const current = await this.getActive(k);
     const newName =
       typeof name === 'string' && name.trim()
         ? name.trim().slice(0, 100)
         : current.name;
-    return this.createVersion(newName, (markdown as string).trim() + '\n');
+    return this.createVersion(k, newName, (markdown as string).trim() + '\n');
   }
 
-  /** Restaura la plantilla por defecto (como una versión nueva; el historial se conserva). */
-  async reset(): Promise<ActiveTemplate> {
-    return this.createVersion(DEFAULT_TEMPLATE_NAME, DEFAULT_TEMPLATE_MARKDOWN);
+  /** Restaura la plantilla por defecto del tipo (versión nueva; el historial se conserva). */
+  async reset(
+    kind: TemplateKind = DEFAULT_TEMPLATE_KIND,
+  ): Promise<ActiveTemplate> {
+    const k = assertKind(kind);
+    const def = TEMPLATE_KINDS[k];
+    return this.createVersion(k, def.defaultName, def.defaultMarkdown);
   }
 
-  private async createVersion(name: string, markdown: string) {
+  private async createVersion(
+    kind: TemplateKind,
+    name: string,
+    markdown: string,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const last = await tx.template.findFirst({
+        where: { kind },
         orderBy: { version: 'desc' },
         select: { version: true },
       });
       await tx.template.updateMany({
-        where: { isActive: true },
+        where: { kind, isActive: true },
         data: { isActive: false },
       });
       return tx.template.create({
         data: {
+          kind,
           name,
           markdown,
           version: (last?.version ?? 0) + 1,

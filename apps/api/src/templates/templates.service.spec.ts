@@ -4,6 +4,10 @@ import {
   validateTemplateMarkdown,
 } from './default-template';
 import { TemplatesService } from './templates.service';
+import {
+  DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN,
+  validateWhatsappTemplate,
+} from './template-kinds';
 
 /** Prisma en memoria mínimo para Template. */
 function fakePrisma() {
@@ -14,15 +18,20 @@ function fakePrisma() {
       findFirst: jest.fn(({ where, orderBy }: any) => {
         let r = rows.filter(
           (x) =>
-            !where ||
-            where.isActive === undefined ||
-            x.isActive === where.isActive,
+            (where?.kind === undefined || x.kind === where.kind) &&
+            (where?.isActive === undefined || x.isActive === where.isActive),
         );
         if (orderBy) r = [...r].sort((a, b) => b.version - a.version);
         return Promise.resolve(r[0] ?? null);
       }),
-      updateMany: jest.fn(({ data }: any) => {
-        rows.filter((r) => r.isActive).forEach((r) => Object.assign(r, data));
+      updateMany: jest.fn(({ where, data }: any) => {
+        rows
+          .filter(
+            (r) =>
+              r.isActive &&
+              (where?.kind === undefined || r.kind === where.kind),
+          )
+          .forEach((r) => Object.assign(r, data));
         return Promise.resolve({ count: 1 });
       }),
       create: jest.fn(({ data }: any) => {
@@ -64,7 +73,10 @@ describe('TemplatesService', () => {
     const db = fakePrisma();
     const s = new TemplatesService(db as never);
     await s.getActive();
-    const v2 = await s.updateActive('## Solo resumen\n<!-- breve -->');
+    const v2 = await s.updateActive(
+      'resumen',
+      '## Solo resumen\n<!-- breve -->',
+    );
     expect(v2.version).toBe(2);
     expect(db.rows.filter((r) => r.isActive)).toHaveLength(1);
     expect((await s.getActive()).version).toBe(2);
@@ -82,7 +94,61 @@ describe('TemplatesService', () => {
     ).toBeTruthy();
     expect(validateTemplateMarkdown('## Sección ok con contenido')).toBeNull();
     const s = new TemplatesService(fakePrisma() as never);
-    await expect(s.updateActive(123)).rejects.toBeInstanceOf(
+    await expect(s.updateActive('resumen', 123)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('versiones y activa son independientes por tipo', async () => {
+    const db = fakePrisma();
+    const s = new TemplatesService(db as never);
+    const r1 = await s.getActive('resumen');
+    const w1 = await s.getActive('whatsapp');
+    expect(r1.version).toBe(1);
+    expect(w1.version).toBe(1);
+    expect(w1.kind).toBe('whatsapp');
+    expect(w1.markdown).toBe(DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN);
+    const w2 = await s.updateActive(
+      'whatsapp',
+      'Mensaje corto con *negrita* y viñetas',
+    );
+    expect(w2.version).toBe(2);
+    // el resumen no cambió ni se desactivó
+    expect((await s.getActive('resumen')).id).toBe(r1.id);
+    expect(
+      db.rows.filter((r) => r.kind === 'resumen' && r.isActive),
+    ).toHaveLength(1);
+    expect(
+      db.rows.filter((r) => r.kind === 'whatsapp' && r.isActive),
+    ).toHaveLength(1);
+    // reset solo del tipo indicado
+    const w3 = await s.reset('whatsapp');
+    expect(w3.version).toBe(3);
+    expect(w3.markdown).toBe(DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN);
+    expect((await s.getActive('resumen')).version).toBe(1);
+  });
+
+  it('valida por tipo: whatsapp no exige encabezados # y tiene tope propio', async () => {
+    expect(
+      validateWhatsappTemplate('Texto libre sin encabezados ok'),
+    ).toBeNull();
+    expect(validateWhatsappTemplate('corto')).toBeTruthy();
+    expect(validateWhatsappTemplate('x'.repeat(3001))).toBeTruthy();
+    const s = new TemplatesService(fakePrisma() as never);
+    await expect(
+      s.updateActive('resumen', 'Texto libre sin encabezados ok'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      s.updateActive('whatsapp', 'Texto libre sin encabezados ok'),
+    ).resolves.toMatchObject({ kind: 'whatsapp' });
+  });
+
+  it('kind inválido -> BadRequestException', async () => {
+    const s = new TemplatesService(fakePrisma() as never);
+    await expect(s.getActive('otro' as never)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(s.reset('otro' as never)).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });

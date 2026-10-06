@@ -8,6 +8,17 @@ export type ProcessStatus =
   | 'necesita_revision'
   | 'error'
 
+export type EtapaProgreso = 'en_cola' | 'leyendo_pdfs' | 'escribiendo_resumen' | 'terminando'
+
+export interface ProgresoAnalisis {
+  etapa: EtapaProgreso
+  /** 0-100 */
+  porcentaje: number
+  adjuntos: { total: number; listos: number }
+  paginas?: { total: number; leidas: number }
+  reintento?: { intento: number; maximo: number }
+}
+
 export interface ThreadListItem {
   id: string
   subject: string
@@ -18,6 +29,7 @@ export interface ThreadListItem {
   lastMessageAt: string
   messageCount: number
   attachmentCount: number
+  progreso?: ProgresoAnalisis | null
 }
 
 export interface AttachmentInfo {
@@ -47,6 +59,7 @@ export interface ThreadDetail {
   seguimiento: boolean
   tieneMensajesNuevos: boolean
   lastMessageAt: string
+  progreso?: ProgresoAnalisis | null
   messages: MessageInfo[]
 }
 
@@ -95,9 +108,12 @@ export interface AnalyzeResult {
   error?: string
 }
 
+export type TemplateKind = 'resumen' | 'whatsapp'
+
 export interface Template {
   id: string
   name: string
+  kind: TemplateKind
   version: number
   markdown: string
   updatedAt: string
@@ -270,6 +286,13 @@ export const threadsApi = {
     api<{ threadId: string; status: ProcessStatus }>(`/threads/${enc(id)}/reprocess`, {
       method: 'POST',
     }),
+  reanalyzeLast: (id: string) =>
+    api<{ threadId: string; status: ProcessStatus; mode: 'incremental'; messageId: string }>(
+      `/threads/${enc(id)}/reanalyze-last`,
+      { method: 'POST' },
+    ),
+  /** Mensaje de WhatsApp redactado por IA solo con el último correo (no guarda nada). */
+  whatsappLast: (id: string) => api<{ texto: string }>(`/threads/${enc(id)}/whatsapp-last`, { method: 'POST' }),
   synthesis: (id: string) => api<SynthesisResponse>(`/threads/${enc(id)}/synthesis`),
   regenerate: (id: string) =>
     api<RegenerateResponse>(`/threads/${enc(id)}/synthesis/regenerate`, { method: 'POST' }),
@@ -280,13 +303,13 @@ export const attachmentsApi = {
 }
 
 export const templatesApi = {
-  active: () => api<Template>('/templates/active'),
-  save: (markdown: string) =>
-    api<Template>('/templates/active', { method: 'PUT', body: { markdown } }),
-  reset: () => api<Template>('/templates/reset', { method: 'POST' }),
-  preview: (markdown?: string) =>
+  active: (kind: TemplateKind = 'resumen') => api<Template>(`/templates/active?kind=${kind}`),
+  save: (markdown: string, kind: TemplateKind = 'resumen') =>
+    api<Template>(`/templates/active?kind=${kind}`, { method: 'PUT', body: { markdown } }),
+  reset: (kind: TemplateKind = 'resumen') => api<Template>(`/templates/reset?kind=${kind}`, { method: 'POST' }),
+  preview: (markdown?: string, kind: TemplateKind = 'resumen') =>
     api<{ markdown: string }>('/templates/preview', {
       method: 'POST',
-      body: markdown ? { markdown } : {},
+      body: markdown ? { markdown, kind } : { kind },
     }),
 }

@@ -10,6 +10,7 @@ import {
   type Transform,
 } from './lib/viewport';
 import { useRuedaZoom } from './useRuedaZoom';
+import { LuPlus, LuMinus } from 'react-icons/lu'
 
 interface Props {
   img: HTMLImageElement;
@@ -102,10 +103,10 @@ export default function VisorAmpliado({ img, bbox, numero, onCerrar }: Props) {
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Zoom del recorte">
           <p className="mr-auto text-base font-semibold">Duda {numero}</p>
           <button type="button" className="btn btn-secondary" aria-label="Acercar" onClick={() => zoomBoton(1.5)}>
-            +
+            <LuPlus className="size-5" aria-hidden />
           </button>
           <button type="button" className="btn btn-secondary" aria-label="Alejar" onClick={() => zoomBoton(1 / 1.5)}>
-            −
+            <LuMinus className="size-5" aria-hidden />
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => setT(ajustar(contenido, vista))}>
             Ajustar

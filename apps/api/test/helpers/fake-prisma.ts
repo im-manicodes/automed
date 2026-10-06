@@ -75,7 +75,7 @@ export function fakePrisma() {
     ocrPage: table(),
     ocrRegion: table(),
     synthesis: table(),
-    template: table(() => ({ isActive: true, version: 1 })),
+    template: table(() => ({ kind: 'resumen', isActive: true, version: 1 })),
     setting: table(() => ({}), ['key']),
   };
 }

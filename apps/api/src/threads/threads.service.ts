@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ProcessStatus } from '../generated/prisma/client';
+import { computeProgress, type ProgresoAnalisis } from './thread-progress';
 
 @Injectable()
 export class ThreadsService {
@@ -11,7 +12,12 @@ export class ThreadsService {
       where: status ? { status } : undefined,
       orderBy: { lastMessageAt: 'desc' },
       include: {
-        messages: { select: { _count: { select: { attachments: true } } } },
+        messages: {
+          select: {
+            _count: { select: { attachments: true } },
+            attachments: { select: { status: true } },
+          },
+        },
       },
     });
     return threads.map((t) => ({
@@ -24,6 +30,11 @@ export class ThreadsService {
       lastMessageAt: t.lastMessageAt,
       messageCount: t.messages.length,
       attachmentCount: t.messages.reduce((n, m) => n + m._count.attachments, 0),
+      // Versión barata (sin páginas ni reintentos); null si el hilo no está en marcha
+      progreso: computeProgress({
+        threadStatus: t.status,
+        attachments: t.messages.flatMap((m) => m.attachments),
+      }),
     }));
   }
 
@@ -56,6 +67,11 @@ export class ThreadsService {
       seguimiento: t.seguimiento,
       tieneMensajesNuevos: t.tieneMensajesNuevos,
       lastMessageAt: t.lastMessageAt,
+      progreso: await this.progress(
+        t.id,
+        t.status,
+        t.messages.flatMap((m) => m.attachments),
+      ),
       // incluye isFromMe (mensaje propio) en cada mensaje
       messages: t.messages,
     };
@@ -68,5 +84,56 @@ export class ThreadsService {
     });
     if (r.count === 0) throw new NotFoundException('Ticket no encontrado');
     return { id, seguimiento };
+  }
+
+  /** Progreso detallado (páginas y reintentos); solo consulta extra si el hilo está en marcha. */
+  private async progress(
+    threadId: string,
+    status: ProcessStatus,
+    atts: { id: string; status: string }[],
+  ): Promise<ProgresoAnalisis | null> {
+    if (status !== 'pendiente' && status !== 'procesando') return null;
+    const ids = atts.map((a) => a.id);
+    const [pages, jobs] = await Promise.all([
+      ids.length
+        ? this.prisma.ocrPage.findMany({
+            where: { attachmentId: { in: ids } },
+            select: { attachmentId: true, text: true },
+          })
+        : Promise.resolve([]),
+      this.prisma.job.findMany({
+        where: {
+          OR: [
+            { payload: { path: ['threadId'], equals: threadId } },
+            ...ids.map((id) => ({
+              payload: { path: ['attachmentId'], equals: id },
+            })),
+          ],
+        },
+        select: {
+          type: true,
+          status: true,
+          attempts: true,
+          maxAttempts: true,
+          lastError: true,
+        },
+      }),
+    ]);
+    const byAtt = new Map<string, { total: number; leidas: number }>();
+    for (const p of pages) {
+      const c = byAtt.get(p.attachmentId) ?? { total: 0, leidas: 0 };
+      c.total++;
+      if (p.text !== null) c.leidas++;
+      byAtt.set(p.attachmentId, c);
+    }
+    return computeProgress({
+      threadStatus: status,
+      attachments: atts.map((a) => ({
+        status: a.status,
+        paginasTotal: byAtt.get(a.id)?.total,
+        paginasLeidas: byAtt.get(a.id)?.leidas,
+      })),
+      jobs,
+    });
   }
 }

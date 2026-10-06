@@ -233,12 +233,16 @@ model Synthesis {
 model Template {
   id        String   @id @default(uuid())
   name      String
-  /// Versión incremental; solo una fila activa a la vez (las demás son historial)
+  /// Tipo de plantilla: 'resumen' (síntesis del ticket) | 'whatsapp' (formato del mensaje). Ver template-kinds.ts
+  kind      String   @default("resumen")
+  /// Versión incremental por kind; solo una fila activa a la vez por kind (las demás son historial)
   version   Int      @default(1)
   markdown  String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([kind, isActive])
 }
 
 model Setting {

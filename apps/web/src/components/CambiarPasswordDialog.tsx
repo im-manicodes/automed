@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useToast } from '../context/toasts-context'
 import { ApiError, authApi } from '../lib/api'
 import { MIN_PASSWORD, validarNuevaPassword } from '../lib/password'
+import { LuTriangleAlert } from 'react-icons/lu'
 
 export default function CambiarPasswordDialog({ onClose }: { onClose: () => void }) {
   const { toast } = useToast()
@@ -42,7 +43,7 @@ export default function CambiarPasswordDialog({ onClose }: { onClose: () => void
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <form role="dialog" aria-modal="true" aria-labelledby="pw-title" noValidate onSubmit={(e) => void submit(e)} className="max-h-full w-full max-w-md space-y-3 overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
         <h2 id="pw-title" className="text-xl font-bold">Cambiar contraseña</h2>
-        <div aria-live="assertive">{error && <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-red-900"><span aria-hidden>⚠ </span>{error}</p>}</div>
+        <div aria-live="assertive">{error && <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-red-900"><LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />{error}</p>}</div>
         <div className="space-y-1">
           <label htmlFor="pw-actual" className="block font-semibold">Contraseña actual</label>
           <input ref={first} id="pw-actual" type={type} autoComplete="current-password" className={cls} value={actual} onChange={(e) => setActual(e.target.value)} />

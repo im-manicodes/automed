@@ -1,7 +1,8 @@
 # SOLO desarrollo (docker-compose.dev.yml). Producción usa apps/api/Dockerfile.
 # Contexto de build: raíz del monorepo. Incluye devDependencies; el código se monta por bind mount.
 FROM node:22-slim
-RUN corepack enable && apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# procps (ps): nest --watch lo necesita para matar el proceso anterior al recargar (sin él queda EADDRINUSE y se sirve código viejo).
+RUN corepack enable && apt-get update && apt-get install -y openssl procps && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY apps/api/package.json apps/api/

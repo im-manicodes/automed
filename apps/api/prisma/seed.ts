@@ -9,9 +9,9 @@ import { PrismaClient } from '../src/generated/prisma/client';
 import { PasswordService } from '../src/auth/password.service';
 import { createUser } from '../src/cli/user-admin';
 import {
-  DEFAULT_TEMPLATE_MARKDOWN,
-  DEFAULT_TEMPLATE_NAME,
-} from '../src/templates/default-template';
+  TEMPLATE_KINDS,
+  type TemplateKind,
+} from '../src/templates/template-kinds';
 
 export type SeedDb = Pick<
   PrismaClient,
@@ -33,25 +33,36 @@ export interface SeedReport {
   user: 'creado' | 'omitido' | 'no_configurado' | 'rechazado_produccion';
 }
 
-/** Crea la plantilla activa por defecto si no hay ninguna activa (misma versión inicial que TemplatesService). */
+/**
+ * Crea la plantilla activa por defecto de CADA tipo (resumen, whatsapp) si el tipo no tiene ninguna
+ * activa (misma versión inicial que TemplatesService, que numera por tipo). Idempotente.
+ */
 export async function ensureActiveTemplate(
   db: Pick<SeedDb, 'template'>,
-): Promise<{ created: boolean }> {
-  const active = await db.template.findFirst({ where: { isActive: true } });
-  if (active) return { created: false };
-  const last = await db.template.findFirst({
-    orderBy: { version: 'desc' },
-    select: { version: true },
-  });
-  await db.template.create({
-    data: {
-      name: DEFAULT_TEMPLATE_NAME,
-      markdown: DEFAULT_TEMPLATE_MARKDOWN,
-      version: (last?.version ?? 0) + 1,
-      isActive: true,
-    },
-  });
-  return { created: true };
+): Promise<{ created: boolean; createdKinds: TemplateKind[] }> {
+  const createdKinds: TemplateKind[] = [];
+  for (const def of Object.values(TEMPLATE_KINDS)) {
+    const active = await db.template.findFirst({
+      where: { kind: def.kind, isActive: true },
+    });
+    if (active) continue;
+    const last = await db.template.findFirst({
+      where: { kind: def.kind },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+    await db.template.create({
+      data: {
+        kind: def.kind,
+        name: def.defaultName,
+        markdown: def.defaultMarkdown,
+        version: (last?.version ?? 0) + 1,
+        isActive: true,
+      },
+    });
+    createdKinds.push(def.kind);
+  }
+  return { created: createdKinds.length > 0, createdKinds };
 }
 
 /** Seed base, idempotente: plantilla, ajustes y (opcional, solo desarrollo) usuario SEED_USER_*. */
@@ -72,8 +83,8 @@ export async function seedBase(
   report.template = tpl.created ? 'creada' : 'omitida';
   log(
     tpl.created
-      ? 'Plantilla: creada la plantilla activa por defecto.'
-      : 'Plantilla: ya hay una plantilla activa; se omite.',
+      ? `Plantillas: creadas las activas por defecto (${tpl.createdKinds.join(', ')}).`
+      : 'Plantillas: ya hay una plantilla activa de cada tipo; se omite.',
   );
 
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {

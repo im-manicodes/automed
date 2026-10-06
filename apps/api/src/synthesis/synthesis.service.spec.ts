@@ -215,6 +215,40 @@ describe('SynthesisService', () => {
     });
   });
 
+  it('reanalyzeMessageId: incremental con síntesis previa + solo ese correo y su OCR (no el hilo completo)', async () => {
+    const s = setup();
+    s.llm.text.mockResolvedValueOnce('## Resumen\nSÍNTESIS PREVIA');
+    s.addMessage('m3', 'Último correo con factura', 'h2');
+    s.addPage('h2', 'OCR ULTIMO factura 900');
+    await s.svc.generate('t1');
+    s.llm.text.mockResolvedValueOnce('## Resumen\nSÍNTESIS CORREGIDA');
+    const r = await s.svc.generate('t1', { reanalyzeMessageId: 'm3' });
+    expect(r).toMatchObject({
+      skipped: false,
+      version: 2,
+      mode: 'incremental',
+    });
+    const [system, user] = s.llm.text.mock.calls[1];
+    expect(system).toMatch(/ACTUALIZA/);
+    expect(user).toContain('SÍNTESIS PREVIA');
+    expect(user).toContain('Último correo con factura');
+    expect(user).toContain('OCR ULTIMO factura 900');
+    expect(user).not.toContain('ANTIGUO');
+    expect(user).not.toContain('ANTIGUA');
+    expect(s.syntheses[1]).toMatchObject({
+      mode: 'incremental',
+      baseSynthesisId: 's1',
+      coveredMessageIds: ['m1', 'm2', 'm3'],
+    });
+    expect(s.syntheses[1].inputTokensEstimados).toBeGreaterThan(0);
+  });
+
+  it('reanalyzeMessageId sin síntesis previa: modo completo', async () => {
+    const s = setup();
+    const r = await s.svc.generate('t1', { reanalyzeMessageId: 'm2' });
+    expect(r.mode).toBe('full');
+  });
+
   it('un adjunto nuevo idéntico a uno ya procesado no reenvía su contenido', async () => {
     const s = setup();
     await s.svc.generate('t1');

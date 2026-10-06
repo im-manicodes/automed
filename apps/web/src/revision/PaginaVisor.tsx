@@ -13,6 +13,7 @@ import {
 } from './lib/viewport';
 import type { Duda } from './lib/types';
 import type { EstadoDuda } from './lib/dudas';
+import { LuCheck, LuPlus, LuMinus } from 'react-icons/lu'
 
 interface Props {
   imagenUrl: string;
@@ -214,7 +215,7 @@ export default function PaginaVisor({ imagenUrl, proporcion, dudas, estados, pag
                     borderRadius: 4,
                   }}
                 >
-                  {hecho ? '✓' : ''}
+                  {hecho ? <LuCheck className="inline size-3.5 align-text-bottom" aria-hidden /> : null}
                   {indice + 1}
                 </span>
               </button>
@@ -224,10 +225,10 @@ export default function PaginaVisor({ imagenUrl, proporcion, dudas, estados, pag
       </div>
       <div className="flex gap-2" role="group" aria-label="Zoom de la página">
         <button type="button" className="btn btn-secondary flex-1" aria-label="Acercar" onClick={() => zoomBoton(1.5)}>
-          +
+          <LuPlus className="size-5" aria-hidden />
         </button>
         <button type="button" className="btn btn-secondary flex-1" aria-label="Alejar" onClick={() => zoomBoton(1 / 1.5)}>
-          −
+          <LuMinus className="size-5" aria-hidden />
         </button>
         <button
           type="button"

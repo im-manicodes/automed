@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useSession } from '../context/session-context'
 import { ApiError } from '../lib/api'
+import { LuClipboardList, LuTriangleAlert } from 'react-icons/lu'
 
 function loginErrorMessage(e: unknown): string {
   if (e instanceof ApiError) {
@@ -38,17 +39,17 @@ export default function Login({ error }: { error?: string }) {
 
   const shown = msg ?? error
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 p-6">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 p-6 md:my-0">
       <div className="space-y-2 text-center">
-        <p className="text-5xl" aria-hidden>📋</p>
+        <LuClipboardList className="mx-auto size-12 text-blue-800" aria-hidden />
         <h1 className="text-3xl font-bold">Auto-med</h1>
         <p className="text-slate-700">Entra con tu correo y tu contraseña.</p>
       </div>
-      <form onSubmit={(e) => void submit(e)} className="space-y-4" noValidate>
+      <form onSubmit={(e) => void submit(e)} className="space-y-4 md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-6 md:shadow-sm" noValidate>
         <div aria-live="assertive">
           {shown && (
             <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-red-900">
-              <span aria-hidden>⚠ </span>{shown}
+              <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />{shown}
             </p>
           )}
         </div>

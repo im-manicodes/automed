@@ -349,6 +349,7 @@ export function buildDemoDataset(now: Date = new Date()): DemoDataset {
     template: {
       id: d('plantilla-antigua'),
       name: '[DEMO] Plantilla antigua',
+      kind: 'resumen',
       version: 0,
       markdown:
         '# Asunto\n<!-- Plantilla antigua de demostración. -->\n\n## Resumen\n',

@@ -20,7 +20,11 @@ export const ATTACHMENT_PROCESSOR = Symbol('ATTACHMENT_PROCESSOR');
 export interface ThreadSynthesizer {
   synthesize(
     threadId: string,
-    opts?: { force?: boolean; correctedSha256?: string },
+    opts?: {
+      force?: boolean;
+      correctedSha256?: string;
+      reanalyzeMessageId?: string;
+    },
   ): Promise<void>;
 }
 export const THREAD_SYNTHESIZER = Symbol('THREAD_SYNTHESIZER');

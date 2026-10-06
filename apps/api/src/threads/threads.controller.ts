@@ -90,6 +90,13 @@ export class ThreadsController {
     return this.pipeline.reprocess(id);
   }
 
+  /** Re-analiza solo el último correo (OCR de sus adjuntos + síntesis incremental). */
+  @Post(':id/reanalyze-last')
+  @HttpCode(202)
+  reanalyzeLast(@Param('id') id: string) {
+    return this.pipeline.reanalyzeLast(id);
+  }
+
   /** Regenera la síntesis en modo COMPLETO (nueva versión, mayor consumo) sin reprocesar adjuntos/OCR. */
   @Post(':id/synthesis/regenerate')
   @HttpCode(202)

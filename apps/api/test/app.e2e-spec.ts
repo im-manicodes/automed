@@ -137,6 +137,24 @@ describe('API (e2e, sin BD)', () => {
       .expect(200);
   });
 
+  it('plantillas: ?kind= válido -> 200, inválido -> 400', async () => {
+    const cookie = accessCookie();
+    await request(app.getHttpServer())
+      .get('/api/templates/active?kind=whatsapp')
+      .set('Cookie', cookie)
+      .expect(200);
+    await request(app.getHttpServer())
+      .get('/api/templates/active?kind=otro')
+      .set('Cookie', cookie)
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/api/templates/reset?kind=otro')
+      .set('Cookie', cookie)
+      .set('Origin', 'http://localhost:8080')
+      .send({})
+      .expect(400);
+  });
+
   it('una cookie falsificada no pasa', async () => {
     await request(app.getHttpServer())
       .get('/api/templates/active')
