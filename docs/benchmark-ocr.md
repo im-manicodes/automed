@@ -4,7 +4,7 @@ Sirve para decidir (1) qué motor usar (`local` o `textract`) y (2) qué valor p
 
 ## Preparar
 1. Copia 10-30 PDFs representativos a una carpeta fuera del repo (p. ej. `~/pruebas-ocr/`): escaneados limpios, escaneados de baja calidad, con manuscrito, fotos de celular, y alguno digital. Si puedes, anota aparte cuáles tienen texto manuscrito.
-2. Para `local`: `docker compose --profile ocr up -d ocr-local` y comprueba `curl localhost:8000/health` (`engine` debe ser `paddle`; si es `tesseract` mira `fallback_reason`).
+2. Para `local`: `docker compose up -d ocr-local` (con `OCR_ENGINE=local` y `COMPOSE_PROFILES` en `.env`) y comprueba `curl localhost:8000/health` (`engine` debe ser `paddle`; si es `tesseract` mira `fallback_reason`).
 3. Para `textract`: credenciales AWS en el entorno/`.env` y `AWS_REGION` (ver `docs/despliegue.md`, sección 4).
 
 ## Ejecutar

@@ -67,3 +67,22 @@ export function enfocarBbox(
   const cy = (bbox.y + bbox.h / 2) * content.h * scale;
   return clampTransform({ scale, x: view.w / 2 - cx, y: view.h / 2 - cy }, content, view);
 }
+
+/** Factor de zoom para un evento de rueda (>1 acerca). Normaliza líneas/páginas a píxeles y suaviza trackpads. */
+export function factorRueda(deltaY: number, deltaMode = 0): number {
+  const px = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
+  const limitado = Math.max(-120, Math.min(120, px));
+  return Math.exp(-limitado * 0.0015);
+}
+
+/** Tamaño de un contenido de proporción w:h ajustado (contain) dentro del visor. */
+export function ajustarTamano(contenido: Size, view: Size): Size {
+  if (contenido.w <= 0 || contenido.h <= 0) return { w: 1, h: 1 };
+  const k = Math.min(view.w / contenido.w, view.h / contenido.h);
+  return { w: Math.max(1, contenido.w * k), h: Math.max(1, contenido.h * k) };
+}
+
+/** Alterna entre ajustar y acercar a `escala` en (px,py); útil con doble clic de ratón. */
+export function alternarZoom(t: Transform, px: number, py: number, content: Size, view: Size, escala = 3): Transform {
+  return t.scale > 1.05 ? ajustar(content, view) : zoomEn(t, escala, px, py, content, view);
+}

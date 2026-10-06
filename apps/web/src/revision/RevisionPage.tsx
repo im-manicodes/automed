@@ -17,7 +17,9 @@ import {
 import type { ApiPagesResponse } from './lib/types';
 import { obtenerPaginas } from './revisionApi';
 import { useGuardado } from './useGuardado';
+import { useEsEscritorio } from './useEsEscritorio';
 import { usePaginaImagen } from './usePaginaImagen';
+import VisorAmpliado from './VisorAmpliado';
 
 const borradores = crearBorradores(
   (() => {
@@ -85,6 +87,8 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
   const [terminado, setTerminado] = useState(false);
   const [modo, setModo] = useState<Modo>('recorte');
   const [paginaVista, setPaginaVista] = useState<number | null>(null);
+  const [ampliado, setAmpliado] = useState(false);
+  const escritorio = useEsEscritorio();
   const [guardados, setGuardados] = useState<Record<string, string>>({});
   const { estados, enviar, reintentarTodo, conError, guardando } = useGuardado();
   const titulo = useRef<HTMLHeadingElement>(null);
@@ -122,6 +126,20 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
     setFlujo(r.flujo);
     setTerminado(r.terminado);
   };
+
+  // Escritorio: Alt+Izquierda / Alt+Derecha = duda anterior / siguiente.
+  useEffect(() => {
+    if (!escritorio || ampliado || terminado) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const paso = e.key === 'ArrowLeft' ? -1 : 1;
+      setFlujo((f) => irA(f, dudas, f.indice + paso));
+    };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, [escritorio, ampliado, terminado, dudas]);
 
   const volverAlTicket = `/tickets/${ticketId}`;
 
@@ -172,33 +190,120 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
   const esUltima = dudas.filter((d) => flujo.estados[d.id] !== 'guardada').length <= 1 && flujo.estados[actual.id] !== 'guardada';
   const guardadoActual = estados[actual.id];
 
+  const encabezado = (
+    <header>
+      <div className="flex items-baseline justify-between gap-2">
+        <h1 ref={titulo} tabIndex={-1} className="text-2xl font-bold outline-none" aria-live="polite">
+          Duda {flujo.indice + 1} de {dudas.length}
+        </h1>
+        <span className="text-base text-slate-700" role="status">
+          {guardadoActual === 'guardando' && 'Guardando…'}
+          {guardadoActual === 'guardado' && '✓ Guardado'}
+          {guardadoActual === 'error' && 'No se guardó'}
+        </span>
+      </div>
+      <div
+        className="mt-2 h-3 overflow-hidden rounded-full bg-slate-200"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={dudas.length}
+        aria-valuenow={hechas}
+        aria-label={`${hechas} de ${dudas.length} dudas resueltas`}
+      >
+        <div className="h-full bg-blue-700 transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-1 text-base text-slate-700">
+        Documento: {datos.filename} · Página {actual.pageNumber}
+      </p>
+    </header>
+  );
+
+  const formulario = (
+    <FormularioDuda
+      key={actual.id}
+      textoInicial={textoInicial(borradores.leer(actual.id), guardados[actual.id] ?? actual.textoGuardado, actual.sugerencia)}
+      sugerencia={actual.sugerencia}
+      esUltima={esUltima}
+      puedeVolver={flujo.indice > 0}
+      onCambio={(t) => borradores.guardar(actual.id, t)}
+      onGuardar={alGuardar}
+      onOmitir={alOmitir}
+      onAnterior={() => setFlujo((f) => anterior(f, dudas))}
+      atajos={escritorio && !ampliado}
+    />
+  );
+
+  const recorte = img ? (
+    <RecorteCanvas
+      img={img}
+      bbox={actual.bbox}
+      numero={flujo.indice + 1}
+      altoMax={escritorio ? Math.max(260, Math.min(560, window.innerHeight * 0.45)) : undefined}
+      onAbrir={escritorio ? () => setAmpliado(true) : undefined}
+    />
+  ) : errorImg ? (
+    <div className="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-400" role="alert">
+      <p>No se pudo cargar la imagen.</p>
+      <button type="button" className="btn btn-secondary mt-2" onClick={reintentar}>
+        Intentar otra vez
+      </button>
+    </div>
+  ) : (
+    <p role="status" className="py-10 text-center text-slate-600">
+      Cargando imagen…
+    </p>
+  );
+
+  const visorAmpliado = ampliado && img && (
+    <VisorAmpliado img={img} bbox={actual.bbox} numero={flujo.indice + 1} onCerrar={() => setAmpliado(false)} />
+  );
+
+  if (escritorio) {
+    const paginaDuda = datos.pages.find((p) => p.pageNumber === actual.pageNumber) ?? pagina;
+    return (
+      <div className="flex flex-col gap-3 pb-4">
+        {encabezado}
+        {conError > 0 && <ErrorGuardado cantidad={conError} onReintentar={reintentarTodo} />}
+        <div className="grid grid-cols-[minmax(0,1.25fr)_minmax(24rem,1fr)] items-start gap-6">
+          <div className="space-y-2">
+            {paginaDuda && (
+              <PaginaVisor
+                imagenUrl={`/api/attachments/${encodeURIComponent(attachmentId)}/pages/${paginaDuda.pageNumber}/image`}
+                proporcion={paginaDuda.height / paginaDuda.width}
+                dudas={dudas}
+                estados={flujo.estados}
+                pageNumber={paginaDuda.pageNumber}
+                actualId={actual.id}
+                onElegir={(i) => setFlujo((f) => irA(f, dudas, i))}
+                claseAlto="h-[calc(100dvh-13rem)] min-h-96"
+                escalaFoco={1.6}
+              />
+            )}
+            <p className="text-sm text-slate-600">
+              Haz clic en un recuadro para ir a esa duda. Rueda del ratón para acercar, arrastra para mover.
+            </p>
+          </div>
+          <aside className="sticky top-16 space-y-3" aria-label="Duda actual">
+            {recorte}
+            {img && <p className="text-sm text-slate-600">Haz clic en el recorte para verlo más grande.</p>}
+            {formulario}
+            <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700" aria-label="Atajos de teclado">
+              <p className="font-semibold">Atajos</p>
+              <ul className="mt-1 space-y-0.5">
+                <li><kbd className="font-mono">Enter</kbd> guardar y pasar a la siguiente (<kbd className="font-mono">Mayús + Enter</kbd> nueva línea)</li>
+                <li><kbd className="font-mono">Alt + ←</kbd> / <kbd className="font-mono">Alt + →</kbd> duda anterior / siguiente</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+        {visorAmpliado}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col gap-3 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <header>
-        <div className="flex items-baseline justify-between gap-2">
-          <h1 ref={titulo} tabIndex={-1} className="text-2xl font-bold outline-none" aria-live="polite">
-            Duda {flujo.indice + 1} de {dudas.length}
-          </h1>
-          <span className="text-base text-slate-700" role="status">
-            {guardadoActual === 'guardando' && 'Guardando…'}
-            {guardadoActual === 'guardado' && '✓ Guardado'}
-            {guardadoActual === 'error' && 'No se guardó'}
-          </span>
-        </div>
-        <div
-          className="mt-2 h-3 overflow-hidden rounded-full bg-slate-200"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={dudas.length}
-          aria-valuenow={hechas}
-          aria-label={`${hechas} de ${dudas.length} dudas resueltas`}
-        >
-          <div className="h-full bg-blue-700 transition-all" style={{ width: `${pct}%` }} />
-        </div>
-        <p className="mt-1 text-base text-slate-700">
-          Documento: {datos.filename} · Página {actual.pageNumber}
-        </p>
-      </header>
+      {encabezado}
 
       {conError > 0 && <ErrorGuardado cantidad={conError} onReintentar={reintentarTodo} />}
 
@@ -218,20 +323,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
       </div>
 
       {modo === 'recorte' ? (
-        img ? (
-          <RecorteCanvas img={img} bbox={actual.bbox} numero={flujo.indice + 1} />
-        ) : errorImg ? (
-          <div className="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-400" role="alert">
-            <p>No se pudo cargar la imagen.</p>
-            <button type="button" className="btn btn-secondary mt-2" onClick={reintentar}>
-              Intentar otra vez
-            </button>
-          </div>
-        ) : (
-          <p role="status" className="py-10 text-center text-slate-600">
-            Cargando imagen…
-          </p>
-        )
+        recorte
       ) : (
         pagina && (
           <div className="space-y-2">
@@ -274,17 +366,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
         )
       )}
 
-      <FormularioDuda
-        key={actual.id}
-        textoInicial={textoInicial(borradores.leer(actual.id), guardados[actual.id] ?? actual.textoGuardado, actual.sugerencia)}
-        sugerencia={actual.sugerencia}
-        esUltima={esUltima}
-        puedeVolver={flujo.indice > 0}
-        onCambio={(t) => borradores.guardar(actual.id, t)}
-        onGuardar={alGuardar}
-        onOmitir={alOmitir}
-        onAnterior={() => setFlujo((f) => anterior(f, dudas))}
-      />
+      {formulario}
     </div>
   );
 }

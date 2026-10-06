@@ -1,0 +1,11 @@
+# SOLO desarrollo (docker-compose.dev.yml). Producción usa apps/web/Dockerfile (nginx).
+# Contexto de build: raíz del monorepo. El código se monta por bind mount.
+FROM node:22-slim
+RUN corepack enable
+WORKDIR /repo
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile --filter web...
+WORKDIR /repo/apps/web
+EXPOSE 5173
+CMD ["pnpm", "exec", "vite", "--host", "0.0.0.0", "--port", "5173"]

@@ -11,6 +11,8 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       port: 5173,
+      // Docker en dev (docker-compose.dev.yml): CHOKIDAR_USEPOLLING=true solo si inotify no detecta cambios.
+      watch: ['true', '1'].includes(env.CHOKIDAR_USEPOLLING ?? '') ? { usePolling: true } : undefined,
       proxy: { '/api': env.VITE_API_URL ?? 'http://localhost:3000' },
     },
   }

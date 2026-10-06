@@ -41,3 +41,29 @@ describe('viewport', () => {
     expect(cx).toBeCloseTo(view.w / 2);
   });
 });
+
+import { ajustarTamano, alternarZoom, factorRueda } from './viewport';
+
+describe('viewport (escritorio)', () => {
+  it('factorRueda acerca con deltaY negativo y aleja con positivo', () => {
+    expect(factorRueda(-100)).toBeGreaterThan(1);
+    expect(factorRueda(100)).toBeLessThan(1);
+    expect(factorRueda(0)).toBe(1);
+    expect(factorRueda(-100)).toBeCloseTo(1 / factorRueda(100));
+  });
+  it('factorRueda limita saltos enormes y normaliza líneas', () => {
+    expect(factorRueda(-100000)).toBeCloseTo(factorRueda(-120));
+    expect(factorRueda(-3, 1)).toBeGreaterThan(factorRueda(-3, 0));
+  });
+  it('ajustarTamano conserva la proporción', () => {
+    expect(ajustarTamano({ w: 200, h: 100 }, { w: 400, h: 400 })).toEqual({ w: 400, h: 200 });
+    expect(ajustarTamano({ w: 100, h: 200 }, { w: 400, h: 400 })).toEqual({ w: 200, h: 400 });
+  });
+  it('alternarZoom acerca y luego vuelve a ajustar', () => {
+    const c = { w: 400, h: 300 };
+    const v = { w: 400, h: 300 };
+    const t1 = alternarZoom(ajustar(c, v), 100, 100, c, v);
+    expect(t1.scale).toBe(3);
+    expect(alternarZoom(t1, 100, 100, c, v)).toEqual({ scale: 1, x: 0, y: 0 });
+  });
+});

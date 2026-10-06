@@ -1,4 +1,4 @@
-export type LlmProviderName = 'anthropic' | 'openai' | 'bedrock';
+export type LlmProviderName = 'anthropic' | 'openai' | 'bedrock' | 'ollama';
 
 export interface LlmConfig {
   provider: LlmProviderName;
@@ -6,6 +6,7 @@ export interface LlmConfig {
   modelVision: string;
   anthropicApiKey?: string;
   openaiApiKey?: string;
+  ollamaBaseUrl: string;
   awsRegion: string;
   timeoutMs: number;
   maxRetries: number;
@@ -19,6 +20,8 @@ const DEFAULT_MODELS: Record<LlmProviderName, string> = {
   // ID/perfil de inferencia de Bedrock: verificar en la consola de la región y sobreescribir.
   bedrock: 'anthropic.claude-sonnet-5-5',
   openai: 'gpt-5',
+  // Solo desarrollo/pruebas: modelo local con visión (~3 GB).
+  ollama: 'qwen2.5vl:3b',
 };
 
 const num = (v: string | undefined, d: number) => {
@@ -31,9 +34,14 @@ export function readLlmConfig(config: {
 }): LlmConfig {
   const get = (k: string): string | undefined => config.get<string>(k);
   const raw = (get('LLM_PROVIDER') ?? 'anthropic').trim().toLowerCase();
-  if (raw !== 'anthropic' && raw !== 'openai' && raw !== 'bedrock') {
+  if (
+    raw !== 'anthropic' &&
+    raw !== 'openai' &&
+    raw !== 'bedrock' &&
+    raw !== 'ollama'
+  ) {
     throw new Error(
-      `LLM_PROVIDER inválido: "${raw}" (anthropic | openai | bedrock)`,
+      `LLM_PROVIDER inválido: "${raw}" (anthropic | openai | bedrock | ollama)`,
     );
   }
   const provider: LlmProviderName = raw;
@@ -44,6 +52,7 @@ export function readLlmConfig(config: {
     modelVision: get('LLM_MODEL_VISION') || modelText,
     anthropicApiKey: get('ANTHROPIC_API_KEY') || undefined,
     openaiApiKey: get('OPENAI_API_KEY') || undefined,
+    ollamaBaseUrl: get('OLLAMA_BASE_URL') || 'http://localhost:11434/v1',
     awsRegion: get('AWS_REGION') || 'us-east-1',
     timeoutMs: num(get('LLM_TIMEOUT_MS'), 120000),
     maxRetries: num(get('LLM_MAX_RETRIES'), 3),

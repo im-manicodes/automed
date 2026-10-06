@@ -26,6 +26,8 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       WEB_ORIGIN: http://localhost:8080
       OCR_LOCAL_URL: http://ocr-local:8000
+      # Con LLM_PROVIDER=ollama, dentro de Docker el servicio se llama `ollama` (no localhost).
+      OLLAMA_BASE_URL: http://ollama:11434/v1
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -51,10 +53,11 @@ services:
     ports:
       - "8080:80"
 
-  # OCR local en CPU, solo desarrollo: arranca con `docker compose --profile ocr up`
-  # (con OCR_ENGINE=local; en producción se usa OCR_ENGINE=textract y este servicio no corre).
+  # OCR local en CPU, solo desarrollo. Se activa solo con OCR_ENGINE=local: el .env raíz define
+  # COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER} y este servicio pertenece al perfil `local`.
+  # Con OCR_ENGINE=textract no corre. `api` no depende de él (así textract no lo necesita).
   ocr-local:
-    profiles: ["ocr"]
+    profiles: ["local"]
     build: ./services/ocr-local
     environment:
       OCR_LOCAL_ENGINE: ${OCR_LOCAL_ENGINE:-paddle}
@@ -64,6 +67,51 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
+  # LLM local con GPU NVIDIA, SOLO desarrollo/pruebas (producción: bedrock). Perfil `ollama`,
+  # activo con LLM_PROVIDER=ollama (vía COMPOSE_PROFILES). El contenido no sale de la máquina.
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    environment:
+      # El contexto por defecto de Ollama (4096) truncaría las síntesis; SYNTH_MAX_INPUT_TOKENS debe ser menor.
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
+    volumes:
+      - ollamamodels:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+
+  # One-shot: descarga el/los modelos cuando ollama está sano y termina.
+  ollama-pull:
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      LLM_MODEL_TEXT: ${LLM_MODEL_TEXT:-qwen2.5vl:3b}
+      LLM_MODEL_VISION: ${LLM_MODEL_VISION:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama pull "$$LLM_MODEL_TEXT"
+        if [ -n "$$LLM_MODEL_VISION" ] && [ "$$LLM_MODEL_VISION" != "$$LLM_MODEL_TEXT" ]; then ollama pull "$$LLM_MODEL_VISION"; fi
+    restart: "no"
+
 volumes:
   rustfsdata:
   ocrmodels:
+  ollamamodels:

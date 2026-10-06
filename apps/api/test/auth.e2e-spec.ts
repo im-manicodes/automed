@@ -354,6 +354,25 @@ describe('Auth + conexión Outlook (e2e, sin BD ni red)', () => {
       );
     });
 
+    it.each([['common'], ['']])(
+      'con MS_TENANT_ID=%j la autorización apunta a /common',
+      async (tenant) => {
+        const prev = env.MS_TENANT_ID;
+        env.MS_TENANT_ID = tenant;
+        try {
+          const s = await newSession();
+          const res = await http()
+            .post('/api/mail/connect')
+            .set('Cookie', header(s.cookies))
+            .expect(200);
+          const u = new URL(res.body.url);
+          expect(u.pathname).toBe('/common/oauth2/v2.0/authorize');
+        } finally {
+          env.MS_TENANT_ID = prev;
+        }
+      },
+    );
+
     it('callback ok: guarda token cifrado ligado al usuario y redirige a Ajustes', async () => {
       const s = await newSession();
       const c = header(s.cookies);

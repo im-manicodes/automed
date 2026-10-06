@@ -1,5 +1,6 @@
 import { AnthropicLlmProvider } from './anthropic-llm.provider';
 import { BedrockLlmProvider } from './bedrock-llm.provider';
+import { OllamaLlmProvider } from './ollama-llm.provider';
 import { OpenAiLlmProvider } from './openai-llm.provider';
 import { createLlmProvider } from './llm-provider.factory';
 import { modelAcceptsTemperature, readLlmConfig } from './llm-config';
@@ -10,6 +11,7 @@ const cfg = (over: Partial<LlmConfig> = {}): LlmConfig => ({
   provider: 'anthropic',
   modelText: 'claude-sonnet-5-5',
   modelVision: 'claude-vision-x',
+  ollamaBaseUrl: 'http://localhost:11434/v1',
   awsRegion: 'us-east-1',
   timeoutMs: 1000,
   maxRetries: 2,
@@ -52,6 +54,7 @@ describe('readLlmConfig / selección de adaptador', () => {
     ['anthropic', AnthropicLlmProvider],
     ['bedrock', BedrockLlmProvider],
     ['openai', OpenAiLlmProvider],
+    ['ollama', OllamaLlmProvider],
   ] as const)('LLM_PROVIDER=%s crea el adaptador correcto', (name, cls) => {
     const p = createLlmProvider(
       readLlmConfig(
@@ -222,5 +225,50 @@ describe('OpenAiLlmProvider (SDK mockeado)', () => {
     expect(body.messages[1].content[0].image_url.url).toBe(
       'data:image/png;base64,AQID',
     );
+  });
+});
+
+describe('Ollama (config y adaptador)', () => {
+  it('readLlmConfig: modelo y URL por defecto, sin API key', () => {
+    const c = readLlmConfig(envOf({ LLM_PROVIDER: 'ollama' }));
+    expect(c.provider).toBe('ollama');
+    expect(c.modelText).toBe('qwen2.5vl:3b');
+    expect(c.modelVision).toBe('qwen2.5vl:3b');
+    expect(c.ollamaBaseUrl).toBe('http://localhost:11434/v1');
+    const o = readLlmConfig(
+      envOf({
+        LLM_PROVIDER: 'ollama',
+        OLLAMA_BASE_URL: 'http://ollama:11434/v1',
+        LLM_MODEL_TEXT: 'x',
+      }),
+    );
+    expect([o.ollamaBaseUrl, o.modelText]).toEqual([
+      'http://ollama:11434/v1',
+      'x',
+    ]);
+  });
+
+  it('usa max_tokens, envía temperature e imagen como data URL', async () => {
+    const create = jest
+      .fn()
+      .mockResolvedValue({ choices: [{ message: { content: ' hola ' } }] });
+    const p = new OllamaLlmProvider(
+      cfg({ provider: 'ollama', modelText: 'qwen2.5vl:3b', modelVision: 'v' }),
+      { chat: { completions: { create } } } as never,
+      noSleep,
+    );
+    expect(await p.vision(img, 'lee', { system: 'S', maxTokens: 50 })).toBe(
+      'hola',
+    );
+    const body = create.mock.calls[0][0];
+    expect(body.model).toBe('v');
+    expect(body.max_tokens).toBe(50);
+    expect(body.max_completion_tokens).toBeUndefined();
+    expect(body.temperature).toBe(0.2);
+    expect(body.messages[0]).toEqual({ role: 'system', content: 'S' });
+    expect(body.messages[1].content[0]).toEqual({
+      type: 'image_url',
+      image_url: { url: 'data:image/png;base64,AQID' },
+    });
   });
 });

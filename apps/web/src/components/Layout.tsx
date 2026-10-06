@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useSession } from '../context/session-context'
 import CambiarPasswordDialog from './CambiarPasswordDialog'
 
@@ -32,18 +32,23 @@ function UserMenu() {
   )
 }
 
+/** La revisión de dudas aprovecha todo el ancho en escritorio (lg); el resto de páginas se queda en max-w-3xl. */
+const RUTA_REVISION = /^\/tickets\/[^/]+\/revision\/[^/]+/
+
 export default function Layout() {
+  const { pathname } = useLocation()
+  const ancho = RUTA_REVISION.test(pathname) ? 'max-w-3xl lg:max-w-7xl' : 'max-w-3xl'
   return (
-    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col">
+    <div className={`mx-auto flex min-h-dvh ${ancho} flex-col`}>
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2">
-        <h1 className="text-xl font-bold">Auto-med</h1>
+        <h1 className="text-xl font-bold">Automed</h1>
         <UserMenu />
       </header>
       <main className="flex-1 p-4 pb-28">
         <Outlet />
       </main>
       <nav aria-label="Principal" className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white">
-        <ul className="mx-auto flex max-w-3xl">
+        <ul className={`mx-auto flex ${ancho}`}>
           {items.map((i) => (
             <li key={i.to} className="flex-1">
               <NavLink

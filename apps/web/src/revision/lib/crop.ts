@@ -57,3 +57,17 @@ export function tamanoSalida(
     height: Math.max(1, Math.round(rect.sh * escala * dpr)),
   };
 }
+
+/**
+ * Posición (en % del contenedor del recorte) de la imagen completa para que, dentro de un
+ * contenedor con overflow oculto y la proporción del recorte, solo se vea `rect`.
+ * Así el navegador pinta la imagen a su resolución natural al hacer zoom con CSS.
+ */
+export function estiloImagenEnRecorte(rect: PixelRect, imgW: number, imgH: number) {
+  return {
+    left: -(rect.sx / rect.sw) * 100,
+    top: -(rect.sy / rect.sh) * 100,
+    width: (imgW / rect.sw) * 100,
+    height: (imgH / rect.sh) * 100,
+  };
+}

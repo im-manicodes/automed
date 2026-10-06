@@ -37,3 +37,12 @@ describe('tamanoSalida', () => {
     expect(tamanoSalida({ sx: 0, sy: 0, sw: 100, sh: 400 }, 400, 200)).toEqual({ width: 50, height: 200 });
   });
 });
+
+import { estiloImagenEnRecorte } from './crop';
+
+describe('estiloImagenEnRecorte', () => {
+  it('coloca la imagen completa para mostrar solo el recorte', () => {
+    const e = estiloImagenEnRecorte({ sx: 100, sy: 50, sw: 200, sh: 100 }, 1000, 800);
+    expect(e).toEqual({ left: -50, top: -50, width: 500, height: 800 });
+  });
+});

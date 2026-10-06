@@ -1,3 +1,4 @@
+import { useRuedaZoom } from './useRuedaZoom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ajustar,
@@ -23,6 +24,10 @@ interface Props {
   pageNumber: number;
   actualId: string | undefined;
   onElegir: (indice: number) => void;
+  /** Clases de alto del visor (por defecto el de móvil). */
+  claseAlto?: string;
+  /** Escala al enfocar la duda actual. */
+  escalaFoco?: number;
 }
 
 interface Tap {
@@ -32,7 +37,7 @@ interface Tap {
 }
 
 /** Página completa con recuadros, pinch-zoom, arrastre, doble toque y botones +/-/ajustar (sin dependencias). */
-export default function PaginaVisor({ imagenUrl, proporcion, dudas, estados, pageNumber, actualId, onElegir }: Props) {
+export default function PaginaVisor({ imagenUrl, proporcion, dudas, estados, pageNumber, actualId, onElegir, claseAlto = 'h-[55vh] min-h-72', escalaFoco = 2 }: Props) {
   const caja = useRef<HTMLDivElement>(null);
   const [vista, setVista] = useState({ w: 360, h: 480 });
   const [t, setT] = useState<Transform>({ scale: 1, x: 0, y: 0 });
@@ -67,7 +72,7 @@ export default function PaginaVisor({ imagenUrl, proporcion, dudas, estados, pag
   const actual = dudas.find((d) => d.id === actualId);
   useEffect(() => {
     if (actual && actual.pageNumber === pageNumber) {
-      setT(enfocarBbox(actual.bbox, contenido, vista, 2));
+      setT(enfocarBbox(actual.bbox, contenido, vista, escalaFoco));
     } else {
       setT(ajustar(contenido, vista));
     }
@@ -104,6 +109,10 @@ export default function PaginaVisor({ imagenUrl, proporcion, dudas, estados, pag
       return;
     }
     if (inicio.current && distancia(inicio.current, actualPos) > 8) movido.current = true;
+    if (movido.current && punteros.current.size === 1 && e.pointerType === 'mouse') {
+      // Con ratón, sigue el arrastre aunque el puntero salga del visor (no se captura antes para no romper el clic en recuadros).
+      caja.current?.setPointerCapture?.(e.pointerId);
+    }
     if (movido.current) {
       setT((prev) => desplazar(prev, actualPos.x - previo.x, actualPos.y - previo.y, contenido, vista));
     }
@@ -132,21 +141,21 @@ export default function PaginaVisor({ imagenUrl, proporcion, dudas, estados, pag
     [vista.w, vista.h, proporcion],
   );
 
+  useRuedaZoom(caja, (factor, x, y) =>
+    setT((prev) => zoomEn(prev, prev.scale * factor, x, y, contenido, vista)),
+  );
+
   const grosor = (sel: boolean) => (sel ? 5 : 2.5) / t.scale;
 
   return (
     <div className="space-y-2">
       <div
         ref={caja}
-        className="relative h-[55vh] min-h-72 touch-none select-none overflow-hidden rounded-xl bg-slate-200 ring-1 ring-slate-300"
+        className={`relative ${claseAlto} touch-none select-none overflow-hidden rounded-xl bg-slate-200 ring-1 ring-slate-300`}
         onPointerDown={alBajar}
         onPointerMove={alMover}
         onPointerUp={alSoltar}
         onPointerCancel={alSoltar}
-        onWheel={(e) => {
-          const r = caja.current!.getBoundingClientRect();
-          setT((prev) => zoomEn(prev, prev.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX - r.left, e.clientY - r.top, contenido, vista));
-        }}
       >
         <div
           style={{

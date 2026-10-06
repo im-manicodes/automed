@@ -11,6 +11,7 @@ apps/web   Vite + React + Tailwind (mobile-first, español)
 docs/      estado-del-proyecto.md, despliegue.md, benchmark-ocr.md, entra-id-registro.md
 services/ocr-local  OCR local (PaddleOCR/Tesseract, perfil `ocr`, solo pruebas)
 docker-compose.yml  rustfs, api, web (Postgres externo vía DATABASE_URL_DOCKER en .env)
+docker-compose.dev.yml  hot reload en Docker (solo desarrollo, se activa con COMPOSE_FILE en .env)
 ```
 
 ## Arranque rápido (desarrollo)
@@ -25,8 +26,16 @@ pnpm dev                                  # api :3000, web :5173
 ## Todo con Docker
 ```bash
 docker compose up -d --build   # web http://localhost:8080; api healthy en /api/health
-docker compose --profile ocr up -d ocr-local   # opcional: OCR local
+# Con OCR_ENGINE=local en .env levanta también ocr-local; con LLM_PROVIDER=ollama, ollama + ollama-pull (GPU).
+# Requiere COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER} en .env (ver .env.example).
 ```
+### Desarrollo con Docker y hot reload
+Añade a tu `.env` local (gitignored) esta línea (en `.env.example` está comentada; no la pongas en producción):
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
+```
+Después `docker compose up` (sin `--build` en cada cambio) usa `docker-compose.dev.yml`: la api corre `nest start --watch` con `src/` y `prisma/` montados, y la web corre el servidor de Vite. En dev entra por **http://localhost:5173** (no :8080); la api sigue en :3000 y `WEB_ORIGIN` se fija a `http://localhost:5173`. Reconstruye con `docker compose up --build` solo si cambian dependencias (`package.json`/lockfile). Si el hot reload no detecta cambios, añade `CHOKIDAR_USEPOLLING=true` al `.env`. El cliente Prisma se regenera en cada arranque de la api. Para volver al modo producción local, comenta la línea `COMPOSE_FILE` o usa `docker compose -f docker-compose.yml up -d --build`.
+
 Guía completa (variables, Entra ID, Textract/Bedrock, backups, problemas): `docs/despliegue.md`. Medir el OCR con tus PDFs: `docs/benchmark-ocr.md`.
 
 ## Comandos
@@ -34,6 +43,26 @@ Guía completa (variables, Entra ID, Textract/Bedrock, backups, problemas): `doc
 
 ## Configuración
 Ver `.env.example` (raíz) (BD, S3/RustFS, `JWT_SECRET`, Microsoft Graph, `OCR_ENGINE`, `LLM_PROVIDER`). `JWT_SECRET` es obligatorio (`openssl rand -base64 48`).
+
+## Variables de Microsoft (Entra ID)
+Acepta cuentas de trabajo de cualquier inquilino y cuentas personales de Microsoft. En <https://entra.microsoft.com>:
+
+1. **Identidad -> Aplicaciones -> Registros de aplicaciones -> Nuevo registro**. Nombre `auto-med`; tipos de cuenta: **Cuentas en cualquier directorio organizativo (multiinquilino) y cuentas personales de Microsoft**; URI de redirección: plataforma **Web**, `http://localhost:3000/api/auth/callback`.
+2. `MS_CLIENT_ID`: en **Información general**, *Id. de aplicación (cliente)*.
+3. `MS_TENANT_ID=common` (no uses el GUID del directorio: limitaría el acceso a ese inquilino).
+4. `MS_CLIENT_SECRET`: **Certificados y secretos -> Nuevo secreto de cliente**; copia la columna **Valor** (solo se muestra una vez).
+5. **Permisos de API -> Microsoft Graph -> Permisos delegados**: `Mail.Read`, `offline_access`, `User.Read`. No requieren consentimiento de administrador.
+6. Comprueba en **Manifiesto** que `signInAudience` sea `AzureADandPersonalMicrosoftAccount`.
+7. `.env` (raíz):
+```
+MS_TENANT_ID=common
+MS_CLIENT_ID=<id de aplicación>
+MS_CLIENT_SECRET=<valor del secreto>
+MS_REDIRECT_URI=http://localhost:3000/api/auth/callback   # idéntica a la registrada (plataforma Web)
+TOKEN_ENC_KEY=<openssl rand -base64 32>
+JWT_SECRET=<openssl rand -base64 48>
+```
+Luego: `pnpm --filter api prisma:migrate`, crear usuario (abajo), `pnpm dev`, iniciar sesión y **Ajustes -> Conectar Outlook**. Detalle: `docs/entra-id-registro.md`.
 
 ## Primer usuario y conexión con Outlook
 La app tiene su propio login (correo + contraseña); Outlook se conecta después desde **Ajustes -> Conectar Outlook**.

@@ -6,14 +6,14 @@ Necesitas una app registrada para que auto-med lea tu buzón con Microsoft Graph
 1. Entra a <https://entra.microsoft.com> con tu cuenta de la organización.
 2. **Identidad > Aplicaciones > Registros de aplicaciones > Nuevo registro**.
 3. Nombre: `auto-med`.
-4. Tipos de cuenta compatibles: **Solo cuentas de este directorio organizativo (inquilino único)**.
+4. Tipos de cuenta compatibles: **Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft** (así se puede conectar un correo de trabajo de cualquier inquilino o un @outlook.com/@hotmail.com).
 5. URI de redirección: plataforma **Web**, valor `http://localhost:3000/api/auth/callback` (en producción usa tu URL HTTPS, p. ej. `https://auto-med.midominio.com/api/auth/callback`). Debe coincidir exactamente con `MS_REDIRECT_URI`.
 6. **Registrar**.
 
 ## 2. Copiar los identificadores
 En la página **Información general** copia:
 - *Id. de aplicación (cliente)* -> `MS_CLIENT_ID`
-- *Id. de directorio (inquilino)* -> `MS_TENANT_ID`
+- *Id. de directorio (inquilino)*: **no se usa**; deja `MS_TENANT_ID=common`. Un GUID limitaría el acceso a ese único inquilino y rompería las cuentas personales.
 
 ## 3. Crear el secreto de cliente
 **Certificados y secretos > Nuevo secreto de cliente**, elige caducidad (máx. 24 meses) y copia el **Valor** (solo se muestra una vez) -> `MS_CLIENT_SECRET`. Anota la fecha de caducidad para renovarlo.
@@ -26,10 +26,12 @@ En la página **Información general** copia:
 
 Si tu tenant lo permite, pulsa **Conceder consentimiento de administrador**; si no, el consentimiento se te pedirá a ti la primera vez que inicies sesión (`Mail.Read` delegado normalmente no requiere admin).
 
+Nota: con cuentas personales el secreto y la URI de redirección se configuran igual. El consentimiento es por cuenta: cada cuenta que se conecte acepta los permisos la primera vez (en organizaciones que exijan aprobación de administrador, lo concede ese inquilino).
+
 ## 5. Configurar la API
 En `.env` (raíz) (nunca lo subas a git):
 ```
-MS_TENANT_ID=<id de directorio>
+MS_TENANT_ID=common
 MS_CLIENT_ID=<id de aplicación>
 MS_CLIENT_SECRET=<valor del secreto>
 MS_REDIRECT_URI=http://localhost:3000/api/auth/callback

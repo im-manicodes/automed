@@ -10,6 +10,8 @@ interface Props {
   onGuardar: (texto: string) => void;
   onOmitir: () => void;
   onAnterior: () => void;
+  /** Atajos de teclado de escritorio (Enter guarda y pasa a la siguiente). */
+  atajos?: boolean;
 }
 
 /** Campo grande + botones de la duda actual. Se remonta (key) en cada duda. */
@@ -22,6 +24,7 @@ export default function FormularioDuda({
   onGuardar,
   onOmitir,
   onAnterior,
+  atajos = false,
 }: Props) {
   const [texto, setTexto] = useState(textoInicial);
   const campo = useRef<HTMLTextAreaElement>(null);
@@ -41,6 +44,32 @@ export default function FormularioDuda({
     vv.addEventListener('resize', alCambiar);
     return () => vv.removeEventListener('resize', alCambiar);
   }, []);
+
+  // Enter (sin Shift) o Ctrl+Enter guardan; con foco en un botón/enlace Enter conserva su función normal.
+  const textoRef = useRef(texto);
+  const guardarRef = useRef(onGuardar);
+  useEffect(() => {
+    textoRef.current = texto;
+    guardarRef.current = onGuardar;
+  });
+  useEffect(() => {
+    if (!atajos) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing || e.altKey || e.metaKey) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      const enTexto = tag === 'TEXTAREA' || (tag === 'INPUT' && (el as HTMLInputElement).type === 'text');
+      if (!e.ctrlKey && (tag === 'BUTTON' || tag === 'A' || tag === 'SELECT' || (tag === 'INPUT' && !enTexto))) return;
+      if (e.shiftKey && !e.ctrlKey) return; // Shift+Enter = salto de línea
+      if (el?.closest('[role="dialog"]')) return;
+      const t = textoEnviable(textoRef.current);
+      if (!t) return;
+      e.preventDefault();
+      guardarRef.current(t);
+    };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, [atajos]);
 
   return (
     <form

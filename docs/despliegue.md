@@ -43,6 +43,8 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `VITE_API_URL` | Solo desarrollo del front (`pnpm dev`). |
 
 ## 3. Levantar con Docker Compose
+> Producción usa **solo** `docker-compose.yml` (imágenes de build; web en nginx :8080). `docker-compose.dev.yml` (hot reload, web en Vite :5173) es solo para desarrollo y únicamente se carga si defines `COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml` en el `.env`; **no pongas esa variable en el `.env` del servidor** (si existe, usa `docker compose -f docker-compose.yml ...` explícito).
+
 ```bash
 docker compose up -d --build
 docker compose ps          # api debe quedar "healthy"
@@ -60,9 +62,21 @@ La api (en contenedor) debe poder llegar a Postgres en el host:
 - Si Postgres corre en otro contenedor con el puerto publicado, `host.docker.internal:5432` también funciona.
 - Si el firewall del host bloquea el bridge, permite el puerto 5432 desde la red de Docker.
 
+### Perfiles automáticos (OCR local y Ollama)
+`docker compose up` (sin flags) decide qué servicios opcionales levantar por `COMPOSE_PROFILES`, definido en `.env` con interpolación (debe ir después de `OCR_ENGINE` y `LLM_PROVIDER`):
+```
+COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER}
+```
+- `OCR_ENGINE=local` -> perfil `local` -> `ocr-local`; `textract` no levanta nada. `api` no depende de `ocr-local`.
+- `LLM_PROVIDER=ollama` -> perfil `ollama` -> `ollama` + `ollama-pull`; `anthropic|openai|bedrock` no levantan nada (un perfil sin servicios es válido).
+- Verifica con `docker compose config --services` y `docker compose config --profiles`.
+
+### Ollama (solo desarrollo/pruebas; producción: Bedrock)
+LLM local con GPU NVIDIA (runtime nvidia de Docker). El contenido sensible no sale de la máquina. En `.env`: `LLM_PROVIDER=ollama`, `LLM_MODEL_TEXT=qwen2.5vl:3b` (con visión, ~3 GB; cabe en 6 GB de VRAM), `OLLAMA_CONTEXT_LENGTH=8192` y `SYNTH_MAX_INPUT_TOKENS` <= ese contexto menos margen (p. ej. 6000); si no, Ollama trunca. `ollama-pull` descarga los modelos al primer arranque (volumen `ollamamodels`). Dentro de Docker la api usa `OLLAMA_BASE_URL=http://ollama:11434/v1`; desde el host, `http://localhost:11434/v1`.
+
 ### Perfil OCR local (solo desarrollo/pruebas)
 ```bash
-docker compose --profile ocr up -d ocr-local     # :8000; con OCR_ENGINE=local y OCR_LOCAL_URL=http://localhost:8000
+docker compose up -d ocr-local     # :8000 (perfil `local`, vía COMPOSE_PROFILES); con OCR_ENGINE=local y OCR_LOCAL_URL=http://localhost:8000
 curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":null}
 ```
 - La imagen pesa unos GB (PaddlePaddle + Tesseract); los modelos se descargan al primer arranque al volumen `ocrmodels`.
@@ -107,7 +121,7 @@ Con un perfil de inferencia entre regiones, el permiso debe cubrir el perfil **y
 4. Prueba con un hilo corto antes de analizar muchos.
 
 ## 6. Registro en Entra ID
-Sigue `docs/entra-id-registro.md` (crear registro, secreto, permisos delegados `Mail.Read` + `offline_access`, redirect URI). Rellena `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` y `MS_REDIRECT_URI` (`http://localhost:3000/api/auth/callback` con compose; en producción la URL pública HTTPS, que debe coincidir con la registrada en Entra). Si el tenant exige aprobación de administrador, el documento incluye el texto para pedirla.
+Sigue `docs/entra-id-registro.md` (crear registro, secreto, permisos delegados `Mail.Read` + `offline_access`, redirect URI). Registra la app como "Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft" y rellena `MS_TENANT_ID=common` (no un GUID), `MS_CLIENT_ID`, `MS_CLIENT_SECRET` y `MS_REDIRECT_URI` (`http://localhost:3000/api/auth/callback` con compose; en producción la URL pública HTTPS, que debe coincidir con la registrada en Entra). El consentimiento es por cuenta conectada. Si el tenant de esa cuenta exige aprobación de administrador, el documento incluye el texto para pedirla.
 
 ## 7. Primer arranque
 1. `docker compose up -d --build` (la API aplica las migraciones al arrancar; requiere `JWT_SECRET` en `.env`).

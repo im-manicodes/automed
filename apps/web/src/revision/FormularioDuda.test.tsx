@@ -22,4 +22,20 @@ describe('FormularioDuda', () => {
     await userEvent.click(screen.getByRole('button', { name: 'No se entiende' }));
     expect(onGuardar).toHaveBeenCalledWith('[ilegible]');
   });
+  it('con atajos, Enter guarda y Mayús+Enter no', async () => {
+    const onGuardar = vi.fn();
+    render(<FormularioDuda {...base} atajos textoInicial="abc" sugerencia="" onGuardar={onGuardar} />);
+    await userEvent.click(screen.getByLabelText('¿Qué dice aquí?'));
+    await userEvent.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(onGuardar).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    expect(onGuardar).toHaveBeenCalledTimes(1);
+  });
+  it('sin atajos, Enter en el campo no guarda', async () => {
+    const onGuardar = vi.fn();
+    render(<FormularioDuda {...base} textoInicial="abc" sugerencia="" onGuardar={onGuardar} />);
+    await userEvent.click(screen.getByLabelText('¿Qué dice aquí?'));
+    await userEvent.keyboard('{Enter}');
+    expect(onGuardar).not.toHaveBeenCalled();
+  });
 });

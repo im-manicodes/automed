@@ -15,6 +15,61 @@ interface TokenResponse {
   expires_in: number;
 }
 
+const GUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const AUTHORITIES = ['common', 'organizations', 'consumers'];
+
+/** Autoridad de login: vacío = `common` (organizaciones + cuentas personales). Acepta common/organizations/consumers o un GUID. */
+export function resolveAuthority(raw: string | undefined | null): string {
+  const v = (raw ?? '').trim();
+  if (!v) return 'common';
+  if (AUTHORITIES.includes(v.toLowerCase())) return v.toLowerCase();
+  if (GUID_RE.test(v)) return v;
+  return 'common';
+}
+
+export interface GraphProfile {
+  mail?: string | null;
+  userPrincipalName?: string | null;
+  otherMails?: string[] | null;
+}
+
+/**
+ * Correo de la cuenta: mail || otherMails[0] || userPrincipalName.
+ * Se descartan UPN de invitado (`#EXT#`); en cuentas personales `mail` puede ser null.
+ */
+export function resolveProfileEmail(profile: GraphProfile): string {
+  const upn = profile.userPrincipalName?.trim();
+  const candidates = [
+    profile.mail,
+    profile.otherMails?.find((m) => !!m?.trim()),
+    upn && !upn.toUpperCase().includes('#EXT#') ? upn : undefined,
+  ];
+  const found = candidates.find((c) => !!c?.trim());
+  return (found ?? '').trim().toLowerCase();
+}
+
+/** Mensaje en español según el código AADSTS / error del endpoint de token. */
+export function tokenErrorMessage(
+  error?: string,
+  description?: string,
+): string {
+  const code = /AADSTS(\d+)/.exec(description ?? '')?.[1];
+  if (error === 'invalid_grant' && code !== '65001') {
+    return 'La conexión con Outlook caducó; vuelve a conectarla';
+  }
+  if (code === '50020') {
+    return 'Esa cuenta no está permitida por el registro de la app en Microsoft; revisa el tipo de cuenta compatible o el valor de MS_TENANT_ID';
+  }
+  if (code === '700016') {
+    return 'Microsoft no reconoce la aplicación en ese directorio; revisa MS_CLIENT_ID y el tipo de cuenta del registro';
+  }
+  if (error === 'consent_required' || code === '65001') {
+    return 'Falta el consentimiento: acepta los permisos al conectar, o pide a tu administrador que los apruebe';
+  }
+  return 'No se pudo autenticar con Microsoft';
+}
+
 /** Error con mensaje seguro (en español) para mostrar al usuario tras el callback. */
 export class OutlookConnectError extends Error {}
 
@@ -29,10 +84,17 @@ export class MicrosoftService {
     private readonly prisma: PrismaService,
     private readonly crypto: TokenCryptoService,
     private readonly jwt: JwtService,
-  ) {}
+  ) {
+    const authority = resolveAuthority(this.config.get<string>('MS_TENANT_ID'));
+    if (GUID_RE.test(authority)) {
+      this.logger.warn(
+        'MS_TENANT_ID es un GUID: solo se admitirán cuentas de ese inquilino. Usa "common" para organizaciones y cuentas personales.',
+      );
+    }
+  }
 
   private tokenUrl() {
-    const tenant = this.config.get<string>('MS_TENANT_ID') || 'common';
+    const tenant = resolveAuthority(this.config.get<string>('MS_TENANT_ID'));
     return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
   }
 
@@ -98,12 +160,16 @@ export class MicrosoftService {
     });
     if (!res.ok) {
       // No se registra el cuerpo completo: solo el código de error.
-      const err = (await res.json().catch(() => ({}))) as { error?: string };
-      this.logger.warn(`Token endpoint ${res.status} ${err.error ?? ''}`);
+      const err = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        error_description?: string;
+      };
+      const aadsts = /AADSTS\d+/.exec(err.error_description ?? '')?.[0] ?? '';
+      this.logger.warn(
+        `Token endpoint ${res.status} ${err.error ?? ''} ${aadsts}`,
+      );
       throw new OutlookConnectError(
-        err.error === 'invalid_grant'
-          ? 'La conexión con Outlook caducó; vuelve a conectarla'
-          : 'No se pudo autenticar con Microsoft',
+        tokenErrorMessage(err.error, err.error_description),
       );
     }
     return (await res.json()) as TokenResponse;
@@ -126,19 +192,11 @@ export class MicrosoftService {
       throw new OutlookConnectError('Microsoft no entregó el permiso offline');
     }
     const me = await fetch(
-      'https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName',
+      'https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName,otherMails',
       { headers: { Authorization: `Bearer ${tokens.access_token}` } },
     );
     if (!me.ok) throw new OutlookConnectError('No se pudo leer tu perfil');
-    const profile = (await me.json()) as {
-      mail?: string;
-      userPrincipalName?: string;
-    };
-    const email = (
-      profile.mail ||
-      profile.userPrincipalName ||
-      ''
-    ).toLowerCase();
+    const email = resolveProfileEmail((await me.json()) as GraphProfile);
     if (!email) throw new OutlookConnectError('Tu perfil no tiene correo');
 
     const tokenEnc = this.crypto.encrypt(tokens.refresh_token);
