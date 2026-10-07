@@ -302,3 +302,7 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 ## Hito: OCR local siempre activo en la versión web
 - Hecho: `ocr-local` sin perfil en `docker-compose.yml` (arranca con `docker compose up`, como `pdf-extract`); `GET /api/settings/ocr` informa `entorno.servidor` y el estado real del servicio (`servicioLocal`); la web ya no bloquea «OCR local» en servidor y muestra estado + Probar de nuevo. Docs actualizadas (CLAUDE.md, AGENTS.md, README, `.env.example`, despliegue, benchmark-ocr).
 - Falta: probar con el contenedor `ocr-local` real (imagen de varios GB; primer arranque descarga modelos de PaddleOCR al volumen `ocrmodels`).
+
+## Hito: build liviano de Docker y Ollama solo en Docker
+- Hecho: `services/ocr-local/Dockerfile` en dos etapas con OpenCV headless (menor pico de disco); `scripts/docker-clean.sh`; servicio `ollama` en `docker-compose.yml` (volumen `ollamamodels`, contexto 8192) con override opcional `docker-compose.gpu.yml`; la api usa `http://ollama:11434/v1`; autodetección con `ollama` primero y guía «El contenedor de Ollama no responde» en `PanelOllama`. El escritorio no cambia. Docs: CLAUDE.md, `.env.example`, `docs/despliegue.md` (Ollama, espacio en disco).
+- Falta: construir `ocr-local` y arrancar `ollama` de verdad (no se construyó en este entorno por el disco); medir el pico real de disco y confirmar que Paddle carga con OpenCV headless.

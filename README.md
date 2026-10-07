@@ -32,7 +32,7 @@ pnpm dev                                  # api :3000, web :5173
 ## Todo con Docker
 ```bash
 docker compose up -d --build   # web http://localhost:8080; api healthy en /api/health
-# `ocr-local` (OCR local en CPU) y `pdf-extract` arrancan siempre; `relay` NO arranca solo: actívalo con `--profile relay`. Ollama no va en Docker: usa el instalado en tu equipo (docs/despliegue.md).
+# `ocr-local` (OCR local en CPU) y `pdf-extract` arrancan siempre; `relay` NO arranca solo: actívalo con `--profile relay`. Ollama corre en el servicio `ollama` del compose (docs/despliegue.md).
 # `pdf-extract` (PDF digital -> markdown sin OCR) se levanta siempre; la API usa OCR solo en páginas escaneadas.
 # o con COMPOSE_PROFILES=relay en .env (opcional, ver .env.example). El proveedor de IA y el OCR se eligen en la web.
 ```

@@ -20,8 +20,9 @@ describe('parseDefaultGateway', () => {
 });
 
 describe('ollamaCandidates', () => {
-  it('docker: host.docker.internal, gateway y localhost', () => {
+  it('docker: servicio ollama primero, luego host.docker.internal, gateway y localhost', () => {
     expect(ollamaCandidates({ docker: true, gateway: '172.17.0.1' })).toEqual([
+      'http://ollama:11434/v1',
       'http://host.docker.internal:11434/v1',
       'http://172.17.0.1:11434/v1',
       'http://localhost:11434/v1',
@@ -29,6 +30,7 @@ describe('ollamaCandidates', () => {
   });
   it('docker sin gateway', () => {
     expect(ollamaCandidates({ docker: true })).toEqual([
+      'http://ollama:11434/v1',
       'http://host.docker.internal:11434/v1',
       'http://localhost:11434/v1',
     ]);

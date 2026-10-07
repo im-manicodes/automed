@@ -64,7 +64,7 @@ La api (en contenedor) debe poder llegar a Postgres en el host:
 COMPOSE_PROFILES=relay
 ```
 - Perfil `relay` -> `relay`. `ocr-local` y `pdf-extract` no tienen perfil: arrancan siempre. `api` no depende de ninguno de ellos.
-- El proveedor LLM y el motor OCR se eligen en la web, no en `.env`. En Docker, `ocr-local` ya corre con `docker compose up` y la API lo usa por `OCR_LOCAL_URL` (`http://ocr-local:8000`): en la web solo eliges «OCR local» y ves su estado real. Ollama no tiene contenedor: ver la sección «Ollama» más abajo.
+- El proveedor LLM y el motor OCR se eligen en la web, no en `.env`. En Docker, `ocr-local` ya corre con `docker compose up` y la API lo usa por `OCR_LOCAL_URL` (`http://ocr-local:8000`): en la web solo eliges «OCR local» y ves su estado real. Ollama corre en el servicio `ollama` del compose: ver la sección «Ollama» más abajo.
 - Verifica con `docker compose config --services` y `docker compose --profile relay config --services`.
 
 ### Servicio `pdf-extract` (PDF digital sin OCR)
@@ -72,28 +72,26 @@ COMPOSE_PROFILES=relay
 - **Licencia:** PyMuPDF y pymupdf4llm son AGPL-3.0 (o licencia comercial de Artifex). Para uso interno de un solo usuario, sin ofrecer el servicio a terceros por red, es aceptable; si el servicio se expusiera a otros usuarios, revisa las obligaciones de la AGPL o cambia la librería.
 - Las páginas escaneadas conservan el flujo OCR -> regiones -> revisión; su markdown sigue siendo texto plano por líneas (mejora de estructura: siguiente fase).
 
-### Ollama (en el host; producción: Bedrock)
-Ollama NO corre en un contenedor: se usa el instalado en el equipo (igual que en el modo escritorio) y el contenido sensible no sale de la máquina. Como con Postgres (`listen_addresses`/`pg_hba`), el host necesita **un ajuste único** para que el contenedor `api` lo alcance:
-1. Instala Ollama (>= 0.12.7, necesario para Qwen3-VL) desde <https://ollama.com/download>.
-2. Ollama escucha por defecto solo en `127.0.0.1`, que un contenedor no ve. En Linux con systemd crea el override (mejor con `tee` que con `systemctl edit`, que si se cierra sin guardar no deja nada):
-```
-sudo mkdir -p /etc/systemd/system/ollama.service.d
-printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"\nEnvironment="OLLAMA_CONTEXT_LENGTH=8192"\n' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
-sudo systemctl daemon-reload && sudo systemctl restart ollama
-ss -ltn | grep 11434     # debe mostrar *:11434 o 0.0.0.0:11434
-```
-   Si hay firewall, permite el puerto 11434 solo desde la red de Docker; no lo expongas a Internet. En Docker Desktop (Mac/Windows) normalmente no hace falta.
-3. **Autodetección:** al abrir el asistente (o Ajustes -> IA) la API prueba la URL configurada y, en Docker, `host.docker.internal`, el gateway de la red del contenedor y `localhost`; si encuentra Ollama en otra dirección, la web la guarda sola. Si ninguna responde, la web muestra «Ollama no acepta conexiones desde Docker» con estos mismos pasos y un botón **Copiar**.
-4. La URL por defecto en Docker es `http://host.docker.internal:11434/v1` (`OLLAMA_BASE_URL` del compose; la api tiene `extra_hosts: host.docker.internal:host-gateway`). La app descarga el modelo recomendado `qwen3-vl:4b-instruct` (~3,3 GB; usa la variante `-instruct`: el tag `qwen3-vl:4b` es la de razonamiento).
-5. El contexto por defecto de Ollama (4096) trunca las síntesis: mantén `OLLAMA_CONTEXT_LENGTH=8192` en el host y `SYNTH_MAX_INPUT_TOKENS` (Ajustes -> IA) por debajo de ese contexto menos margen (p. ej. 6000).
-Prueba: `docker compose exec api node -e "fetch('http://host.docker.internal:11434/api/version').then(r=>r.text()).then(console.log)"`. Fuera de Docker (`pnpm dev`, escritorio) la URL es `http://localhost:11434/v1`.
+### Ollama (servicio `ollama` del compose; producción: Bedrock)
+En Docker, Ollama corre en su propio contenedor (`ollama`, volumen `ollamamodels`): no se instala nada en el host y el contenido sensible no sale de la máquina. El modo escritorio (Electron) no usa Docker y sigue con el Ollama instalado en el equipo (`http://localhost:11434/v1`).
+1. `docker compose up -d ollama` (arranca con el resto en `docker compose up`). El servicio escucha en `0.0.0.0` dentro de la red del compose y publica `127.0.0.1:11434`; `api` lo usa por `OLLAMA_BASE_URL=http://ollama:11434/v1`.
+2. **Autodetección:** al abrir el asistente (o Ajustes -> IA) la API prueba la URL configurada y, en Docker, `ollama`, `host.docker.internal`, el gateway de la red del contenedor y `localhost`. Si ninguna responde, la web muestra «El contenedor de Ollama no responde» con `docker compose up -d ollama` y `docker compose logs ollama`.
+3. La app descarga el modelo recomendado `qwen3-vl:4b-instruct` (~3,3 GB; usa la variante `-instruct`: el tag `qwen3-vl:4b` es la de razonamiento) y lo guarda en el volumen `ollamamodels`.
+4. El contexto por defecto de Ollama (4096) trunca las síntesis: el compose fija `OLLAMA_CONTEXT_LENGTH=8192` (cámbialo en `.env`) y `SYNTH_MAX_INPUT_TOKENS` (Ajustes -> IA) debe quedar por debajo de ese contexto menos margen (p. ej. 6000).
+5. **GPU NVIDIA (opcional):** requiere `nvidia-container-toolkit` y el runtime `nvidia` de Docker. Añade a tu `.env` `COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml` y recrea: `docker compose up -d ollama`. Comprueba con `docker compose exec ollama nvidia-smi`. Sin ese archivo, Ollama corre en CPU.
+Prueba: `docker compose exec api node -e "fetch('http://ollama:11434/api/version').then(r=>r.text()).then(console.log)"`. Fuera de Docker (`pnpm dev`, escritorio) la URL es `http://localhost:11434/v1`.
+
+### Espacio en disco y builds
+- La imagen de `ocr-local` (PaddlePaddle) es la más pesada y se construye en dos etapas (builder + imagen final) para que el pico de disco sea bajo. Presupuesto en reposo: ~10-12 GB (ocr-local ~2 GB, ollama 1-4 GB, modelo 3,3 GB, resto ~1,5 GB). Con poco espacio, construye de a un servicio (`docker compose build ocr-local`) y vigila `df -h /`.
+- Tras cada `--build` ejecuta `./scripts/docker-clean.sh` (poda caché de build e imágenes sin etiqueta; nunca toca volúmenes).
+- Límite de la caché de BuildKit en `/etc/docker/daemon.json`: `{"builder": {"gc": {"enabled": true, "defaultKeepStorage": "5GB"}}}` y `sudo systemctl restart docker`.
 
 ### Servicio OCR local (`ocr-local`, siempre activo en la versión web)
 ```bash
 docker compose up -d ocr-local     # :8000 (sin perfil: ya corre con `docker compose up`); la api lo usa por http://ocr-local:8000
 curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":null}
 ```
-- La imagen pesa unos GB (PaddlePaddle + Tesseract); los modelos se descargan al primer arranque al volumen `ocrmodels`.
+- La imagen pesa ~2 GB (PaddlePaddle + Tesseract; build en dos etapas); los modelos se descargan al primer arranque al volumen `ocrmodels`.
 - `engine` indica el motor activo. Si PaddleOCR no carga, el servicio cae a Tesseract **y lo dice** en `fallback_reason` y en los logs. `OCR_LOCAL_ENGINE=tesseract` fuerza Tesseract.
 - Para que la api en compose use el OCR local, levántalo en el mismo compose (la URL por defecto en compose ya es `http://ocr-local:8000`).
 

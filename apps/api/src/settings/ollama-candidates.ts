@@ -37,7 +37,8 @@ export function ollamaCandidates(opts: {
   const port = opts.port ?? 11434;
   const at = (host: string) => `http://${host}:${port}/v1`;
   if (!opts.docker) return [at('localhost')];
-  const out = [at('host.docker.internal')];
+  // Docker: Ollama es el servicio `ollama` del compose; el resto es respaldo.
+  const out = [at('ollama'), at('host.docker.internal')];
   if (opts.gateway) out.push(at(opts.gateway));
   out.push(at('localhost'));
   return out;

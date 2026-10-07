@@ -5,8 +5,8 @@ import { instalado, useModelosOllama, type EstadoModelo } from '../../hooks/useM
 import type { HardwareIa } from '../../lib/api'
 import { formatoAvance } from '../../lib/format'
 
-const COMANDO_DOCKER = `printf '[Service]\\nEnvironment="OLLAMA_HOST=0.0.0.0"\\nEnvironment="OLLAMA_CONTEXT_LENGTH=8192"\\n' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
-sudo systemctl daemon-reload && sudo systemctl restart ollama`
+const COMANDO_DOCKER = `docker compose up -d ollama
+docker compose logs ollama`
 
 function GuiaDocker() {
   const [copiado, setCopiado] = useState(false)
@@ -20,12 +20,11 @@ function GuiaDocker() {
   }
   return (
     <div className="space-y-2">
-      <p className="text-slate-700">En Linux, abre una terminal y pega estos comandos (crean el archivo <span className="break-all">/etc/systemd/system/ollama.service.d/override.conf</span> y reinician Ollama):</p>
+      <p className="text-slate-700">Abre una terminal en la carpeta del proyecto, inicia el contenedor y, si sigue sin responder, revisa su registro:</p>
       <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 text-sm text-slate-50">{COMANDO_DOCKER}</pre>
       <button type="button" className="btn btn-secondary" onClick={() => void copiar()}>
         <LuCopy className="size-5" aria-hidden />{copiado ? 'Copiado' : 'Copiar'}
       </button>
-      <p className="text-sm text-slate-700">En Mac o Windows con Docker Desktop debería funcionar sin cambios; revisa la URL en Ajustes.</p>
     </div>
   )
 }
@@ -112,11 +111,10 @@ export default function PanelOllama({ hardware, onRecheck, modelos, activo = tru
     return (
       <div className="space-y-3">
         <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-900">
-          <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Ollama no acepta conexiones desde Docker.
+          <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />El contenedor de Ollama no responde.
         </p>
         <GuiaDocker />
         <div className="flex flex-wrap gap-2">
-          <a className="btn" href="https://ollama.com/download" target="_blank" rel="noreferrer">Descargar Ollama</a>
           <button type="button" className="btn btn-secondary" disabled={buscando} onClick={() => void recheck()}>
             {buscando ? 'Buscando…' : 'Probar de nuevo'}
           </button>

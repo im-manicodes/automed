@@ -27,11 +27,8 @@ services:
       WEB_ORIGIN: http://localhost:8080
       OCR_LOCAL_URL: http://ocr-local:8000
       PDF_EXTRACT_URL: http://pdf-extract:8001
-      # Con Ollama (elegido en la web) se usa el Ollama instalado en el host (igual que en modo escritorio);
-      # desde el contenedor `localhost` no llega al host. Ollama debe escuchar en 0.0.0.0 (OLLAMA_HOST).
-      OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # Con Ollama (elegido en la web) se usa el servicio `ollama` de este compose.
+      OLLAMA_BASE_URL: http://ollama:11434/v1
     depends_on:
       rustfs:
         condition: service_started
@@ -84,6 +81,25 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
+  # Ollama (LLM local). Sin perfil: siempre activo; `api` NO depende de él (solo se usa si se elige Ollama en la
+  # web, que descarga el modelo sola). Modelos en el volumen `ollamamodels`. Versión fija >= 0.12.7 (Qwen3-VL).
+  # Para GPU NVIDIA: añadir docker-compose.gpu.yml (ver ese archivo). OLLAMA_CONTEXT_LENGTH debe ser >= SYNTH_MAX_INPUT_TOKENS más margen.
+  ollama:
+    image: ollama/ollama:0.12.7
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
+    volumes:
+      - ollamamodels:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "127.0.0.1:11434:11434"
+
   # Relay de «Usar desde el celular» (apps/relay): servicio OPCIONAL, solo perfil `relay` (no corre con
   # `docker compose up` normal; actívalo con `--profile relay` o COMPOSE_PROFILES=relay). Sin BD: guarda solo devices.json en
   # RELAY_DATA_DIR (volumen relaydata). Sirve solo el arranque (apps/relay/bootstrap), no el front. Escucha en 127.0.0.1: pon delante un proxy con HTTPS (docs/despliegue.md).
@@ -114,3 +130,4 @@ volumes:
   relaydata:
   rustfsdata:
   ocrmodels:
+  ollamamodels:
