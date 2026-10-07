@@ -205,3 +205,12 @@ Haz backup de la BD antes de actualizar si hay migraciones nuevas (`apps/api/pri
 | Textract: `AccessDenied` / imagen > 10 MB | Revisa IAM (sección 4) y baja `OCR_RENDER_DPI`. |
 | Bedrock: `ValidationException` / modelo no encontrado | ID de modelo o perfil incorrecto para la región (sección 5). |
 | Muchas "dudas" en documentos limpios | Ajusta `OCR_CONFIDENCE_THRESHOLD` con `docs/benchmark-ocr.md`. |
+
+## CI/CD: GitHub Actions + GHCR + Dokku (DigitalOcean)
+Guía paso a paso en el `README.md` ("Despliegue en producción"). Resumen técnico de `.github/workflows/deploy.yml` (push a `main`, sin tests previos; los despliegues se encolan, no se cancelan):
+1. **build-and-push** (matriz `api`, `web`, `pdf-extract`): imágenes en `ghcr.io/<owner>/<repo>-<servicio>` con etiquetas `latest` y SHA del commit. `ocr-local` y `ollama` son solo desarrollo y no se publican.
+2. **deploy**: por SSH como usuario `dokku` ejecuta `git:from-image` para `pdf-extract`, `api` y `web` con la etiqueta del SHA (despliegue sin caída; la api corre `prisma migrate deploy` al arrancar) y comprueba `https://$APP_DOMAIN/api/health`.
+
+Topología en Dokku (creada por `deploy/dokku/bootstrap.sh`): red interna `automed` a la que se unen las cuatro apps (`attach-post-create`); alias internos `api.web:3000`, `pdf-extract.web:8001`, `rustfs.web:9000`. Solo `web` tiene proxy/dominio/HTTPS (`proxy:disable` en el resto). `web` es el nginx de la imagen: su plantilla (`apps/web/nginx.conf.template`) lee `API_UPSTREAM` (`http://api:3000` en compose, `http://api.web:3000` en Dokku) y resuelve el DNS interno en cada petición, así que redesplegar la api no deja a nginx con una IP vieja. Postgres es el plugin `dokku-postgres` (servicio `automed-db`, `DATABASE_URL` inyectada por `postgres:link`); RustFS usa el volumen Docker `automed-rustfs`. El login a GHCR se guarda en el servidor con `registry:login` (token `read:packages` solo en el Droplet); GitHub solo tiene la clave SSH, el known_hosts y el host.
+
+Notas: Dokku ignora el `HEALTHCHECK` de Docker; por defecto espera 10 s y comprueba que el contenedor siga vivo (si la migración falla, la api sale y el despliegue se aborta). `api` debe escuchar en 3000 (`PORT=3000` se fija en su config porque Dokku inyecta otro `PORT`).

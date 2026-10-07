@@ -78,6 +78,10 @@
 - Activar `seguimiento` en un hilo con `tieneMensajesNuevos` no dispara el análisis por sí solo; hay que pulsar Analizar.
 - La migración cancela (status `error`) los jobs pendientes de hilos que pasan a `sin_analizar`; un `process_attachment` compartido por sha256 con otro hilo analizado también se cancelaría (caso raro: se resuelve con `reprocess`).
 
+## CI/CD (hecho, sin probar en GitHub/Droplet)
+- Hecho: `.github/workflows/deploy.yml` (push a `main` -> build/push de `api`, `web`, `pdf-extract` a GHCR -> `git:from-image` por SSH a Dokku -> chequeo de `/api/health`), `deploy/dokku/bootstrap.sh` + `env.example` (plugins, red interna, apps, Postgres, RustFS, HTTPS, config), plantilla nginx del `web` con `API_UPSTREAM` (probada en local con un upstream de prueba) y guía en el README / `docs/despliegue.md`. Se descartó la variante Compose + Caddy.
+- Falta: crear Droplet/Dokku/secrets y ejecutar el primer despliegue real (el script de arranque no se ejecutó contra un Dokku real: verificar `storage:mount` con volumen nombrado y la unión a la red junto al `link` de Postgres); decidir backups de Postgres/RustFS.
+
 ## Reorganización del frontend (hecho)
 - Hecho: `apps/web/src/pages/<página>/{page.tsx,components,hooks,lib}` (login, tickets, ticket-detalle, revision, reportes, plantilla, ajustes) con tests junto a su código; compartido en `components/`, `hooks/` (`useQuery`, `useMutation`, `useMail`, `usePolling`, `useEsEscritorio`, `useRuedaZoom`, `usePaginaImagen`) y `lib/`. Todas las peticiones pasan por `useQuery`/`useMutation` (sobre `api()`/`apiBlob()`); eliminados los objetos `threadsApi/mailApi/...` y `revision/revisionApi.ts`. Tests con `test/mockFetch.ts`. Build, lint y 143 tests en verde.
 - Falta: tests de `useGuardado` y de la página de revisión (no existían).

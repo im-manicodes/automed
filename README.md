@@ -13,6 +13,8 @@ services/pdf-extract  PDF digital -> markdown con PyMuPDF (sin OCR; siempre acti
 services/ocr-local  OCR local (PaddleOCR/Tesseract, perfil `ocr`, solo pruebas)
 docker-compose.yml  rustfs, api, web (Postgres externo vía DATABASE_URL_DOCKER en .env)
 docker-compose.dev.yml  hot reload en Docker (solo desarrollo, se activa con COMPOSE_FILE en .env)
+deploy/dokku  bootstrap.sh y env.example para preparar Dokku en el Droplet
+.github/workflows/deploy.yml  CI/CD: build -> GHCR -> Dokku (DigitalOcean)
 ```
 
 ## Arranque rápido (desarrollo)
@@ -39,6 +41,89 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
 Después `docker compose up` (sin `--build` en cada cambio) usa `docker-compose.dev.yml`: la api corre `nest start --watch` con `src/` y `prisma/` montados, y la web corre el servidor de Vite. En dev entra por **http://localhost:5173** (no :8080); la api sigue en :3000 y `WEB_ORIGIN` se fija a `http://localhost:5173`. Reconstruye con `docker compose up --build` solo si cambian dependencias (`package.json`/lockfile). Si el hot reload no detecta cambios, añade `CHOKIDAR_USEPOLLING=true` al `.env`. El cliente Prisma se regenera en cada arranque de la api. Para volver al modo producción local, comenta la línea `COMPOSE_FILE` o usa `docker compose -f docker-compose.yml up -d --build`.
 
 Guía completa (variables, Entra ID, Textract/Bedrock, backups, problemas): `docs/despliegue.md`. Medir el OCR con tus PDFs: `docs/benchmark-ocr.md`.
+
+## Despliegue en producción (GitHub Actions + GHCR + Dokku en DigitalOcean)
+Cada push a `main` construye las imágenes `api`, `web` y `pdf-extract`, las sube a GitHub Container Registry y le pide a **Dokku** (instalado en un Droplet) que las despliegue por SSH. Dokku corre cada servicio como una app: `web` (nginx, la única pública, con HTTPS de Let's Encrypt), `api`, `pdf-extract`, `rustfs` y un Postgres del plugin oficial; se hablan por una red interna. Los secretos de la app viven en la config de Dokku, no en GitHub. Los pasos 1 a 5 se hacen una sola vez; después basta con `git push`.
+
+> Necesitas: un dominio (o subdominio) cuyo DNS controles, cuenta de DigitalOcean, este repositorio en GitHub y los datos de producción (Entra ID, AWS Bedrock/Textract; ver `docs/despliegue.md`).
+
+### 1. Crear el Droplet e instalar Dokku
+1. En DigitalOcean crea un Droplet **Ubuntu 24.04** (mínimo 4 GB de RAM) y anota su IP.
+2. En tu DNS crea un registro **A** (p. ej. `automed.tudominio.com`) hacia esa IP.
+3. Entra por SSH como root, abre solo lo necesario e instala Dokku con el comando oficial de <https://dokku.com/docs/getting-started/installation/> (descarga `bootstrap.sh` de la versión vigente y ejecútalo; necesitas Dokku 0.35 o superior).
+```bash
+ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw --force enable
+```
+(Docker se instala con Dokku.) Solo se publican 80 y 443; api, Postgres, RustFS y pdf-extract no son accesibles desde fuera.
+
+### 2. Crear la clave SSH de GitHub Actions
+En tu máquina (clave nueva, solo para esto, sin contraseña):
+```bash
+ssh-keygen -t ed25519 -f ./deploy_key -C "github-actions" -N ""
+scp ./deploy_key.pub root@<IP-DEL-DROPLET>:/root/deploy_key.pub
+ssh-keyscan -t ed25519 <IP-DEL-DROPLET>      # guarda la salida: es DOKKU_KNOWN_HOSTS
+```
+`deploy_key` (privada) va a un secret de GitHub; luego bórrala de tu máquina o guárdala en un gestor de contraseñas. No la subas al repositorio.
+
+### 3. Preparar Dokku con el script de arranque
+1. Crea un token para que el Droplet descargue las imágenes: GitHub -> Settings -> Developer settings -> **Personal access tokens (classic)** -> permiso único `read:packages`.
+2. Copia a tu servidor el script y la plantilla de variables, y rellénala:
+```bash
+scp deploy/dokku/bootstrap.sh deploy/dokku/env.example root@<IP-DEL-DROPLET>:/root/
+ssh root@<IP-DEL-DROPLET>
+cd /root && mv env.example automed.env && chmod 600 automed.env && nano automed.env
+```
+Rellena como mínimo `DOMAIN`, `LETSENCRYPT_EMAIL`, `S3_ACCESS_KEY` y `S3_SECRET_KEY` (aleatorios largos: `openssl rand -base64 24`), `TOKEN_ENC_KEY` (`openssl rand -base64 32`), `JWT_SECRET` (`openssl rand -base64 48`), los datos de Microsoft (`MS_REDIRECT_URI=https://<DOMAIN>/api/auth/callback`) y AWS (`OCR_ENGINE=textract`, `LLM_PROVIDER=bedrock`). Formato `CLAVE=valor`, sin comillas ni espacios.
+3. Ejecuta el script (instala los plugins de Postgres y Let's Encrypt, crea la red interna, las apps, la base de datos, el volumen de RustFS y toda la configuración; se puede repetir):
+```bash
+GHCR_USER=<tu-usuario-de-github> GHCR_TOKEN=<el-token> ./bootstrap.sh /root/automed.env
+dokku ssh-keys:add github-actions < /root/deploy_key.pub
+```
+4. En **Entra ID** (Registros de aplicaciones -> tu app -> Autenticación) añade la URI de redirección web `https://<DOMAIN>/api/auth/callback`, idéntica a `MS_REDIRECT_URI`.
+
+### 4. Configurar GitHub
+En el repositorio, **Settings -> Environments -> New environment** llamado `production`:
+
+| Tipo | Nombre | Valor |
+|---|---|---|
+| Secret | `DOKKU_HOST` | IP o dominio del Droplet |
+| Secret | `DOKKU_SSH_KEY` | contenido completo de `deploy_key` (privada) |
+| Secret | `DOKKU_KNOWN_HOSTS` | salida de `ssh-keyscan` del paso 2 |
+| Variable | `APP_DOMAIN` | tu dominio (`automed.tudominio.com`), para el chequeo final de salud |
+
+En **Settings -> Actions -> General -> Workflow permissions** deja "Read and write permissions" (el job de construcción ya pide `packages: write`).
+
+### 5. Primer despliegue
+```bash
+git push origin main
+```
+Sigue el avance en la pestaña **Actions**. El workflow construye las imágenes y despliega `pdf-extract`, `api` y `web` (la api aplica las migraciones al arrancar). Cuando termine el primer despliegue de `web`, en el Droplet activa el HTTPS y crea el primer usuario:
+```bash
+dokku letsencrypt:enable web && dokku letsencrypt:cron-job --add
+dokku enter api web node dist/cli/user.js create --email tu@correo.com --nombre "Tu nombre"
+curl https://<DOMAIN>/api/health        # {"status":"ok","db":true,"storage":true}
+```
+Abre `https://<DOMAIN>`, inicia sesión y entra a **Ajustes -> Conectar Outlook**. El job final de Actions verifica `/api/health` por HTTPS, así que el primer push fallará en ese paso hasta que actives Let's Encrypt (el despliegue en sí ya está hecho); vuelve a lanzar el workflow después.
+
+### Operación diaria
+- **Actualizar:** `git push origin main`. Dokku despliega sin caída: si el contenedor nuevo no arranca, deja el anterior.
+- **Estado y logs:** `dokku ps:report`, `dokku logs api -t`, `dokku logs web -t`.
+- **Volver a una versión anterior:** `dokku git:from-image api ghcr.io/<owner>/<repo>-api:<sha-del-commit-bueno>` (cada commit queda etiquetado en GHCR con su SHA; haz lo mismo con `web` si cambió). Si ese commit incluía migraciones de BD ya aplicadas, no se deshacen solas.
+- **Cambiar variables:** `dokku config:set api CLAVE=valor` (reinicia la api) o edita `automed.env` y repite `./bootstrap.sh`.
+- **Respaldos:** son datos de salud. Activa los **backups del Droplet** en DigitalOcean (incluyen el volumen de RustFS y los datos de Postgres) y haz volcados puntuales: `dokku postgres:export automed-db > respaldo.dump`. El plugin también permite respaldos programados a un S3 (`dokku postgres:backup-schedule`).
+
+### Problemas frecuentes
+| Síntoma | Causa probable |
+|---|---|
+| Actions falla con `Host key verification failed` | `DOKKU_KNOWN_HOSTS` vacío o de otra IP; repite `ssh-keyscan -t ed25519 <host>`. |
+| `Permission denied (publickey)` | No ejecutaste `dokku ssh-keys:add` con la pública, o el secret `DOKKU_SSH_KEY` no es la privada completa. |
+| `denied` o `unauthorized` al bajar la imagen | El token de `bootstrap.sh` caducó o no tiene `read:packages`; repite el script con uno nuevo. |
+| La api no arranca | Falta una variable (`dokku config api`) o BD inaccesible; revisa `dokku logs api`. |
+| El login con Microsoft vuelve con error | `MS_REDIRECT_URI` distinta a la registrada en Entra ID. |
+| Error de certificado | El registro A no apunta al Droplet o 80/443 están bloqueados; revisa `dokku letsencrypt:list`. |
+| `web` responde 502 en `/api` | La api no está corriendo o no está en la red: `dokku network:report api` y `dokku ps:report api`. |
+
+Detalle técnico del flujo: sección "CI/CD" de `docs/despliegue.md`.
 
 ## Comandos
 `pnpm build` · `pnpm lint` · `pnpm test` · `pnpm --filter api test:e2e-flow` (flujo completo con mocks, esquema temporal) · `pnpm --filter web test` (vitest) · `pnpm --filter api prisma:migrate`
