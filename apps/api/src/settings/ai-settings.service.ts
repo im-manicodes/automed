@@ -102,18 +102,8 @@ const SUGGESTED: Record<LlmProviderName, AiSuggestedModels> = {
     ],
   },
   ollama: {
-    texto: [
-      'qwen3-vl:4b-instruct',
-      'qwen2.5vl:3b',
-      'qwen2.5vl:7b',
-      'llama3.2:3b',
-    ],
-    vision: [
-      'qwen3-vl:4b-instruct',
-      'qwen2.5vl:3b',
-      'qwen2.5vl:7b',
-      'llama3.2-vision:11b',
-    ],
+    texto: ['qwen3-vl:4b-instruct', 'llama3.2:3b'],
+    vision: ['qwen3-vl:4b-instruct', 'llama3.2-vision:11b'],
   },
 };
 

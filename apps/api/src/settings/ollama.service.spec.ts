@@ -46,12 +46,12 @@ describe('OllamaService', () => {
     fetchMock.mockImplementation((url: string) =>
       String(url).endsWith('/api/version')
         ? json({ version: '0.12.7' })
-        : json({ models: [{ name: 'qwen2.5vl:3b' }, { name: 'x:1' }] }),
+        : json({ models: [{ name: 'qwen3-vl:4b-instruct' }, { name: 'x:1' }] }),
     );
     expect(await svc.info('http://localhost:11434/v1')).toEqual({
       alcanzable: true,
       version: '0.12.7',
-      modelos: ['qwen2.5vl:3b', 'x:1'],
+      modelos: ['qwen3-vl:4b-instruct', 'x:1'],
       versionMinima: OLLAMA_MIN_VERSION,
       requiereActualizar: false,
     });
@@ -88,16 +88,19 @@ describe('OllamaService', () => {
         { status: 'success' },
       ]),
     );
-    const first = svc.startPull('http://localhost:11434/v1', 'qwen2.5vl:3b');
+    const first = svc.startPull(
+      'http://localhost:11434/v1',
+      'qwen3-vl:4b-instruct',
+    );
     expect(first.estado).toBe('descargando');
     await tick();
-    expect(svc.status('qwen2.5vl:3b')).toMatchObject({
+    expect(svc.status('qwen3-vl:4b-instruct')).toMatchObject({
       estado: 'listo',
       completado: 100,
       total: 100,
     });
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    expect(body).toEqual({ name: 'qwen2.5vl:3b', stream: true });
+    expect(body).toEqual({ name: 'qwen3-vl:4b-instruct', stream: true });
     expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:11434/api/pull');
   });
 

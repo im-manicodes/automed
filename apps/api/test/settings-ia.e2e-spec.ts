@@ -234,18 +234,21 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
 
   it('pull: 202 con estado, validación del modelo y consulta de progreso', async () => {
     ollama.startPull.mockReturnValue({
-      modelo: 'qwen2.5vl:3b',
+      modelo: 'qwen3-vl:4b-instruct',
       estado: 'descargando',
       completado: 0,
       total: 0,
     });
     const res = await authed(http().post('/api/settings/ia/ollama/pull'))
-      .send({ modelo: 'qwen2.5vl:3b' })
+      .send({ modelo: 'qwen3-vl:4b-instruct' })
       .expect(202);
-    expect(res.body).toEqual({ modelo: 'qwen2.5vl:3b', estado: 'descargando' });
+    expect(res.body).toEqual({
+      modelo: 'qwen3-vl:4b-instruct',
+      estado: 'descargando',
+    });
     expect(ollama.startPull).toHaveBeenCalledWith(
       expect.stringContaining('http'),
-      'qwen2.5vl:3b',
+      'qwen3-vl:4b-instruct',
     );
 
     await authed(http().post('/api/settings/ia/ollama/pull'))
@@ -254,13 +257,13 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
     await authed(http().get('/api/settings/ia/ollama/pull')).expect(400);
 
     ollama.status.mockReturnValue({
-      modelo: 'qwen2.5vl:3b',
+      modelo: 'qwen3-vl:4b-instruct',
       estado: 'descargando',
       completado: 5,
       total: 10,
     });
     const st = await authed(
-      http().get('/api/settings/ia/ollama/pull?modelo=qwen2.5vl:3b'),
+      http().get('/api/settings/ia/ollama/pull?modelo=qwen3-vl:4b-instruct'),
     ).expect(200);
     expect(st.body).toMatchObject({ completado: 5, total: 10 });
   });

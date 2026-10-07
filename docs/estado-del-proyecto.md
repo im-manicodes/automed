@@ -165,7 +165,7 @@
 
 ## Perfiles de compose y Ollama (dev)
 - `COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER}` en `.env`: `docker compose up` levanta `ocr-local` (perfil `local`) solo con `OCR_ENGINE=local` y `ollama` + `ollama-pull` (perfil `ollama`) solo con `LLM_PROVIDER=ollama`. Verificado con `docker compose config --services/--profiles`.
-- `LLM_PROVIDER=ollama` (solo dev): `OllamaLlmProvider` sobre cliente OpenAI-compatible (`max_tokens`, imágenes data URL), modelo por defecto `qwen3-vl:4b-instruct` (antes `qwen2.5vl:3b`; el tag `qwen3-vl:4b` es la variante de razonamiento y no se usa), `OLLAMA_BASE_URL`, `OLLAMA_CONTEXT_LENGTH`. Con tests unitarios; no probado contra un Ollama real (sin contenedores ni modelos en este entorno).
+- `LLM_PROVIDER=ollama` (solo dev): `OllamaLlmProvider` sobre cliente OpenAI-compatible (`max_tokens`, imágenes data URL), modelo por defecto `qwen3-vl:4b-instruct` (el tag `qwen3-vl:4b` es la variante de razonamiento y no se usa), `OLLAMA_BASE_URL`, `OLLAMA_CONTEXT_LENGTH`. Con tests unitarios; no probado contra un Ollama real (sin contenedores ni modelos en este entorno).
 
 ## UI responsive (tablet y PC, `apps/web`)
 - Hecho: `Layout` con barra lateral fija en >= md (w-48, w-60 en lg; "Mi cuenta" al pie, menú hacia arriba) y barra inferior solo < md; Tickets en 1 columna (md) / 2 columnas (lg), filtros con wrap y barra "Analizar" alineada al contenido; TicketDetalle en 2 columnas en lg (lateral sticky); Plantilla editor + vista previa lado a lado en lg; Ajustes en rejilla en md; Login con tarjeta en md+; revisión de dudas con ancho `md:max-w-7xl` dentro del nuevo Layout.

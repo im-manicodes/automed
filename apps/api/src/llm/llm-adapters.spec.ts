@@ -268,7 +268,11 @@ describe('Ollama (config y adaptador)', () => {
       .fn()
       .mockResolvedValue({ choices: [{ message: { content: ' hola ' } }] });
     const p = new OllamaLlmProvider(
-      cfg({ provider: 'ollama', modelText: 'qwen2.5vl:3b', modelVision: 'v' }),
+      cfg({
+        provider: 'ollama',
+        modelText: 'qwen3-vl:4b-instruct',
+        modelVision: 'v',
+      }),
       { chat: { completions: { create } } } as never,
       noSleep,
     );
