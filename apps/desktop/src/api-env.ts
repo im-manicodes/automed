@@ -5,6 +5,10 @@ import type { Secrets } from './secrets';
 export interface BuildConfig {
   msClientId?: string;
   msTenantId?: string;
+  /** Dirección del relay (https://relay.ejemplo.com). Vacío = «Usar desde el celular» no disponible. */
+  relayUrl?: string;
+  /** Token para registrar el dispositivo en el relay (RELAY_REGISTRATION_TOKEN del relay). */
+  relayRegistrationToken?: string;
 }
 
 export interface ApiEnvInput {
@@ -14,6 +18,8 @@ export interface ApiEnvInput {
   databaseUrl: string;
   secrets: Secrets;
   buildConfig: BuildConfig;
+  /** Control local del túnel (relay-control.ts); la API lo usa para «Usar desde el celular». */
+  relayControl?: { url: string; token: string; ipToken?: string };
   /** Variables base heredadas (se filtran: no se pasa nada sensible del entorno del usuario). */
   baseEnv?: NodeJS.ProcessEnv;
 }
@@ -46,6 +52,11 @@ export function buildApiEnv(i: ApiEnvInput): Record<string, string> {
     PADDLE_PDX_CACHE_HOME: join(i.dataDir, 'python', 'models'),
     PDF_TEXT_MODE: 'node',
   });
+  if (i.relayControl) {
+    env.RELAY_CONTROL_URL = i.relayControl.url;
+    env.RELAY_CONTROL_TOKEN = i.relayControl.token;
+    if (i.relayControl.ipToken) env.RELAY_IP_TOKEN = i.relayControl.ipToken;
+  }
   return env;
 }
 

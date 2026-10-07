@@ -3,7 +3,6 @@ import { LuChevronLeft, LuChevronRight, LuMaximize, LuMinus, LuPlus } from 'reac
 import { usePaginaImagen } from '../../../hooks/usePaginaImagen'
 import { useRuedaZoom } from '../../../hooks/useRuedaZoom'
 import { ajustar, ajustarTamano, alternarZoom, desplazar, zoomEn, type Size, type Transform } from '../../../lib/viewport'
-import { urlImagenPagina } from '../../../lib/paginas'
 import ErrorBox from '../../../components/ErrorBox'
 import Spinner from '../../../components/Spinner'
 
@@ -90,7 +89,7 @@ export default function VisorPaginas({ attachmentId, paginas }: Props) {
       >
         {img && (
           <img
-            src={urlImagenPagina(attachmentId, pageNumber)}
+            src={img.src}
             alt={`Página ${indice + 1} de ${total} del documento`}
             draggable={false}
             className="absolute left-0 top-0 max-w-none bg-white"

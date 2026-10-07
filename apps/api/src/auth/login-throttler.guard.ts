@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { clientIp } from './client-ip';
 
 /** Límite de intentos de login por IP + correo (el cuerpo ya viene parseado). */
 @Injectable()
@@ -8,7 +9,7 @@ export class LoginThrottlerGuard extends ThrottlerGuard {
     const body = (req.body ?? {}) as { email?: unknown };
     const email =
       typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-    return Promise.resolve(`${String(req.ip)}|${email}`);
+    return Promise.resolve(`${clientIp(req)}|${email}`);
   }
 
   protected throwThrottlingException(): Promise<void> {

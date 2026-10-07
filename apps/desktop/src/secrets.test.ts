@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { loadOrCreateSecrets, type SafeStorageLike } from './secrets';
+import { loadOrCreateSecrets, saveSecrets, type SafeStorageLike } from './secrets';
 
 const fakeSafe = (backend?: string, available = true): SafeStorageLike => ({
   isEncryptionAvailable: () => available,
@@ -63,5 +63,16 @@ describe('secrets', () => {
     expect(() => loadOrCreateSecrets(dir, bad)).toThrow(/claves guardadas/);
     writeFileSync(join(dir, 'secrets.bin'), Buffer.from([0x50, 0x7b, 0x7d]));
     expect(() => loadOrCreateSecrets(dir, null)).toThrow(/dañado/);
+  });
+
+  it('guarda y recupera la identidad del relay (cifrada)', () => {
+    const dir = tmp();
+    const ss = fakeSafe('gnome_libsecret');
+    const first = loadOrCreateSecrets(dir, ss).secrets;
+    saveSecrets(dir, ss, { ...first, relay: { deviceId: 'd'.repeat(22), secret: 'Ab1'.repeat(14), enabled: true } });
+    expect(readFileSync(join(dir, 'secrets.bin')).toString('utf8')).not.toContain('Ab1'.repeat(14));
+    const again = loadOrCreateSecrets(dir, ss).secrets;
+    expect(again.relay).toEqual({ deviceId: 'd'.repeat(22), secret: 'Ab1'.repeat(14), enabled: true });
+    expect(again.jwtSecret).toBe(first.jwtSecret);
   });
 });

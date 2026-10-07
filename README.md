@@ -32,9 +32,9 @@ pnpm dev                                  # api :3000, web :5173
 ## Todo con Docker
 ```bash
 docker compose up -d --build   # web http://localhost:8080; api healthy en /api/health
-# Con OCR_ENGINE=local en .env levanta también ocr-local; con LLM_PROVIDER=ollama, ollama + ollama-pull (GPU).
+# ocr-local, ollama + ollama-pull (GPU) y relay NO arrancan solos: actívalos con `--profile local|ollama|relay`.
 # `pdf-extract` (PDF digital -> markdown sin OCR) se levanta siempre; la API usa OCR solo en páginas escaneadas.
-# Requiere COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER} en .env (ver .env.example).
+# o con COMPOSE_PROFILES=local,ollama,relay en .env (opcional, ver .env.example). El proveedor de IA y el OCR se eligen en la web.
 ```
 ### Desarrollo con Docker y hot reload
 Añade a tu `.env` local (gitignored) esta línea (en `.env.example` está comentada; no la pongas en producción):
@@ -80,7 +80,7 @@ scp deploy/dokku/bootstrap.sh deploy/dokku/env.example root@<IP-DEL-DROPLET>:/ro
 ssh root@<IP-DEL-DROPLET>
 cd /root && mv env.example automed.env && chmod 600 automed.env && nano automed.env
 ```
-Rellena como mínimo `DOMAIN`, `LETSENCRYPT_EMAIL`, `S3_ACCESS_KEY` y `S3_SECRET_KEY` (aleatorios largos: `openssl rand -base64 24`), `TOKEN_ENC_KEY` (`openssl rand -base64 32`), `JWT_SECRET` (`openssl rand -base64 48`), los datos de Microsoft (`MS_REDIRECT_URI=https://<DOMAIN>/api/auth/callback`) y AWS (`OCR_ENGINE=textract`, `LLM_PROVIDER=bedrock`). Formato `CLAVE=valor`, sin comillas ni espacios.
+Rellena como mínimo `DOMAIN`, `LETSENCRYPT_EMAIL`, `S3_ACCESS_KEY` y `S3_SECRET_KEY` (aleatorios largos: `openssl rand -base64 24`), `TOKEN_ENC_KEY` (`openssl rand -base64 32`), `JWT_SECRET` (`openssl rand -base64 48`), los datos de Microsoft (`MS_REDIRECT_URI=https://<DOMAIN>/api/auth/callback`) y, si usas AWS, las credenciales estándar (el proveedor LLM y el motor OCR se eligen luego en la web). Formato `CLAVE=valor`, sin comillas ni espacios.
 3. Ejecuta el script (instala los plugins de Postgres y Let's Encrypt, crea la red interna, las apps, la base de datos, el volumen de RustFS y toda la configuración; se puede repetir):
 ```bash
 GHCR_USER=<tu-usuario-de-github> GHCR_TOKEN=<el-token> ./bootstrap.sh /root/automed.env
@@ -137,7 +137,7 @@ Detalle técnico del flujo: sección "CI/CD" de `docs/despliegue.md`.
 `pnpm build` · `pnpm lint` · `pnpm test` · `pnpm --filter api test:e2e-flow` (flujo completo con mocks, esquema temporal) · `pnpm --filter web test` (vitest) · `pnpm --filter api prisma:migrate`
 
 ## Configuración
-Ver `.env.example` (raíz) (BD, S3/RustFS, `JWT_SECRET`, Microsoft Graph, `OCR_ENGINE`, `LLM_PROVIDER`). `JWT_SECRET` es obligatorio (`openssl rand -base64 48`).
+Ver `.env.example` (raíz) (BD, S3/RustFS, `JWT_SECRET`, Microsoft Graph). El proveedor de IA, los modelos, las claves y el motor OCR se configuran en la web (bienvenida / Ajustes), no en `.env`. `JWT_SECRET` es obligatorio (`openssl rand -base64 48`).
 
 ## Variables de Microsoft (Entra ID)
 Acepta cuentas de trabajo de cualquier inquilino y cuentas personales de Microsoft. En <https://entra.microsoft.com>:
@@ -184,7 +184,7 @@ Olvidaste la contraseña: `pnpm --filter api user:reset-password -- --email tu@c
 
 Se ejecutan desde la raíz (o desde cualquier subcarpeta con `pnpm -w db:status`) y delegan a `apps/api`; leen el `.env` raíz. Argumentos: `pnpm run db:migrate -- --name mi_cambio`. Los scripts `db:seed*` corren con `tsx` sobre `apps/api/prisma/seed.ts` y `prisma/seed-demo.ts` (demo en `prisma/seed/`; no necesitan `pnpm build`); `db:reset` sí compila y corre `dist/cli/db-reset.js`, que tras el reset lanza `prisma db seed`. En Docker (la imagen incluye `prisma/` y `tsx`): `docker compose exec api pnpm exec prisma db seed`. `prisma.config.ts` registra el seed (`migrations.seed: 'tsx prisma/seed.ts'`, relativo a `apps/api`).
 
-Variables del seed (todas opcionales, ver `.env.example`): `SEED_USER_EMAIL`, `SEED_USER_NAME`, `SEED_USER_PASSWORD`. Si están las tres y no es `NODE_ENV=production`, `db:seed` crea un usuario de DESARROLLO con las mismas validaciones/argon2id que `user:create` (si ya existe no lo toca; adopta la cuenta de Outlook huérfana igual que `user:create`, y lo avisa). Nunca imprime contraseñas ni hashes.
+Variables del seed (todas opcionales; ya no figuran en `.env.example`: defínelas solo en tu `.env` local de desarrollo o en CI): `SEED_USER_EMAIL`, `SEED_USER_NAME`, `SEED_USER_PASSWORD`. Si están las tres y no es `NODE_ENV=production`, `db:seed` crea un usuario de DESARROLLO con las mismas validaciones/argon2id que `user:create` (si ya existe no lo toca; adopta la cuenta de Outlook huérfana igual que `user:create`, y lo avisa). Nunca imprime contraseñas ni hashes.
 
 `db:seed:demo`: los tickets demo NO son correos reales; su cuenta `demo@demo.invalid` no tiene tokens de Microsoft, así que el sync no los toca ni los mezcla. No lo corras junto a datos reales con el sync activo salvo para probar la UI; límpialo con `db:seed:demo:clean`. Se niega en producción.
 

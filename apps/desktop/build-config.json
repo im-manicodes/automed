@@ -1,5 +1,7 @@
 {
-  "_comentario": "El desarrollador debe registrar la app en Microsoft Entra ID (tipo 'Mobile and desktop applications', redirect http://localhost, multiinquilino + cuentas personales, sin secreto) y poner aqui su client id. Vacio = Outlook no se podra conectar.",
+  "_comentario": "El desarrollador debe registrar la app en Microsoft Entra ID (tipo 'Mobile and desktop applications', redirect http://localhost, multiinquilino + cuentas personales, sin secreto) y poner aqui su client id. Vacio = Outlook no se podra conectar. relayUrl: direccion publica del relay para 'Usar desde el celular' (https://relay.ejemplo.com); la variable de entorno AUTOMED_RELAY_URL la sobrescribe. Vacio = funcion no disponible. relayRegistrationToken: debe coincidir con RELAY_REGISTRATION_TOKEN del relay (evita registros abiertos de dispositivos); AUTOMED_RELAY_REGISTRATION_TOKEN lo sobrescribe.",
   "msClientId": "",
-  "msTenantId": "common"
+  "msTenantId": "common",
+  "relayUrl": "",
+  "relayRegistrationToken": ""
 }

@@ -31,15 +31,10 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` | Registro en Entra ID (ver sección 6). |
 | `SYNC_INTERVAL_MIN` | Cada cuántos minutos se sincroniza el correo (solo descarga/guarda; nunca analiza). `0` lo desactiva. |
 | `JOBS_ENABLED`, `JOBS_CONCURRENCY`, `JOBS_POLL_MS`, `JOBS_MAX_ATTEMPTS`, `JOBS_BACKOFF_*`, `JOBS_LOCK_TIMEOUT_SEC` | Cola de trabajos en PostgreSQL. `JOBS_ENABLED=false` apaga el worker **y** el polling del sync (útil para verificar el despliegue sin tocar nada externo). |
-| `OCR_ENGINE` | `local` (servicio `ocr-local`) o `textract` (AWS). |
-| `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*` | Rasterizado y umbral de dudas; ver `docs/benchmark-ocr.md`. |
-| `OCR_LOCAL_URL`, `OCR_LOCAL_TIMEOUT_MS`, `OCR_LOCAL_ENGINE`, `OCR_LANG` | Servicio OCR local (`paddle` o `tesseract`). |
-| `PDF_TEXT_MODE`, `PDF_EXTRACT_URL`, `PDF_EXTRACT_TIMEOUT_MS`, `PDF_TEXT_MIN_CHARS` | Servicio `pdf-extract` (`auto` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. En compose `PDF_EXTRACT_URL` ya apunta a `http://pdf-extract:8001`. |
-| `TEXTRACT_MODE` | `detect` (DetectDocumentText) o `analyze` (AnalyzeDocument FORMS+TABLES, más caro). |
-| `LLM_PROVIDER` | `anthropic`, `openai`, `bedrock` u `ollama`. **Valor por defecto**: lo que el usuario configure en la web (asistente de bienvenida en el primer inicio de sesión, o Ajustes -> Inteligencia artificial) tiene prioridad y se guarda en la base de datos; lo mismo aplica a `LLM_MODEL_*`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_BASE_URL`, `AWS_REGION` y `SYNTH_MAX_INPUT_TOKENS`. Las credenciales de Bedrock siguen siendo las estándar de AWS (rol o variables), no se piden en la web. |
-| `LLM_MODEL_TEXT`, `LLM_MODEL_VISION` | Modelos; vacío = por defecto del proveedor. En Bedrock pon el ID real (sección 5). |
-| `LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `SYNTH_MAX_INPUT_TOKENS` | Límites y costo del LLM. |
-| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | Claves para pruebas. |
+| `PDF_TEXT_MODE`, `PDF_EXTRACT_URL`, `PDF_EXTRACT_TIMEOUT_MS`, `PDF_TEXT_MIN_CHARS` | (opcionales) Servicio `pdf-extract` (`auto` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. En compose `PDF_EXTRACT_URL` ya apunta a `http://pdf-extract:8001`. |
+| `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*`, `OCR_LOCAL_TIMEOUT_MS`, `TEXTRACT_MODE` | (opcionales, comentados en `.env.example`) Ajustes finos de OCR; ver `docs/benchmark-ocr.md`. |
+| `LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `SYNTH_MAX_INPUT_TOKENS` | (opcionales) Límites y costo del LLM. |
+| (no van en `.env`) | **Proveedor LLM, modelos, claves (Anthropic/OpenAI), URL de Ollama, región AWS y motor OCR (`local`/`textract`) se eligen en la web** (asistente de bienvenida en el primer inicio de sesión, Ajustes -> Inteligencia artificial y Ajustes -> OCR) y se guardan en la base de datos (claves cifradas). Las variables `LLM_*`, `*_API_KEY`, `OLLAMA_BASE_URL`, `AWS_REGION`, `OCR_ENGINE` aún se leen como valores por defecto, pero ya no se documentan. Las credenciales de Bedrock/Textract siguen siendo las estándar de AWS (rol o variables), no se piden en la web. |
 | `AWS_REGION` (+ credenciales AWS estándar) | Región para Bedrock y Textract. |
 | `VITE_API_URL` | Solo desarrollo del front (`pnpm dev`). |
 
@@ -63,14 +58,14 @@ La api (en contenedor) debe poder llegar a Postgres en el host:
 - Si Postgres corre en otro contenedor con el puerto publicado, `host.docker.internal:5432` también funciona.
 - Si el firewall del host bloquea el bridge, permite el puerto 5432 desde la red de Docker.
 
-### Perfiles automáticos (OCR local y Ollama)
-`docker compose up` (sin flags) decide qué servicios opcionales levantar por `COMPOSE_PROFILES`, definido en `.env` con interpolación (debe ir después de `OCR_ENGINE` y `LLM_PROVIDER`):
+### Perfiles opcionales (OCR local, Ollama, relay)
+`docker compose up` (sin flags) NO levanta `ocr-local`, `ollama` ni `relay`: se activan de forma explícita, con `--profile` o definiendo en `.env` (opcional, comentado en `.env.example`):
 ```
-COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER}
+COMPOSE_PROFILES=local,ollama,relay
 ```
-- `OCR_ENGINE=local` -> perfil `local` -> `ocr-local`; `textract` no levanta nada. `api` no depende de `ocr-local`.
-- `LLM_PROVIDER=ollama` -> perfil `ollama` -> `ollama` + `ollama-pull`; `anthropic|openai|bedrock` no levantan nada (un perfil sin servicios es válido).
-- Verifica con `docker compose config --services` y `docker compose config --profiles`.
+- Perfil `local` -> `ocr-local`; perfil `ollama` -> `ollama` + `ollama-pull`; perfil `relay` -> `relay`. `api` no depende de ellos.
+- El proveedor LLM y el motor OCR se eligen en la web, no en `.env`. En Docker, elegir «OCR local» u «Ollama» en la web no levanta el contenedor (la API no controla Docker): activa además el perfil y apunta la URL en Ajustes (`http://ocr-local:8000`, `http://ollama:11434/v1`).
+- Verifica con `docker compose config --services` y `docker compose --profile local --profile ollama --profile relay config --services`.
 
 ### Servicio `pdf-extract` (PDF digital sin OCR)
 - Se levanta siempre (sin perfil), imagen ligera `python:3.12-slim` con PyMuPDF + pymupdf4llm; healthcheck `GET /health`; puerto `127.0.0.1:8001`. `api` no depende de él: si no responde o `PDF_TEXT_MODE=off`, la API usa el OCR para todas las páginas (con un warning en el log). Tras actualizar: `docker compose up --build` y añade a tu `.env` las variables `PDF_*` nuevas (ver `.env.example`; las existentes no cambian). Prueba: `curl localhost:8001/health`.
@@ -78,19 +73,19 @@ COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER}
 - Las páginas escaneadas conservan el flujo OCR -> regiones -> revisión; su markdown sigue siendo texto plano por líneas (mejora de estructura: siguiente fase).
 
 ### Ollama (solo desarrollo/pruebas; producción: Bedrock)
-LLM local con GPU NVIDIA (runtime nvidia de Docker). El contenido sensible no sale de la máquina. En `.env`: `LLM_PROVIDER=ollama`, `LLM_MODEL_TEXT=qwen3-vl:4b-instruct` (Qwen3-VL 4B con visión, ~3,3 GB; cabe en 6 GB de VRAM; requiere Ollama >= 0.12.7 y la variante `-instruct`: el tag `qwen3-vl:4b` a secas es la de razonamiento), `OLLAMA_CONTEXT_LENGTH=8192` y `SYNTH_MAX_INPUT_TOKENS` <= ese contexto menos margen (p. ej. 6000); si no, Ollama trunca. `ollama-pull` descarga los modelos al primer arranque (volumen `ollamamodels`). Dentro de Docker la api usa `OLLAMA_BASE_URL=http://ollama:11434/v1`; desde el host, `http://localhost:11434/v1`.
+LLM local con GPU NVIDIA (runtime nvidia de Docker). El contenido sensible no sale de la máquina. Activa el perfil `ollama` y en la web elige Ollama con el modelo `qwen3-vl:4b-instruct` (Qwen3-VL 4B con visión, ~3,3 GB; cabe en 6 GB de VRAM; requiere Ollama >= 0.12.7 y la variante `-instruct`: el tag `qwen3-vl:4b` a secas es la de razonamiento), el contenedor usa `OLLAMA_CONTEXT_LENGTH` (8192 por defecto, override opcional en `.env`) y `SYNTH_MAX_INPUT_TOKENS` (Ajustes -> IA) <= ese contexto menos margen (p. ej. 6000); si no, Ollama trunca. `ollama-pull` descarga los modelos al primer arranque (volumen `ollamamodels`). Dentro de Docker la URL por defecto de Ollama es `http://ollama:11434/v1` (cámbiala en la web si hace falta); desde el host, `http://localhost:11434/v1`.
 
 ### Perfil OCR local (solo desarrollo/pruebas)
 ```bash
-docker compose up -d ocr-local     # :8000 (perfil `local`, vía COMPOSE_PROFILES); con OCR_ENGINE=local y OCR_LOCAL_URL=http://localhost:8000
+docker compose up -d ocr-local     # :8000 (perfil `local`); en la web elige OCR local con URL http://localhost:8000 (o http://ocr-local:8000 desde la api en compose)
 curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":null}
 ```
 - La imagen pesa unos GB (PaddlePaddle + Tesseract); los modelos se descargan al primer arranque al volumen `ocrmodels`.
 - `engine` indica el motor activo. Si PaddleOCR no carga, el servicio cae a Tesseract **y lo dice** en `fallback_reason` y en los logs. `OCR_LOCAL_ENGINE=tesseract` fuerza Tesseract.
-- Para que la api en compose use el OCR local, levántalo en el mismo compose (`OCR_LOCAL_URL` ya apunta a `http://ocr-local:8000`).
+- Para que la api en compose use el OCR local, levántalo en el mismo compose (la URL por defecto en compose ya es `http://ocr-local:8000`).
 
 ## 4. Cambiar a Textract (producción)
-1. `OCR_ENGINE=textract`, `AWS_REGION=<región con Textract>`, `TEXTRACT_MODE=detect` (o `analyze`).
+1. En la web (Ajustes -> OCR) elige Textract y la región (`AWS_REGION` con Textract); `TEXTRACT_MODE=detect` (o `analyze`) es override opcional en `.env`.
 2. Credenciales AWS estándar para el proceso de la api: rol IAM (si corre en AWS) o `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` en el `.env`.
 3. IAM mínimo (sin acceso a S3; las imágenes se envían como bytes):
 ```json
@@ -107,8 +102,8 @@ curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":n
 4. No levantes `ocr-local` en producción.
 
 ## 5. Bedrock como LLM
-1. `LLM_PROVIDER=bedrock`, `AWS_REGION=<región>`.
-2. **Verifica el ID del modelo en tu región**: el valor por defecto `anthropic.claude-sonnet-5-5` es una suposición. En la consola de Bedrock > *Model catalog* (o con `aws bedrock list-foundation-models --region <r> --by-provider anthropic` y `aws bedrock list-inference-profiles --region <r>`) copia el **Model ID** o el **ID del perfil de inferencia** (p. ej. `us.anthropic....`) y ponlo en `LLM_MODEL_TEXT` (y `LLM_MODEL_VISION` si es distinto). Confirma que tu cuenta tiene acceso al modelo en esa región.
+1. En la web (bienvenida o Ajustes -> Inteligencia artificial) elige Bedrock y la región.
+2. **Verifica el ID del modelo en tu región**: el valor por defecto `anthropic.claude-sonnet-5-5` es una suposición. En la consola de Bedrock > *Model catalog* (o con `aws bedrock list-foundation-models --region <r> --by-provider anthropic` y `aws bedrock list-inference-profiles --region <r>`) copia el **Model ID** o el **ID del perfil de inferencia** (p. ej. `us.anthropic....`) y ponlo en el modelo de cada tarea en Ajustes -> Inteligencia artificial. Confirma que tu cuenta tiene acceso al modelo en esa región.
 3. IAM mínimo (la API Converse usa `bedrock:InvokeModel`):
 ```json
 {
@@ -176,7 +171,7 @@ En producción usa solo `db:deploy` (y `db:seed` si quieres la plantilla/ajustes
 - Prueba restaurar de vez en cuando.
 
 ## 8b. Reporte diario en Excel (datos sensibles de salud)
-El reporte (`/api/reports`) contiene nombres, diagnósticos, montos y pendientes de pacientes hospitalizados. Los `.xlsx` se guardan en RustFS bajo `reportes/AAAA-MM-DD/` (incluye esas rutas en tus políticas de acceso y backups) y solo se descargan con sesión. En producción el LLM debe ser Bedrock (`LLM_PROVIDER=bedrock`); con Ollama/API keys son solo pruebas. La API nueva depende de `exceljs`: tras actualizar usa `docker compose up -d --build api` (en dev con hot reload también hay que reconstruir la imagen para instalar la dependencia). La bitácora de eventos (tabla `HospitalEvent`, migración `20261012100000_eventos_hospitalizacion`) también contiene datos de pacientes: inclúyela en los respaldos de la base; la migración se aplica con `prisma:deploy` o reiniciando la api (`docker compose restart api`). La programación diaria usa `Setting` `reporte.programado|hora|zona` (zona por defecto `America/Mexico_City`) y se evalúa en el worker de la API, por lo que la API debe estar encendida a esa hora (si estaba apagada, se genera al volver a arrancar el mismo día).
+El reporte (`/api/reports`) contiene nombres, diagnósticos, montos y pendientes de pacientes hospitalizados. Los `.xlsx` se guardan en RustFS bajo `reportes/AAAA-MM-DD/` (incluye esas rutas en tus políticas de acceso y backups) y solo se descargan con sesión. En producción el LLM debe ser Bedrock (elegido en la web); con Ollama/API keys son solo pruebas. La API nueva depende de `exceljs`: tras actualizar usa `docker compose up -d --build api` (en dev con hot reload también hay que reconstruir la imagen para instalar la dependencia). La bitácora de eventos (tabla `HospitalEvent`, migración `20261012100000_eventos_hospitalizacion`) también contiene datos de pacientes: inclúyela en los respaldos de la base; la migración se aplica con `prisma:deploy` o reiniciando la api (`docker compose restart api`). La programación diaria usa `Setting` `reporte.programado|hora|zona` (zona por defecto `America/Mexico_City`) y se evalúa en el worker de la API, por lo que la API debe estar encendida a esa hora (si estaba apagada, se genera al volver a arrancar el mismo día).
 
 ## 9. Actualizar
 ```bash
@@ -205,6 +200,45 @@ Haz backup de la BD antes de actualizar si hay migraciones nuevas (`apps/api/pri
 | Textract: `AccessDenied` / imagen > 10 MB | Revisa IAM (sección 4) y baja `OCR_RENDER_DPI`. |
 | Bedrock: `ValidationException` / modelo no encontrado | ID de modelo o perfil incorrecto para la región (sección 5). |
 | Muchas "dudas" en documentos limpios | Ajusta `OCR_CONFIDENCE_THRESHOLD` con `docs/benchmark-ocr.md`. |
+
+## 11. Relay de «Usar desde el celular» (opcional)
+El relay (`apps/relay`) es un servicio pequeño y **sin base de datos** que conecta el celular con la app de escritorio: el escritorio abre un túnel WSS saliente y el relay le reenvía lo que llega del celular. Todo el tráfico de la API va **cifrado de extremo a extremo** (el relay solo ve bytes opacos y metadatos; ver `docs/relay-e2e.md`). Ya NO sirve el front de `apps/web`: solo una pantalla de arranque mínima (`apps/relay/bootstrap`, hash publicado en `docs/relay-e2e.md`); el front lo entrega el escritorio por el canal cifrado y el celular lo verifica. Es independiente del resto de servicios; un solo relay atiende a todos los escritorios.
+
+### Variables (`.env`, ver `.env.example`)
+| Variable | Qué hace |
+|---|---|
+| `RELAY_REGISTRATION_TOKEN` | **Obligatorio en producción.** Sin él cualquiera podría registrar dispositivos. Genéralo con `openssl rand -base64 32`. Debe ser **idéntico** en el relay y en el escritorio (`relayRegistrationToken` de `apps/desktop/build-config.json` al construir el instalable, o la variable `AUTOMED_RELAY_REGISTRATION_TOKEN` del escritorio). |
+| `RELAY_PORT` | Puerto en 127.0.0.1 del host (por defecto 8081); el proxy HTTPS apunta aquí. |
+| `RELAY_TRUST_PROXY` | `1` (por defecto) detrás de un proxy que pone `X-Forwarded-For`; el relay usa la IP real para sus límites. Con `1` el relay **debe** estar detrás de un proxy que sobrescriba esa cabecera (si no, la IP se falsea). |
+| `RELAY_COOKIE_SECURE` | `1` por defecto (cookies `Secure`); `0` solo para pruebas sin HTTPS. |
+| `RELAY_DATA_DIR` | Carpeta con `devices.json` (solo hashes SHA-256 de los secretos de dispositivo y los deviceId revocados). **Debe ser persistente**: si se pierde, los dispositivos ya vinculados se re-registran solos al reconectar, pero se pierde la lista de revocados. En compose es el volumen `relaydata` (`/data`). |
+
+### Levantarlo con Docker Compose
+El servicio `relay` está en el perfil `relay`: **no** corre con el `docker compose up` normal. Para activarlo añade `relay` a `COMPOSE_PROFILES` en `.env` (p. ej. `COMPOSE_PROFILES=relay`) o lánzalo solo:
+```bash
+docker compose --profile relay up -d --build relay
+curl localhost:8081/healthz        # {"ok":true}
+```
+Escucha solo en `127.0.0.1:${RELAY_PORT}`: **no lo publiques sin TLS**.
+
+### HTTPS (TLS) obligatorio
+El celular exige HTTPS (PWA, WebCrypto y cookies `Secure`) y el escritorio se conecta por WSS. Pon delante un proxy que termine TLS y soporte WebSocket (`/tunnel`), por ejemplo Caddy:
+```
+relay.tudominio.com {
+    reverse_proxy 127.0.0.1:8081
+}
+```
+(Caddy gestiona el certificado y el upgrade a WebSocket solo.) Con nginx hace falta `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 3600s;`, `proxy_request_buffering off; proxy_buffering off;` (descargas grandes) y `proxy_set_header X-Forwarded-For $remote_addr;` (que sobrescriba, no que añada). Con Dokku: despliega `apps/relay/Dockerfile` (contexto: raíz del monorepo) como otra app, monta un volumen persistente en `/data`, fija `RELAY_REGISTRATION_TOKEN` y activa Let's Encrypt.
+
+### Conectar los escritorios
+1. Construye el instalable con `relayUrl` (`https://relay.tudominio.com`) y `relayRegistrationToken` en `apps/desktop/build-config.json` (o define `AUTOMED_RELAY_URL` / `AUTOMED_RELAY_REGISTRATION_TOKEN` en el escritorio). Sin `relayUrl` la función aparece como no disponible.
+2. En la app: Ajustes -> «Usar desde el celular» (guía en `docs/instalable.md`).
+
+### Operación y límites
+- Sin contenido en logs: solo conexión/desconexión de túneles con los 6 primeros caracteres del deviceId.
+- Límites: 600 peticiones/min y 30 conexiones de túnel/min por IP, cuerpo de petición <= 1 MiB, 64 peticiones simultáneas por dispositivo.
+- Si el escritorio está apagado o sin internet, el relay responde 503 con `code: "pc_apagada"` y la web del celular muestra «Tu computadora está apagada o sin internet…» con botón «Reintentar».
+- El relay solo sirve el arranque (`apps/relay/bootstrap`: `index.html`, `boot.js`, `sw.js`, iconos); la imagen ya no compila `apps/web` y no hace falta actualizarlo con cada versión del escritorio (solo si cambia el arranque; entonces el escritorio y `docs/relay-e2e.md` traen el hash nuevo y el escritorio avisará si el relay sirve otro). Comprueba el hash: `curl -s https://<relay>/boot.js | sha256sum` debe coincidir con `docs/relay-e2e.md`. El relay imprime el hash combinado al arrancar. Límite residual: la primera carga confía en el relay (ver `docs/relay-e2e.md`).
 
 ## CI/CD: GitHub Actions + GHCR + Dokku (DigitalOcean)
 Guía paso a paso en el `README.md` ("Despliegue en producción"). Resumen técnico de `.github/workflows/deploy.yml` (push a `main`, sin tests previos; un push nuevo cancela la construcción anterior que siga corriendo; un despliegue ya en curso no se cancela: el siguiente espera su turno y, si hay varios en cola, solo corre el más reciente):

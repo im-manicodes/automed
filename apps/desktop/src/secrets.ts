@@ -10,10 +10,20 @@ export interface SafeStorageLike {
   getSelectedStorageBackend?(): string;
 }
 
+/** Identidad del dispositivo ante el relay («Usar desde el celular»); se crea al activarlo. */
+export interface RelaySecrets {
+  deviceId: string;
+  secret: string;
+  /** Clave E2E (32 bytes, base64url): va en el `#` del QR y se guarda aquí; nunca llega al relay. */
+  e2eKey: string;
+  enabled: boolean;
+}
+
 export interface Secrets {
   jwtSecret: string;
   tokenEncKey: string;
   pgPassword: string;
+  relay?: RelaySecrets;
 }
 
 export interface LoadedSecrets {
@@ -47,7 +57,12 @@ function isValid(s: unknown): s is Secrets {
     typeof o.tokenEncKey === 'string' &&
     Buffer.from(o.tokenEncKey, 'base64').length === 32 &&
     typeof o.pgPassword === 'string' &&
-    o.pgPassword.length >= 16
+    o.pgPassword.length >= 16 &&
+    (o.relay === undefined ||
+      (typeof o.relay.deviceId === 'string' &&
+        typeof o.relay.secret === 'string' &&
+        (o.relay.e2eKey === undefined || typeof o.relay.e2eKey === 'string') &&
+        typeof o.relay.enabled === 'boolean'))
   );
 }
 
@@ -121,4 +136,12 @@ export function loadOrCreateSecrets(
   }
   write(file, PLAIN, Buffer.from(json, 'utf8'));
   return { secrets, created: true, warning: WARN_NO_SAFE_STORAGE };
+}
+
+/** Reescribe `secrets.bin` con los secretos dados (p. ej. al activar/desvincular el relay). */
+export function saveSecrets(dataDir: string, safeStorage: SafeStorageLike | null, secrets: Secrets): void {
+  const file = join(dataDir, 'secrets.bin');
+  const json = JSON.stringify(secrets);
+  if (canEncrypt(safeStorage)) write(file, ENCRYPTED, safeStorage.encryptString(json));
+  else write(file, PLAIN, Buffer.from(json, 'utf8'));
 }

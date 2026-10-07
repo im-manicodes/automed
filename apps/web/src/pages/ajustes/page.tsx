@@ -82,6 +82,12 @@ export default function Ajustes() {
       </div>
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-lg font-bold">Usar desde el celular</h3>
+        <p className="text-slate-700">Entra a auto-med desde tu celular con un código QR.</p>
+        <Link to="/ajustes/celular" className="btn btn-secondary w-full">Abrir</Link>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="text-lg font-bold">Sesión</h3>
         {session.status === 'authenticated' && <p className="break-all text-slate-700">Entraste como {session.user.nombre} ({session.user.email})</p>}
         <button type="button" className="btn btn-secondary w-full" onClick={() => void logout()}>Salir</button>

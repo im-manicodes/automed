@@ -84,6 +84,8 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
   const paginaNum = paginaVista ?? actual?.pageNumber ?? datos.pages[0]?.pageNumber;
   const pagina = datos.pages.find((p) => p.pageNumber === paginaNum);
   const { img, error: errorImg, reintentar } = usePaginaImagen(attachmentId, actual?.pageNumber);
+  // Página completa del visor (escritorio: la de la duda; celular: solo en modo «Página completa»).
+  const imagenVisor = usePaginaImagen(attachmentId, escritorio ? actual?.pageNumber : modo === 'pagina' ? paginaNum : undefined).img;
 
   // Al cambiar de duda, la vista de página sigue a la duda y el foco vuelve al encabezado (anuncia el avance).
   useEffect(() => {
@@ -255,7 +257,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
           <div className="space-y-2">
             {paginaDuda && (
               <PaginaVisor
-                imagenUrl={`/api/attachments/${encodeURIComponent(attachmentId)}/pages/${paginaDuda.pageNumber}/image`}
+                imagenUrl={imagenVisor?.src ?? ''}
                 proporcion={paginaDuda.height / paginaDuda.width}
                 dudas={dudas}
                 estados={flujo.estados}
@@ -338,7 +340,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
               </button>
             </div>
             <PaginaVisor
-              imagenUrl={`/api/attachments/${encodeURIComponent(attachmentId)}/pages/${pagina.pageNumber}/image`}
+              imagenUrl={imagenVisor?.src ?? ''}
               proporcion={pagina.height / pagina.width}
               dudas={dudas}
               estados={flujo.estados}

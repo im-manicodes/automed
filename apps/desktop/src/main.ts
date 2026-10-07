@@ -3,10 +3,12 @@ import {
   BrowserWindow,
   dialog,
   Menu,
+  powerSaveBlocker,
   safeStorage,
   shell,
   utilityProcess,
 } from 'electron';
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ApiProcess, waitForHealth, type ForkFn } from './api-process';
@@ -16,7 +18,11 @@ import { errorPage, loadingPage, toDataUrl } from './pages';
 import { devResourcesDir, resolvePaths } from './paths';
 import { PostgresManager } from './postgres';
 import { getFreePort } from './ports';
-import { loadOrCreateSecrets } from './secrets';
+import { KeepAwake } from './keep-awake';
+import { FrontBundle } from './front-bundle';
+import { RelayManager } from './relay-manager';
+import { startRelayControl, type RelayControl } from './relay-control';
+import { loadOrCreateSecrets, saveSecrets } from './secrets';
 import { createMainWindow } from './window';
 
 const SMOKE = process.argv.includes('--smoke-test');
@@ -45,6 +51,10 @@ process.on('unhandledRejection', (e) => log(`promesa rechazada: ${msg(e)}`));
 let win: BrowserWindow | null = null;
 let pg: PostgresManager | null = null;
 let api: ApiProcess | null = null;
+let relay: RelayManager | null = null;
+let relayControl: RelayControl | null = null;
+/** Token por arranque compartido con la API para reenviar la IP real del celular (límite de login). */
+const relayIpToken = randomBytes(24).toString('hex');
 let origin: string | null = null;
 let warning: string | undefined;
 let quitting = false;
@@ -67,8 +77,16 @@ function readBuildConfig(): BuildConfig {
   }
 }
 
+async function stopRelay() {
+  relay?.stop();
+  relay = null;
+  await relayControl?.close().catch(() => {});
+  relayControl = null;
+}
+
 async function stopBackend() {
   origin = null;
+  relay?.setPort(null);
   try {
     await api?.stop();
   } catch (e) {
@@ -93,6 +111,19 @@ async function startBackend(): Promise<{ origin: string; port: number; health: R
   const loaded = loadOrCreateSecrets(dataDir, safeStorage);
   warning = loaded.warning;
   if (warning) log(`aviso: ${warning}`);
+
+  // «Usar desde el celular»: el túnel vive aquí (proceso principal); la API lo controla por un canal local.
+  relay ??= new RelayManager({
+    relayUrl: process.env.AUTOMED_RELAY_URL || readBuildConfig().relayUrl,
+    registrationToken: process.env.AUTOMED_RELAY_REGISTRATION_TOKEN || readBuildConfig().relayRegistrationToken || undefined,
+    ipToken: relayIpToken,
+    front: new FrontBundle(paths.webDir, app.getVersion()),
+    keepAwake: new KeepAwake(dataDir, powerSaveBlocker),
+    secrets: loaded.secrets,
+    persist: (s) => saveSecrets(dataDir, safeStorage, s),
+    log,
+  });
+  relayControl ??= await startRelayControl(relay);
 
   step('Iniciando la base de datos…');
   pg = new PostgresManager({
@@ -123,6 +154,7 @@ async function startBackend(): Promise<{ origin: string; port: number; health: R
     databaseUrl: pg.databaseUrl,
     secrets: loaded.secrets,
     buildConfig: readBuildConfig(),
+    relayControl: { url: relayControl.url, token: relayControl.token, ipToken: relayIpToken },
   });
   api = new ApiProcess({
     fork: ((entry, args, opts) => utilityProcess.fork(entry, args, opts)) as ForkFn,
@@ -135,6 +167,8 @@ async function startBackend(): Promise<{ origin: string; port: number; health: R
   const readyPort = await api.start();
   const health = await waitForHealth(readyPort);
   origin = `http://localhost:${readyPort}`;
+  relay.setPort(readyPort);
+  relay.resume();
   return { origin, port: readyPort, health };
 }
 
@@ -204,6 +238,7 @@ async function runSmoke() {
   const finish = async (ok: boolean, detail: string) => {
     clearTimeout(timer);
     await stopBackend();
+    await stopRelay();
     console.log(`SMOKE_TEST ${ok ? 'OK' : 'FAIL'} ${detail} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
     app.exit(ok ? 0 : 1);
   };
@@ -231,7 +266,7 @@ if (!SMOKE && !app.requestSingleInstanceLock()) {
     if (quitting) return;
     quitting = true;
     e.preventDefault();
-    void stopBackend().finally(() => app.exit(0));
+    void stopBackend().then(stopRelay).finally(() => app.exit(0));
   });
   for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => app.quit());
   app.on('window-all-closed', () => app.quit());

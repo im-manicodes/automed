@@ -51,6 +51,22 @@ Necesitas:
 
 El análisis (OCR + IA) sigue siendo **siempre bajo petición tuya**: sincronizar el correo solo descarga y guarda.
 
+## Usar desde el celular
+
+Para entrar a auto-med desde el celular (también fuera de tu red) sin abrir puertos ni configurar el router. Requiere que quien construye el instalable haya configurado un relay (ver `docs/despliegue.md`, sección 11); si no, la pantalla dirá que esta versión todavía no trae el servicio.
+
+1. En el escritorio: **Ajustes -> Usar desde el celular -> Activar**. Aparece un código QR.
+2. En el celular: escanea el QR con la cámara, abre la página y elige **Instalar** (o «Añadir a pantalla de inicio»). Entra con tu correo y contraseña de siempre.
+3. **Tu computadora debe estar encendida, con internet y con auto-med abierto.** Si no, el celular muestra «Tu computadora está apagada o sin internet. Enciéndela y abre auto-med.» con un botón **Reintentar**.
+4. **Mantener la computadora despierta** (opcional, apagado por defecto): evita que el sistema se suspenda por inactividad mientras el celular esté activo. Gasta más batería y no sirve si cierras la tapa o apagas el equipo. La preferencia se recuerda en `relay-prefs.json` dentro de la carpeta de datos.
+5. **Desvincular** borra el acceso y la clave: el QR anterior deja de funcionar. Para volver a usarlo hay que activar y escanear un código nuevo.
+
+Seguridad y límites:
+- La información viaja **cifrada de extremo a extremo**: la clave va en el QR (en la parte `#`, que el navegador nunca envía al servidor) y el relay no puede leer nada (`docs/relay-e2e.md`). **No compartas el QR**: quien lo tenga puede abrir la página (aún necesita tu correo y contraseña).
+- Hay **un solo QR/clave por computadora**: todos los celulares que lo escaneen comparten el acceso y «Desvincular» los saca a todos. Varios celulares con clave propia no está hecho.
+- El front (la app) lo entrega tu computadora por el canal cifrado y el celular lo verifica antes de ejecutarlo; el relay solo sirve una pantalla de arranque mínima con hash publicado (`docs/relay-e2e.md`). Aun así la primera vez que escaneas el código el celular confía en el relay: usa un relay propio y de confianza. En «Usar desde el celular» -> «Comprobar el servicio» ves la huella esperada del arranque.
+- Conectar Outlook se sigue haciendo desde la computadora.
+
 ## Instalar Python (solo para OCR en tu computador)
 
 La app necesita Python 3.9 a 3.12 (referencia: 3.11). **Python 3.13 o superior no sirve** con los paquetes de OCR fijados. La app lo detecta, te muestra la guía de tu sistema y un botón "Verificar de nuevo".
@@ -133,6 +149,7 @@ La app **no tiene** "exportar respaldo". Para respaldar: **cierra la app por com
 - **Ventana real:** la prueba automática (Linux) arranca la app sin pantalla (xvfb) y consulta `/api/health`; no se ha comprobado el uso con ventana real, ni el flujo de primer usuario o el asistente en el paquete.
 - **Instalación del `.deb`:** el `.deb` se construyó, pero no se instaló.
 - **OCR local real con PaddlePaddle:** no se ha ejecutado "Preparar el OCR" ni la lectura de un PDF escaneado con el entorno gestionado, ni se midió la descarga.
+- **Usar desde el celular:** probado con pruebas automáticas (relay + túnel + cifrado), no con un celular real ni con un relay desplegado.
 - **Conexión con Outlook:** necesita el `client id` de Entra, aún sin registrar.
 
 Faltan también (fuera de esta entrega): iconos propios, firma y notarización, auto-actualización, exportar respaldo y macOS.

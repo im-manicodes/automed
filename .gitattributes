@@ -1,0 +1,2 @@
+# Arranque del relay: su hash se publica y se comprueba; no tocar finales de línea.
+apps/relay/bootstrap/* -text

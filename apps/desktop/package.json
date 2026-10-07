@@ -19,10 +19,12 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "embedded-postgres": "18.4.0-beta.17"
+    "embedded-postgres": "18.4.0-beta.17",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",
+    "@types/ws": "^8.18.2",
     "electron": "^44.6.0",
     "electron-builder": "^26.15.3",
     "typescript": "^5.9.3",

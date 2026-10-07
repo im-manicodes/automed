@@ -27,7 +27,7 @@ services:
       WEB_ORIGIN: http://localhost:8080
       OCR_LOCAL_URL: http://ocr-local:8000
       PDF_EXTRACT_URL: http://pdf-extract:8001
-      # Con LLM_PROVIDER=ollama, dentro de Docker el servicio se llama `ollama` (no localhost).
+      # Con Ollama (elegido en la web), dentro de Docker el servicio se llama `ollama` (no localhost).
       OLLAMA_BASE_URL: http://ollama:11434/v1
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -69,9 +69,9 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
 
-  # OCR local en CPU, solo desarrollo. Se activa solo con OCR_ENGINE=local: el .env raíz define
-  # COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER} y este servicio pertenece al perfil `local`.
-  # Con OCR_ENGINE=textract no corre. `api` no depende de él (así textract no lo necesita).
+  # OCR local en CPU, solo desarrollo. Perfil `local`: no corre salvo que lo actives explícitamente
+  # (`--profile local` o COMPOSE_PROFILES=local en .env). Luego elige OCR «local» en la web (Ajustes -> OCR)
+  # con URL http://ocr-local:8000. `api` no depende de él (así Textract no lo necesita).
   ocr-local:
     profiles: ["local"]
     build: ./services/ocr-local
@@ -84,7 +84,8 @@ services:
       - "127.0.0.1:8000:8000"
 
   # LLM local con GPU NVIDIA, SOLO desarrollo/pruebas (producción: bedrock). Perfil `ollama`,
-  # activo con LLM_PROVIDER=ollama (vía COMPOSE_PROFILES). El contenido no sale de la máquina.
+  # activación explícita (`--profile ollama` o COMPOSE_PROFILES=ollama); luego elige Ollama en la web con
+  # URL http://ollama:11434/v1. El contenido no sale de la máquina.
   ollama:
     profiles: ["ollama"]
     image: ollama/ollama:latest
@@ -127,7 +128,34 @@ services:
         if [ -n "$$LLM_MODEL_VISION" ] && [ "$$LLM_MODEL_VISION" != "$$LLM_MODEL_TEXT" ]; then ollama pull "$$LLM_MODEL_VISION"; fi
     restart: "no"
 
+  # Relay de «Usar desde el celular» (apps/relay): servicio OPCIONAL, solo perfil `relay` (no corre con
+  # `docker compose up` normal; actívalo con `--profile relay` o COMPOSE_PROFILES=relay). Sin BD: guarda solo devices.json en
+  # RELAY_DATA_DIR (volumen relaydata). Sirve solo el arranque (apps/relay/bootstrap), no el front. Escucha en 127.0.0.1: pon delante un proxy con HTTPS (docs/despliegue.md).
+  relay:
+    profiles: ["relay"]
+    build:
+      context: .
+      dockerfile: apps/relay/Dockerfile
+    environment:
+      PORT: "8080"
+      RELAY_DATA_DIR: /data
+      RELAY_TRUST_PROXY: ${RELAY_TRUST_PROXY:-1}
+      RELAY_COOKIE_SECURE: ${RELAY_COOKIE_SECURE:-1}
+      RELAY_REGISTRATION_TOKEN: ${RELAY_REGISTRATION_TOKEN:-}
+    volumes:
+      - relaydata:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "127.0.0.1:${RELAY_PORT:-8081}:8080"
+
 volumes:
+  relaydata:
   rustfsdata:
   ocrmodels:
   ollamamodels:

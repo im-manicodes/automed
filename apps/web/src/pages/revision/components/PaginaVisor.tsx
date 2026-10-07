@@ -169,12 +169,12 @@ export default function PaginaVisor({ imagenUrl, proporcion, dudas, estados, pag
             transformOrigin: '0 0',
           }}
         >
-          <img
+          {imagenUrl && <img
             src={imagenUrl}
             alt={`Página ${pageNumber} del documento`}
             draggable={false}
             className="h-full w-full bg-white"
-          />
+          />}
           {dudasPagina.map(({ d, indice }) => {
             const sel = d.id === actualId;
             const hecho = estados[d.id] === 'guardada';
