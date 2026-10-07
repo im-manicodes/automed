@@ -29,7 +29,7 @@ export interface HardwareInfo {
 export const MIN_RAM_GB = 8;
 export const MIN_GPU_VRAM_GB = 4;
 
-/** Regla pura: ¿puede este equipo correr un modelo local pequeño (qwen2.5vl:3b)? */
+/** Regla pura: ¿puede este equipo correr un modelo local pequeño (qwen3-vl:4b, ~3,3 GB)? */
 export function evaluarHardware(input: {
   ramGb: number;
   gpu?: Gpu;

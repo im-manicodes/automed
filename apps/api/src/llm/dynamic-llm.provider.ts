@@ -31,6 +31,7 @@ export class DynamicLlmProvider implements LlmProvider {
           c.provider === 'anthropic' ? c.anthropicApiKey : null,
           c.provider === 'ollama' ? c.ollamaBaseUrl : null,
           c.provider === 'bedrock' ? c.awsRegion : null,
+          c.provider === 'bedrock' ? (c.awsCredentials ?? null) : null,
           c.timeoutMs,
           c.maxRetries,
           c.retryBaseMs,

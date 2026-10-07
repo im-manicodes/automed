@@ -93,6 +93,20 @@ export class MicrosoftService {
     }
   }
 
+  /**
+   * URI de retorno. Si MS_REDIRECT_URI no está definida y la app corre en modo escritorio
+   * (APP_MODE=desktop), se arma con el puerto real (loopback; Entra ignora el puerto en localhost).
+   */
+  redirectUri(): string {
+    const configured = this.config.get<string>('MS_REDIRECT_URI')?.trim();
+    if (configured) return configured;
+    if (this.config.get<string>('APP_MODE') === 'desktop') {
+      const port = this.config.get<string>('PORT') || '3000';
+      return `http://localhost:${port}/api/auth/callback`;
+    }
+    return this.config.getOrThrow<string>('MS_REDIRECT_URI');
+  }
+
   private tokenUrl() {
     const tenant = resolveAuthority(this.config.get<string>('MS_TENANT_ID'));
     return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
@@ -114,7 +128,7 @@ export class MicrosoftService {
     const params = new URLSearchParams({
       client_id: this.config.getOrThrow('MS_CLIENT_ID'),
       response_type: 'code',
-      redirect_uri: this.config.getOrThrow('MS_REDIRECT_URI'),
+      redirect_uri: this.redirectUri(),
       response_mode: 'query',
       scope: SCOPES,
       state,
@@ -125,7 +139,14 @@ export class MicrosoftService {
     return `${this.authorizeUrl()}?${params}`;
   }
 
-  private readState(state: string | undefined, userId: string): string {
+  /**
+   * Valida el state (JWT firmado, 10 min, con el verificador PKCE cifrado). Con `userId` exige que
+   * sea el mismo usuario (modo web); sin él (modo escritorio, sin cookie de sesión) devuelve el del state.
+   */
+  private readState(
+    state: string | undefined,
+    userId: string | null,
+  ): { userId: string; verifier: string } {
     if (!state) throw new OutlookConnectError('Solicitud no válida');
     let payload: { sub?: string; cv?: string };
     try {
@@ -135,11 +156,11 @@ export class MicrosoftService {
         'La solicitud caducó o no es válida; inténtalo de nuevo',
       );
     }
-    if (payload.sub !== userId || !payload.cv) {
+    if (!payload.sub || !payload.cv || (userId && payload.sub !== userId)) {
       throw new OutlookConnectError('La solicitud no corresponde a tu sesión');
     }
     try {
-      return this.crypto.decrypt(payload.cv);
+      return { userId: payload.sub, verifier: this.crypto.decrypt(payload.cv) };
     } catch {
       throw new OutlookConnectError('Solicitud no válida');
     }
@@ -175,17 +196,22 @@ export class MicrosoftService {
     return (await res.json()) as TokenResponse;
   }
 
-  /** Completa la conexión: valida state/PKCE y usuario, guarda el refresh token cifrado. Devuelve el correo. */
+  /**
+   * Completa la conexión: valida state/PKCE y usuario, guarda el refresh token cifrado. Devuelve el correo.
+   * `userId` null = modo escritorio: el usuario sale del state firmado (no hay cookie de sesión).
+   */
   async handleCallback(
-    userId: string,
+    userId: string | null,
     code: string,
     state: string | undefined,
   ): Promise<string> {
-    const verifier = this.readState(state, userId);
+    const read = this.readState(state, userId);
+    const verifier = read.verifier;
+    userId = read.userId;
     const tokens = await this.tokenRequest({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: this.config.getOrThrow('MS_REDIRECT_URI'),
+      redirect_uri: this.redirectUri(),
       code_verifier: verifier,
     });
     if (!tokens.refresh_token) {

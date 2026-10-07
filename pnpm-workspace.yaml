@@ -10,3 +10,9 @@ allowBuilds:
   '@nestjs/core': true
   '@swc/core': true
   workerd: set this to true or false
+  '@embedded-postgres/linux-x64': true
+  '@embedded-postgres/windows-x64': true
+  electron: true
+  electron-winstaller: true
+minimumReleaseAgeExclude:
+  - electron@44.6.0

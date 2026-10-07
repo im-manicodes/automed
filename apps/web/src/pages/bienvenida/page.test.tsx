@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { ToastProvider } from '../../context/toasts'
 import { ajustesIa, hardwareIa } from '../../test/ajustesIa'
+import { ajustesOcr } from '../../test/ajustesOcr'
 import { mockFetch, type MockHandler } from '../../test/mockFetch'
 import Bienvenida from './page'
 
@@ -28,11 +29,13 @@ function renderPage() {
 const puts = (f: ReturnType<typeof mockFetch>) =>
   f.mock.calls.filter(([, i]) => (i?.method ?? 'GET') === 'PUT').map(([, i]) => JSON.parse(String(i?.body)))
 
-function rutas(hw: MockHandler = { body: hardwareIa() }) {
+function rutas(hw: MockHandler = { body: hardwareIa() }, ocr: MockHandler = { body: ajustesOcr() }) {
   return {
+    'GET /api/settings/ocr': ocr,
+    'PUT /api/settings/ocr': (req: { body: unknown }) => ({ body: ajustesOcr({ motor: (req.body as { motor: 'local' | 'textract' | 'ninguno' }).motor }) }),
     'GET /api/settings/ia': { body: ajustesIa() },
     'GET /api/settings/ia/hardware': hw,
-    'PUT /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, proveedor: 'openai', claves: { openai: true, anthropic: false } }) },
+    'PUT /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, proveedor: 'openai', claves: { openai: true, anthropic: false, aws: false } }) },
     'POST /api/settings/ia/test': { body: { ok: true, ms: 321, mensaje: 'ok' } },
   }
 }
@@ -56,6 +59,10 @@ describe('Asistente de bienvenida', () => {
     // Modelos preseleccionados con los sugeridos de OpenAI.
     expect(screen.getByLabelText('Resúmenes de tickets')).toHaveValue('gpt-4o-mini')
     expect(screen.getByLabelText('Lectura de zonas dudosas (visión)')).toHaveValue('gpt-4o')
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+
+    // Paso de lectura de PDFs escaneados: se deja para después.
+    expect(await screen.findByText('¿Cómo leemos tus PDFs escaneados?')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
 
     expect(screen.getByText('Todo listo')).toBeInTheDocument()
@@ -95,6 +102,8 @@ describe('Asistente de bienvenida', () => {
     await user.click(await screen.findByRole('button', { name: /Siguiente/ }))
     await user.click(screen.getByRole('radio', { name: /configuración actual del servidor/ }))
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    await screen.findByText('¿Cómo leemos tus PDFs escaneados?')
+    await user.click(await screen.findByRole('button', { name: /Siguiente/ }))
     await user.click(await screen.findByRole('button', { name: 'Ir a mis tickets' }))
     await waitFor(() => expect(screen.getByTestId('ubicacion')).toHaveTextContent('/tickets'))
     expect(puts(f)).toEqual([{ bienvenidaCompletada: true }])

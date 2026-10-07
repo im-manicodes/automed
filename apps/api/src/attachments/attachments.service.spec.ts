@@ -27,7 +27,6 @@ function setup(storageKey: string, imageKey: string, existing: string[]) {
   const storage: any = {
     exists: jest.fn(async (k: string) => existing.includes(k)),
     get: jest.fn(async (k: string) => new Uint8Array([k.length])),
-    presignedGetUrl: jest.fn(async (k: string) => `url:${k}`),
   };
   return { svc: new AttachmentsService(prisma, storage), storage };
 }
@@ -41,7 +40,7 @@ describe('AttachmentsService (resolución de imágenes)', () => {
     await svc.pageImage('a1', 1);
     expect(storage.get).toHaveBeenCalledWith(own);
     const r = await svc.listPages('a1');
-    expect(r.pages[0].imageUrl).toBe(`url:${own}`);
+    expect(r.pages[0].imageUrl).toBe('/api/attachments/a1/pages/1/image');
   });
 
   it('cae a OcrPage.imageKey si la copia no existe', async () => {

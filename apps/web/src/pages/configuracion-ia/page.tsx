@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LuArrowLeft, LuSave } from 'react-icons/lu'
+import TarjetaOcr from './components/TarjetaOcr'
 import CredencialesProveedor from '../../components/ia/CredencialesProveedor'
 import ModeloPorTarea from '../../components/ia/ModeloPorTarea'
 import SelectorProveedor from '../../components/ia/SelectorProveedor'
@@ -51,6 +52,16 @@ function Formulario({ inicial }: { inicial: AjustesIa }) {
           onChange={(t, m) => setBorrador((b) => ({ ...b, modelos: { ...b.modelos, [t]: m } }))}
         />
       </section>
+
+      <TarjetaOcr
+        ajustesIa={ajustes}
+        claves={borrador.aws ?? {}}
+        onClaves={(aws) => setBorrador((b) => ({ ...b, aws }))}
+        onGuardadoIa={(nuevo) => {
+          setAjustes(nuevo)
+          setBorrador((b) => ({ ...b, aws: undefined }))
+        }}
+      />
 
       <details className="rounded-xl border border-slate-200 bg-white p-4">
         <summary className="min-h-11 cursor-pointer font-bold">Opciones avanzadas</summary>

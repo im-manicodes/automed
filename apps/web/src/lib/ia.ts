@@ -1,4 +1,5 @@
 import type { AjustesIa, CambiosAjustesIa, LlmTask, ProveedorIa } from './api'
+import { awsIncompleta, cambiosAws, type ClavesAws } from './ocr'
 
 export const TAREAS: { id: LlmTask; etiqueta: string }[] = [
   { id: 'resumen', etiqueta: 'Resúmenes de tickets' },
@@ -27,6 +28,8 @@ export interface BorradorIa {
   /** undefined = sin cambios, string = clave nueva, null = quitar la guardada. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
+  /** Claves de AWS (Bedrock y Textract comparten las mismas). */
+  aws?: ClavesAws
 }
 
 export function borradorDesde(a: AjustesIa): BorradorIa {
@@ -61,11 +64,13 @@ export function cambiosDesde(b: BorradorIa): CambiosAjustesIa {
   }
   if (b.claveOpenai !== undefined) c.claveOpenai = b.claveOpenai
   if (b.claveAnthropic !== undefined) c.claveAnthropic = b.claveAnthropic
+  if (b.aws) Object.assign(c, cambiosAws(b.aws))
   return c
 }
 
 /** ¿Falta la clave del proveedor elegido? (ni guardada ni escrita) */
 export function faltaClave(b: BorradorIa, a: AjustesIa): boolean {
+  if (b.proveedor === 'bedrock' && b.aws && awsIncompleta(b.aws)) return true
   const clave = b.proveedor === 'openai' ? b.claveOpenai : b.proveedor === 'anthropic' ? b.claveAnthropic : 'no aplica'
   const guardada = b.proveedor === 'openai' ? a.claves.openai : b.proveedor === 'anthropic' ? a.claves.anthropic : true
   if (clave === 'no aplica') return false

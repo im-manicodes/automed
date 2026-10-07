@@ -6,7 +6,7 @@
 import { loadRootEnv } from '../src/cli/load-env';
 import { createPgAdapter } from '../src/prisma/prisma.service';
 import { PrismaClient } from '../src/generated/prisma/client';
-import { StorageService } from '../src/storage/storage.service';
+import { S3StorageService } from '../src/storage/s3-storage.service';
 import { renderDemoPage } from './seed/page-image';
 import { assertNotProduction, cleanDemo, seedDemo } from './seed/demo';
 import type { ConfigService } from '@nestjs/config';
@@ -19,7 +19,7 @@ async function main() {
   if (!url) throw new Error('Falta DATABASE_URL (.env raíz)');
   if (!clean) assertNotProduction(process.env, 'db:seed:demo');
   const storage = process.env.S3_ENDPOINT
-    ? new StorageService({
+    ? new S3StorageService({
         get: (k: string, d?: string) => process.env[k] ?? d,
       } as unknown as ConfigService)
     : null;

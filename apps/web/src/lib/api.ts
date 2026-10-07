@@ -313,7 +313,7 @@ function refreshSession(): Promise<boolean> {
 }
 
 // Rutas de autenticación: un 401 aquí significa "datos incorrectos" o "sin sesión", no se reintenta.
-const NO_REFRESH = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/me']
+const NO_REFRESH = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/me', '/auth/setup-status', '/auth/setup']
 
 export async function api<T>(
   path: string,
@@ -376,7 +376,7 @@ export interface AjustesIa {
   awsRegion: string
   maxInputTokens: number
   /** Solo si hay clave guardada; la clave en sí nunca llega al navegador. */
-  claves: { openai: boolean; anthropic: boolean }
+  claves: { openai: boolean; anthropic: boolean; aws: boolean }
   sugeridos: Record<ProveedorIa, { texto: string[]; vision: string[] }>
 }
 
@@ -389,6 +389,9 @@ export interface CambiosAjustesIa {
   /** string = nueva clave, null = quitar, ausente = no cambiar. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
+  /** Ambas juntas (nuevas) o ambas null (quitar). */
+  claveAwsAccessKeyId?: string | null
+  claveAwsSecreto?: string | null
   bienvenidaCompletada?: true
 }
 
@@ -412,7 +415,7 @@ export interface HardwareIa {
   ramGb: number
   cpus: number
   gpu?: { nombre: string; vramGb: number }
-  ollama: { alcanzable: boolean; version?: string; modelos: string[] }
+  ollama: { alcanzable: boolean; version?: string; modelos: string[]; versionMinima?: string; requiereActualizar?: boolean }
   ollamaApto: { apto: boolean; velocidad: 'rapida' | 'lenta' | null; motivo: string }
 }
 
@@ -422,4 +425,61 @@ export interface DescargaOllama {
   completado: number
   total: number
   error?: string
+}
+
+// --- Primer usuario ---
+export interface SetupStatus {
+  needsSetup: boolean
+}
+
+export interface NuevoPrimerUsuario {
+  email: string
+  nombre: string
+  password: string
+}
+
+// --- Lectura de PDFs escaneados (/settings/ocr) ---
+export type MotorOcr = 'local' | 'textract' | 'ninguno'
+
+export interface GuiaPython {
+  titulo: string
+  pasos: string[]
+  comandos: string[]
+  enlace?: string
+}
+
+export interface AjustesOcr {
+  motor: MotorOcr
+  origen: 'panel' | 'servidor'
+  textractMode: 'detect' | 'analyze'
+  entorno: { escritorio: boolean; so: 'windows' | 'linux' | 'otro' }
+  python: {
+    requerido: string
+    rango: string
+    detectado: boolean
+    version?: string
+    ejecutable?: string
+    compatible: boolean
+    motivo?: string
+    guia: GuiaPython
+  }
+  entornoPython: { estado: 'sin_preparar' | 'preparando' | 'listo' | 'error'; mensaje?: string }
+  servicioLocal: { estado: 'detenido' | 'iniciando' | 'listo' | 'error'; fallbackReason?: string | null; mensaje?: string }
+}
+
+export interface CambiosAjustesOcr {
+  motor?: MotorOcr
+  textractMode?: 'detect' | 'analyze'
+}
+
+export interface ProgresoPython {
+  estado: 'inactivo' | 'preparando' | 'listo' | 'error'
+  lineas: string[]
+  mensaje?: string
+}
+
+export interface PruebaOcrResultado {
+  ok: boolean
+  ms: number
+  mensaje: string
 }

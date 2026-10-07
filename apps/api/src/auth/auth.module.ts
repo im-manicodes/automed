@@ -9,6 +9,8 @@ import { SessionGuard } from './session.guard';
 import { PasswordService } from './password.service';
 import { MicrosoftService } from './microsoft.service';
 import { LoginThrottlerGuard } from './login-throttler.guard';
+import { IpThrottlerGuard } from './ip-throttler.guard';
+import { UsersService } from '../users/users.service';
 
 /** JWT_SECRET es obligatorio: sin él (o si es corto) la API no arranca. */
 export function jwtSecretFrom(config: ConfigService): string {
@@ -40,6 +42,8 @@ export function jwtSecretFrom(config: ConfigService): string {
     PasswordService,
     MicrosoftService,
     LoginThrottlerGuard,
+    IpThrottlerGuard,
+    UsersService,
   ],
   controllers: [AuthController],
   exports: [
@@ -48,6 +52,7 @@ export function jwtSecretFrom(config: ConfigService): string {
     SessionGuard,
     PasswordService,
     MicrosoftService,
+    UsersService,
     JwtModule,
   ],
 })

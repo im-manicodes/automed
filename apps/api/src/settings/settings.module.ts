@@ -7,6 +7,7 @@ import { AiSettingsService } from './ai-settings.service';
 import { HardwareService } from './hardware.service';
 import { OllamaService } from './ollama.service';
 import { AiTestService } from './ai-test.service';
+import { OcrSettingsService } from './ocr-settings.service';
 
 @Module({
   imports: [AuthModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])],
@@ -16,8 +17,9 @@ import { AiTestService } from './ai-test.service';
     HardwareService,
     OllamaService,
     AiTestService,
+    OcrSettingsService,
   ],
   controllers: [SettingsController],
-  exports: [AiSettingsService],
+  exports: [AiSettingsService, OcrSettingsService],
 })
 export class SettingsModule {}

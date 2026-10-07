@@ -105,6 +105,11 @@ export default function PanelOllama({ hardware, onRecheck, modelos }: Props) {
       <p role="status" className="text-green-900">
         <LuCheck className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Ollama está listo{hardware.ollama.version ? ` (versión ${hardware.ollama.version})` : ''}.
       </p>
+      {hardware.ollama.requiereActualizar && (
+        <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-900">
+          Tu Ollama es anterior a la versión {hardware.ollama.versionMinima ?? '0.12.7'}, que el modelo recomendado (Qwen3-VL) necesita. Actualiza Ollama desde ollama.com/download y pulsa «Probar de nuevo».
+        </p>
+      )}
       <div>
         <p className="font-semibold">Modelos instalados</p>
         {hardware.ollama.modelos.length === 0 ? (

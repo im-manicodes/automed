@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { ToastProvider } from '../../../context/toasts'
-import * as clipboard from '../lib/clipboard'
+import * as clipboard from '../../../lib/clipboard'
 import WhatsappDialog from './WhatsappDialog'
 
 function renderDlg(initial: string, onClose = vi.fn()) {

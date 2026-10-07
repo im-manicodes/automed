@@ -8,6 +8,8 @@ export interface LlmConfig {
   openaiApiKey?: string;
   ollamaBaseUrl: string;
   awsRegion: string;
+  /** Credenciales AWS explícitas (panel); sin ellas se usa la cadena por defecto de AWS. */
+  awsCredentials?: { accessKeyId: string; secretAccessKey: string };
   timeoutMs: number;
   maxRetries: number;
   retryBaseMs: number;
@@ -20,8 +22,10 @@ export const DEFAULT_MODELS: Record<LlmProviderName, string> = {
   // ID/perfil de inferencia de Bedrock: verificar en la consola de la región y sobreescribir.
   bedrock: 'anthropic.claude-sonnet-5-5',
   openai: 'gpt-5',
-  // Solo desarrollo/pruebas: modelo local con visión (~3 GB).
-  ollama: 'qwen2.5vl:3b',
+  // Modelo local recomendado: Qwen3-VL 4B con visión (~3,3 GB; requiere Ollama >= 0.12.7). Se usa la variante
+  // `-instruct`: el tag `qwen3-vl:4b` a secas apunta a la de razonamiento (mismo digest que `4b-thinking`),
+  // que mete su razonamiento en la respuesta y gasta el límite de tokens.
+  ollama: 'qwen3-vl:4b-instruct',
 };
 
 const num = (v: string | undefined, d: number) => {

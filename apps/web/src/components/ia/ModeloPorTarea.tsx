@@ -11,7 +11,7 @@ interface Props {
   onChange: (tarea: LlmTask, modelo: string) => void
 }
 
-function Fila({ id, etiqueta, valor, lista, onChange }: { id: LlmTask; etiqueta: string; valor: string; lista: string[]; onChange: (m: string) => void }) {
+function Fila({ id, etiqueta, valor, lista, recomendado, onChange }: { id: LlmTask; etiqueta: string; valor: string; lista: string[]; recomendado?: string; onChange: (m: string) => void }) {
   const [otroForzado, setOtroForzado] = useState(false)
   const esOtro = otroForzado || !lista.includes(valor)
   return (
@@ -29,7 +29,7 @@ function Fila({ id, etiqueta, valor, lista, onChange }: { id: LlmTask; etiqueta:
           }
         }}
       >
-        {lista.map((m) => <option key={m} value={m}>{m}</option>)}
+        {lista.map((m) => <option key={m} value={m}>{m === recomendado ? `${m} (recomendado)` : m}</option>)}
         <option value={OTRO}>Otro…</option>
       </select>
       {esOtro && (
@@ -56,6 +56,7 @@ export default function ModeloPorTarea({ proveedor, modelos, sugeridos, onChange
           etiqueta={t.etiqueta}
           valor={modelos[t.id]}
           lista={t.id === 'vision' ? sugeridos.vision : sugeridos.texto}
+          recomendado={proveedor === 'ollama' ? (t.id === 'vision' ? sugeridos.vision : sugeridos.texto)[0] : undefined}
           onChange={(m) => onChange(t.id, m)}
         />
       ))}

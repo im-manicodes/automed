@@ -27,31 +27,23 @@ export class AttachmentsService {
       attachmentId: att.id,
       filename: att.filename,
       status: att.status,
-      pages: await Promise.all(
-        pages.map(async (p) => ({
-          pageNumber: p.pageNumber,
-          width: p.width,
-          height: p.height,
-          imageUrl: await this.storage.presignedGetUrl(
-            await this.resolveImageKey(
-              att.storageKey,
-              p.pageNumber,
-              p.imageKey,
-            ),
-          ),
-          regions: p.regions.map((r) => ({
-            id: r.id,
-            x: r.x,
-            y: r.y,
-            w: r.w,
-            h: r.h,
-            text: r.text,
-            confidence: r.confidence,
-            status: r.status,
-            textoUsuario: r.userText,
-          })),
+      pages: pages.map((p) => ({
+        pageNumber: p.pageNumber,
+        width: p.width,
+        height: p.height,
+        imageUrl: `/api/attachments/${att.id}/pages/${p.pageNumber}/image`,
+        regions: p.regions.map((r) => ({
+          id: r.id,
+          x: r.x,
+          y: r.y,
+          w: r.w,
+          h: r.h,
+          text: r.text,
+          confidence: r.confidence,
+          status: r.status,
+          textoUsuario: r.userText,
         })),
-      ),
+      })),
     };
   }
 

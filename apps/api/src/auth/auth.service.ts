@@ -136,6 +136,11 @@ export class AuthService {
     return { user, access: this.signAccess(user), refresh: r.raw };
   }
 
+  /** Abre una sesión nueva (familia nueva de refresh tokens) para un usuario ya autenticado/creado. */
+  startSession(user: AuthUser, userAgent?: string): Promise<SessionTokens> {
+    return this.tokensFor(user, randomUUID(), userAgent);
+  }
+
   async login(
     email: unknown,
     password: unknown,

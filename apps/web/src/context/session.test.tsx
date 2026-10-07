@@ -46,3 +46,24 @@ describe('SessionProvider al arrancar', () => {
     await waitFor(() => expect(screen.getByText('anonymous')).toBeInTheDocument())
   })
 })
+
+describe('SessionProvider.aceptarSesion', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('pasa a autenticado con el usuario recibido (primer usuario)', async () => {
+    mockFetch({ 'GET /api/auth/me': { body: { authenticated: false } }, 'POST /api/auth/refresh': { status: 401, body: {} } })
+    function Aceptar() {
+      const { aceptarSesion } = useSession()
+      return <button onClick={() => aceptarSesion(usuario)}>aceptar</button>
+    }
+    render(
+      <SessionProvider>
+        <Estado />
+        <Aceptar />
+      </SessionProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('anonymous')).toBeInTheDocument())
+    screen.getByText('aceptar').click()
+    await waitFor(() => expect(screen.getByText('hola Ana')).toBeInTheDocument())
+  })
+})

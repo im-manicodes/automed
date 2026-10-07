@@ -9,7 +9,7 @@
 import { ConfigService } from '@nestjs/config';
 import { createPgAdapter } from '../prisma/prisma.service';
 import { PrismaClient } from '../generated/prisma/client';
-import { StorageService } from '../storage/storage.service';
+import { S3StorageService } from '../storage/s3-storage.service';
 import { loadRootEnv } from './load-env';
 import {
   migrateStorage,
@@ -33,7 +33,7 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('Falta DATABASE_URL (.env raíz)');
   const prisma = new PrismaClient({ adapter: createPgAdapter(url) });
-  const storage = new StorageService(new ConfigService());
+  const storage = new S3StorageService(new ConfigService());
   console.log(
     args.apply
       ? 'Migrando el almacenamiento al layout por hilo...'

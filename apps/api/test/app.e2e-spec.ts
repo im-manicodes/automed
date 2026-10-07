@@ -10,7 +10,9 @@ import { JwtModule, JwtService } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PasswordService } from '../src/auth/password.service';
 import { MicrosoftService } from '../src/auth/microsoft.service';
+import { IpThrottlerGuard } from '../src/auth/ip-throttler.guard';
 import { LoginThrottlerGuard } from '../src/auth/login-throttler.guard';
+import { UsersService } from '../src/users/users.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { SessionGuard } from '../src/auth/session.guard';
 import { AuthController } from '../src/auth/auth.controller';
@@ -60,6 +62,8 @@ describe('API (e2e, sin BD)', () => {
         AuthService,
         PasswordService,
         LoginThrottlerGuard,
+        IpThrottlerGuard,
+        UsersService,
         SessionGuard,
         { provide: ConfigService, useValue: config },
         { provide: PrismaService, useValue: {} },

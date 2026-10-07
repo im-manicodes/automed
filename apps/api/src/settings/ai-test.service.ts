@@ -11,6 +11,8 @@ export interface AiTestDraft {
   claveAnthropic?: string;
   ollamaUrl?: string;
   awsRegion?: string;
+  claveAwsAccessKeyId?: string;
+  claveAwsSecreto?: string;
 }
 
 export interface AiTestResult {
@@ -91,6 +93,13 @@ export class AiTestService {
     const claveAnthropic = str(d.claveAnthropic, 'La clave de Anthropic', 500);
     const ollamaUrl = str(d.ollamaUrl, 'La dirección de Ollama', 500);
     const awsRegion = str(d.awsRegion, 'La región de AWS', 50);
+    const awsId = str(d.claveAwsAccessKeyId, 'La clave de acceso de AWS', 128);
+    const awsSecret = str(d.claveAwsSecreto, 'El secreto de AWS', 500);
+    if ((awsId === undefined) !== (awsSecret === undefined)) {
+      throw new BadRequestException(
+        'Las claves de AWS van juntas: indica la clave de acceso y el secreto',
+      );
+    }
     if (ollamaUrl) {
       let ok = false;
       try {
@@ -122,6 +131,10 @@ export class AiTestService {
       anthropicApiKey: claveAnthropic ?? eff.llm.anthropicApiKey,
       ollamaBaseUrl: ollamaUrl ?? eff.llm.ollamaBaseUrl,
       awsRegion: awsRegion ?? eff.llm.awsRegion,
+      awsCredentials:
+        awsId && awsSecret
+          ? { accessKeyId: awsId, secretAccessKey: awsSecret }
+          : eff.llm.awsCredentials,
       timeoutMs: TEST_TIMEOUT_MS,
       maxRetries: 0,
     };

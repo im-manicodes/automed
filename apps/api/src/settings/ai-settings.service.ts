@@ -30,6 +30,8 @@ export interface AiStoredConfig {
   maxInputTokens?: number;
   openaiKeyEnc?: string;
   anthropicKeyEnc?: string;
+  awsAccessKeyIdEnc?: string;
+  awsSecretEnc?: string;
 }
 
 /** Configuración vigente (panel sobre .env). Contiene claves: NUNCA exponerla por la API. */
@@ -58,7 +60,7 @@ export interface AiPublicSettings {
   ollamaUrl: string;
   awsRegion: string;
   maxInputTokens: number;
-  claves: { openai: boolean; anthropic: boolean };
+  claves: { openai: boolean; anthropic: boolean; aws: boolean };
   sugeridos: Record<LlmProviderName, AiSuggestedModels>;
 }
 
@@ -71,6 +73,9 @@ export interface AiSettingsInput {
   maxInputTokens?: number;
   claveOpenai?: string | null;
   claveAnthropic?: string | null;
+  /** Las dos claves de AWS van juntas: ambas con valor, o ambas null para borrarlas. */
+  claveAwsAccessKeyId?: string | null;
+  claveAwsSecreto?: string | null;
   bienvenidaCompletada?: boolean;
 }
 
@@ -97,10 +102,26 @@ const SUGGESTED: Record<LlmProviderName, AiSuggestedModels> = {
     ],
   },
   ollama: {
-    texto: ['qwen2.5vl:3b', 'qwen2.5vl:7b', 'llama3.2:3b'],
-    vision: ['qwen2.5vl:3b', 'qwen2.5vl:7b', 'llama3.2-vision:11b'],
+    texto: [
+      'qwen3-vl:4b-instruct',
+      'qwen2.5vl:3b',
+      'qwen2.5vl:7b',
+      'llama3.2:3b',
+    ],
+    vision: [
+      'qwen3-vl:4b-instruct',
+      'qwen2.5vl:3b',
+      'qwen2.5vl:7b',
+      'llama3.2-vision:11b',
+    ],
   },
 };
+
+/** Credenciales AWS en claro (solo para construir clientes; nunca se exponen ni se registran). */
+export interface AwsCredentials {
+  accessKeyId: string;
+  secretAccessKey: string;
+}
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -183,6 +204,7 @@ export class AiSettingsService {
       this.decryptKey(stored?.openaiKeyEnc) ?? env.openaiApiKey;
     const anthropicApiKey =
       this.decryptKey(stored?.anthropicKeyEnc) ?? env.anthropicApiKey;
+    const awsCredentials = this.awsFrom(stored);
     return {
       proveedor,
       modelos,
@@ -199,8 +221,22 @@ export class AiSettingsService {
         anthropicApiKey,
         ollamaBaseUrl: ollamaUrl,
         awsRegion,
+        ...(awsCredentials ? { awsCredentials } : {}),
       },
     };
+  }
+
+  private awsFrom(stored: AiStoredConfig | null): AwsCredentials | undefined {
+    const accessKeyId = this.decryptKey(stored?.awsAccessKeyIdEnc);
+    const secretAccessKey = this.decryptKey(stored?.awsSecretEnc);
+    return accessKeyId && secretAccessKey
+      ? { accessKeyId, secretAccessKey }
+      : undefined;
+  }
+
+  /** Credenciales AWS guardadas en el panel (descifradas) o undefined para usar la cadena por defecto de AWS. */
+  async getAwsCredentials(): Promise<AwsCredentials | undefined> {
+    return (await this.load()).effective.llm.awsCredentials;
   }
 
   /** Configuración vigente (panel > .env), con caché hasta el próximo `save`. */
@@ -239,6 +275,7 @@ export class AiSettingsService {
       claves: {
         openai: !!e.llm.openaiApiKey,
         anthropic: !!e.llm.anthropicApiKey,
+        aws: !!e.llm.awsCredentials,
       },
       sugeridos,
     };
@@ -341,6 +378,35 @@ export class AiSettingsService {
           );
         }
         next[enc] = this.crypto.encrypt(t);
+      }
+      touchesConfig = true;
+    }
+    const awsId = input.claveAwsAccessKeyId;
+    const awsSecret = input.claveAwsSecreto;
+    if (awsId !== undefined || awsSecret !== undefined) {
+      if (awsId === undefined || awsSecret === undefined) {
+        throw new BadRequestException(
+          'Las claves de AWS van juntas: indica la clave de acceso y el secreto',
+        );
+      }
+      if (awsId === null && awsSecret === null) {
+        delete next.awsAccessKeyIdEnc;
+        delete next.awsSecretEnc;
+      } else {
+        const id = typeof awsId === 'string' ? awsId.trim() : '';
+        const secret = typeof awsSecret === 'string' ? awsSecret.trim() : '';
+        if (!id || id.length > 128 || /\s/.test(id)) {
+          throw new BadRequestException(
+            'La clave de acceso de AWS no es válida (para borrarla envía null junto con el secreto)',
+          );
+        }
+        if (!secret || secret.length > 500) {
+          throw new BadRequestException(
+            'El secreto de AWS no es válido (para borrarlo envía null junto con la clave de acceso)',
+          );
+        }
+        next.awsAccessKeyIdEnc = this.crypto.encrypt(id);
+        next.awsSecretEnc = this.crypto.encrypt(secret);
       }
       touchesConfig = true;
     }

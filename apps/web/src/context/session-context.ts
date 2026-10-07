@@ -10,6 +10,8 @@ export interface SessionCtx {
   session: SessionState
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  /** Acepta una sesión ya iniciada por el servidor (p. ej. al crear el primer usuario). */
+  aceptarSesion: (user: User) => void
 }
 
 export const SessionContext = createContext<SessionCtx | null>(null)

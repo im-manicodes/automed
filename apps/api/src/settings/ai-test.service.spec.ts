@@ -75,6 +75,34 @@ describe('AiTestService', () => {
     expect(spy.mock.calls[0][0].openaiApiKey).toBe('sk-guardada');
   });
 
+  it('bedrock: usa las credenciales AWS del borrador o, si no hay, las guardadas', async () => {
+    const saved = { accessKeyId: 'AKIAGUARDADA', secretAccessKey: 'sg' };
+    const ai2 = {
+      getEffective: jest.fn().mockResolvedValue({
+        ...eff,
+        llm: { ...eff.llm, awsCredentials: saved },
+      }),
+    };
+    const s2 = new AiTestService(ai2 as unknown as AiSettingsService);
+    const spy = jest.spyOn(factory, 'createLlmProvider').mockReturnValue({
+      complete: jest.fn().mockResolvedValue('OK'),
+    } as never);
+    await s2.test({ proveedor: 'bedrock' });
+    expect(spy.mock.calls[0][0].awsCredentials).toEqual(saved);
+    await s2.test({
+      proveedor: 'bedrock',
+      claveAwsAccessKeyId: 'AKIANUEVA',
+      claveAwsSecreto: 'sn',
+    });
+    expect(spy.mock.calls[1][0].awsCredentials).toEqual({
+      accessKeyId: 'AKIANUEVA',
+      secretAccessKey: 'sn',
+    });
+    await expect(
+      s2.test({ proveedor: 'bedrock', claveAwsAccessKeyId: 'AKIA' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('error del proveedor: mensaje mapeado sin eco de la clave', async () => {
     jest.spyOn(factory, 'createLlmProvider').mockReturnValue({
       complete: jest

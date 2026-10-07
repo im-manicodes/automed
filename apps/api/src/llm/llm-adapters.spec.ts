@@ -190,6 +190,21 @@ describe('BedrockLlmProvider (SDK mockeado)', () => {
     expect(input.messages[0].content[0].image.format).toBe('png');
   });
 
+  it('usa credenciales explícitas si existen y la cadena por defecto si no', async () => {
+    const creds = { accessKeyId: 'AKIAX', secretAccessKey: 'sec' };
+    const withCreds = new BedrockLlmProvider(
+      cfg({ provider: 'bedrock', awsCredentials: creds }),
+    );
+    const c1 = (withCreds as any).client.config;
+    expect(await c1.credentials()).toMatchObject(creds);
+    const noCreds = new BedrockLlmProvider(cfg({ provider: 'bedrock' }));
+    const c2 = (noCreds as any).client.config;
+    expect(c2.credentials).toBeDefined(); // proveedor por defecto de AWS
+    expect((await c2.credentials().catch(() => ({}))).accessKeyId).not.toBe(
+      'AKIAX',
+    );
+  });
+
   it('reintenta ThrottlingException', async () => {
     const err = Object.assign(new Error('t'), { name: 'ThrottlingException' });
     const send = jest
@@ -232,8 +247,8 @@ describe('Ollama (config y adaptador)', () => {
   it('readLlmConfig: modelo y URL por defecto, sin API key', () => {
     const c = readLlmConfig(envOf({ LLM_PROVIDER: 'ollama' }));
     expect(c.provider).toBe('ollama');
-    expect(c.modelText).toBe('qwen2.5vl:3b');
-    expect(c.modelVision).toBe('qwen2.5vl:3b');
+    expect(c.modelText).toBe('qwen3-vl:4b-instruct');
+    expect(c.modelVision).toBe('qwen3-vl:4b-instruct');
     expect(c.ollamaBaseUrl).toBe('http://localhost:11434/v1');
     const o = readLlmConfig(
       envOf({

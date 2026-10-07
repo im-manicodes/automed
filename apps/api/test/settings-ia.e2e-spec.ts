@@ -8,7 +8,9 @@ import type { App } from 'supertest/types';
 import { configureApp } from '../src/app.setup';
 import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
+import { IpThrottlerGuard } from '../src/auth/ip-throttler.guard';
 import { LoginThrottlerGuard } from '../src/auth/login-throttler.guard';
+import { UsersService } from '../src/users/users.service';
 import { MicrosoftService } from '../src/auth/microsoft.service';
 import { PasswordService } from '../src/auth/password.service';
 import { SessionGuard } from '../src/auth/session.guard';
@@ -62,6 +64,8 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
         TokenCryptoService,
         SessionGuard,
         LoginThrottlerGuard,
+        IpThrottlerGuard,
+        UsersService,
         AiSettingsService,
         AiTestService,
         { provide: HardwareService, useValue: hardware },
@@ -121,7 +125,7 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
       origen: 'servidor',
       claves: { openai: false, anthropic: false },
     });
-    expect(res.body.sugeridos.ollama.texto).toContain('qwen2.5vl:3b');
+    expect(res.body.sugeridos.ollama.texto[0]).toBe('qwen3-vl:4b-instruct');
     expect(JSON.stringify(res.body)).not.toMatch(/Enc|sk-/);
   });
 
@@ -148,7 +152,11 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
     const put = await authed(http().put('/api/settings/ia'))
       .send({ proveedor: 'openai', claveOpenai: KEY })
       .expect(200);
-    expect(put.body.claves).toEqual({ openai: true, anthropic: false });
+    expect(put.body.claves).toEqual({
+      openai: true,
+      anthropic: false,
+      aws: false,
+    });
     expect(put.body.proveedor).toBe('openai');
     expect(put.body.origen).toBe('panel');
     expect(JSON.stringify(put.body)).not.toContain(KEY);

@@ -35,8 +35,9 @@ export class LocalOcrEngineService implements OcrEngine {
   async recognize(
     image: Uint8Array,
     pageNumber: number,
+    opts: { baseUrl?: string } = {},
   ): Promise<OcrPageResult> {
-    const res = await fetch(`${this.cfg.localUrl}/ocr`, {
+    const res = await fetch(`${opts.baseUrl ?? this.cfg.localUrl}/ocr`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream' },
       body: Buffer.from(image),

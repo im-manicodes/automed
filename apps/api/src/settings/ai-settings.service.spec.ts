@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { TokenCryptoService } from '../auth/token-crypto.service';
 import { AiSettingsService } from './ai-settings.service';
@@ -69,7 +70,9 @@ describe('AiSettingsService', () => {
     const { svc } = setup({ LLM_PROVIDER: 'openai', LLM_MODEL_TEXT: 'gpt-x' });
     await svc.save({ proveedor: 'ollama' });
     const e = await svc.getEffective();
-    expect(Object.values(e.modelos)).toEqual(Array(5).fill('qwen2.5vl:3b'));
+    expect(Object.values(e.modelos)).toEqual(
+      Array(5).fill('qwen3-vl:4b-instruct'),
+    );
     await svc.save({ modelos: { resumen: 'otro' } });
     const e2 = await svc.getEffective();
     expect(e2.modelos.vision).toBe('otro');
@@ -89,6 +92,57 @@ describe('AiSettingsService', () => {
     expect((rows.get('ia.config') as any).anthropicKeyEnc).toBeUndefined();
   });
 
+  it('credenciales AWS: cifradas en reposo, descifradas solo por getAwsCredentials y nunca en getPublic', async () => {
+    const { svc, rows } = setup();
+    expect(await svc.getAwsCredentials()).toBeUndefined();
+    await svc.save({
+      claveAwsAccessKeyId: 'AKIAEJEMPLO12345',
+      claveAwsSecreto: 'secreto-aws-muy-largo',
+    });
+    const stored = JSON.stringify(rows.get('ia.config'));
+    expect(stored).not.toContain('AKIAEJEMPLO12345');
+    expect(stored).not.toContain('secreto-aws-muy-largo');
+    expect(stored).toContain('awsAccessKeyIdEnc');
+    expect(await svc.getAwsCredentials()).toEqual({
+      accessKeyId: 'AKIAEJEMPLO12345',
+      secretAccessKey: 'secreto-aws-muy-largo',
+    });
+    const pub = await svc.getPublic();
+    expect(pub.claves.aws).toBe(true);
+    const json = JSON.stringify(pub);
+    expect(json).not.toContain('AKIAEJEMPLO12345');
+    expect(json).not.toContain('secreto-aws-muy-largo');
+    // guardar otra cosa no toca las claves
+    await svc.save({ awsRegion: 'eu-west-1' });
+    expect((await svc.getAwsCredentials())?.accessKeyId).toBe(
+      'AKIAEJEMPLO12345',
+    );
+    await svc.save({ claveAwsAccessKeyId: null, claveAwsSecreto: null });
+    expect(await svc.getAwsCredentials()).toBeUndefined();
+    expect((await svc.getPublic()).claves.aws).toBe(false);
+    expect((rows.get('ia.config') as any).awsSecretEnc).toBeUndefined();
+  });
+
+  it('credenciales AWS: deben venir juntas y ser válidas (400 en español)', async () => {
+    const { svc } = setup();
+    const bad: any[] = [
+      { claveAwsAccessKeyId: 'AKIA1' },
+      { claveAwsSecreto: 'x' },
+      { claveAwsAccessKeyId: 'AKIA1', claveAwsSecreto: null },
+      { claveAwsAccessKeyId: null, claveAwsSecreto: 'x' },
+      { claveAwsAccessKeyId: '', claveAwsSecreto: 'x' },
+      { claveAwsAccessKeyId: 'A K', claveAwsSecreto: 'x' },
+      { claveAwsAccessKeyId: 'A'.repeat(129), claveAwsSecreto: 'x' },
+      { claveAwsAccessKeyId: 'AKIA1', claveAwsSecreto: '' },
+      { claveAwsAccessKeyId: 'AKIA1', claveAwsSecreto: 'x'.repeat(501) },
+      { claveAwsAccessKeyId: 5, claveAwsSecreto: 'x' },
+    ];
+    for (const b of bad) {
+      await expect(svc.save(b)).rejects.toThrow(BadRequestException);
+    }
+    expect(await svc.getAwsCredentials()).toBeUndefined();
+  });
+
   it('getPublic jamás contiene claves, solo si existen', async () => {
     const { svc } = setup({ ANTHROPIC_API_KEY: 'sk-env-ant' });
     await svc.save({ claveOpenai: 'sk-openai-panel' });
@@ -97,8 +151,12 @@ describe('AiSettingsService', () => {
     expect(json).not.toContain('sk-openai-panel');
     expect(json).not.toContain('sk-env-ant');
     expect(json).not.toMatch(/Enc|apiKey|ApiKey/i);
-    expect(pub.claves).toEqual({ openai: true, anthropic: true });
-    expect(pub.sugeridos.ollama.texto[0]).toBe('qwen2.5vl:3b');
+    expect(pub.claves).toEqual({
+      openai: true,
+      anthropic: true,
+      aws: false,
+    });
+    expect(pub.sugeridos.ollama.texto[0]).toBe('qwen3-vl:4b-instruct');
     expect(pub.sugeridos.openai.vision.length).toBeGreaterThan(0);
   });
 

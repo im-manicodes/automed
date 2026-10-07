@@ -14,6 +14,7 @@ import { join, resolve } from 'node:path';
 import type { ConfigService } from '@nestjs/config';
 import { LocalOcrEngineService } from '../src/ocr/local-ocr-engine.service';
 import { TextractOcrEngineService } from '../src/ocr/textract-ocr-engine.service';
+import type { AiSettingsService } from '../src/settings/ai-settings.service';
 import { PdfRasterizerService } from '../src/ocr/pdf-rasterizer.service';
 import {
   classifyRegions,
@@ -53,7 +54,11 @@ async function main() {
   const rasterizer = new PdfRasterizerService(config);
   const engine =
     cfg.engine === 'textract'
-      ? new TextractOcrEngineService(config)
+      ? new TextractOcrEngineService(config, {
+          // Sin Nest ni BD: región del env y credenciales de la cadena por defecto de AWS.
+          getEffective: () => Promise.resolve({ awsRegion: cfg.awsRegion }),
+          getAwsCredentials: () => Promise.resolve(undefined),
+        } as unknown as AiSettingsService)
       : new LocalOcrEngineService(config);
 
   const files = readdirSync(dir)

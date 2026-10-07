@@ -17,7 +17,10 @@ const FORMATS: Record<string, ImageFormat> = {
   'image/webp': 'webp',
 };
 
-/** Bedrock vía API Converse (credenciales AWS estándar: rol/perfil/variables). */
+/**
+ * Bedrock vía API Converse. Usa las credenciales explícitas de la configuración (panel) si existen;
+ * si no, la cadena por defecto de AWS (rol/perfil/variables).
+ */
 export class BedrockLlmProvider extends BaseLlmProvider {
   private readonly client: Pick<BedrockRuntimeClient, 'send'>;
 
@@ -27,7 +30,12 @@ export class BedrockLlmProvider extends BaseLlmProvider {
     sleep?: (ms: number) => Promise<void>,
   ) {
     super(cfg, sleep);
-    this.client = client ?? new BedrockRuntimeClient({ region: cfg.awsRegion });
+    this.client =
+      client ??
+      new BedrockRuntimeClient({
+        region: cfg.awsRegion,
+        ...(cfg.awsCredentials ? { credentials: cfg.awsCredentials } : {}),
+      });
   }
 
   protected async call(

@@ -137,6 +137,36 @@ describe('DynamicLlmProvider', () => {
     expect(mockCreate).toHaveBeenCalledTimes(6);
   });
 
+  it('recrea el adaptador de Bedrock al cambiar las credenciales AWS', async () => {
+    const { svc, set } = setup();
+    const bedrock = (awsCredentials?: unknown) =>
+      eff(
+        { proveedor: 'bedrock' },
+        { provider: 'bedrock', ...(awsCredentials ? { awsCredentials } : {}) },
+      );
+    set(bedrock());
+    await svc.text('s', 'u');
+    await svc.text('s', 'u');
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    set(bedrock({ accessKeyId: 'A', secretAccessKey: 'S1' }));
+    await svc.text('s', 'u');
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    set(bedrock({ accessKeyId: 'A', secretAccessKey: 'S2' }));
+    await svc.text('s', 'u');
+    expect(mockCreate).toHaveBeenCalledTimes(3);
+    // en otro proveedor las credenciales AWS no importan
+    set(
+      eff({}, { awsCredentials: { accessKeyId: 'X', secretAccessKey: 'Y' } }),
+    );
+    await svc.text('s', 'u');
+    expect(mockCreate).toHaveBeenCalledTimes(4);
+    set(
+      eff({}, { awsCredentials: { accessKeyId: 'X', secretAccessKey: 'Z' } }),
+    );
+    await svc.text('s', 'u');
+    expect(mockCreate).toHaveBeenCalledTimes(4);
+  });
+
   it('una clave de otro proveedor no recrea el adaptador', async () => {
     const { svc, set } = setup();
     await svc.text('s', 'u');

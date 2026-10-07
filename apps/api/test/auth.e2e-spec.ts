@@ -8,6 +8,7 @@ import type { App } from 'supertest/types';
 import { configureApp } from '../src/app.setup';
 import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
+import { IpThrottlerGuard } from '../src/auth/ip-throttler.guard';
 import { LoginThrottlerGuard } from '../src/auth/login-throttler.guard';
 import { MicrosoftService } from '../src/auth/microsoft.service';
 import { PasswordService } from '../src/auth/password.service';
@@ -16,6 +17,7 @@ import { TokenCryptoService } from '../src/auth/token-crypto.service';
 import { MailController } from '../src/mail/mail.controller';
 import { MailSyncService } from '../src/mail/mail-sync.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { UsersService } from '../src/users/users.service';
 import { fakePrisma } from './helpers/fake-prisma';
 
 const SECRET = 's'.repeat(48);
@@ -90,6 +92,8 @@ describe('Auth + conexión Outlook (e2e, sin BD ni red)', () => {
         TokenCryptoService,
         SessionGuard,
         LoginThrottlerGuard,
+        IpThrottlerGuard,
+        UsersService,
         {
           provide: ConfigService,
           useValue: {

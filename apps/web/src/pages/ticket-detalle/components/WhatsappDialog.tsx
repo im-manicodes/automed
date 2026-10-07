@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LuCopy, LuExternalLink, LuPencil } from 'react-icons/lu'
 import { useToast } from '../../../context/toasts-context'
-import { copiarTexto } from '../lib/clipboard'
+import { copiarTexto } from '../../../lib/clipboard'
 import { enlaceWhatsApp } from '../lib/whatsapp'
 
 interface Props {

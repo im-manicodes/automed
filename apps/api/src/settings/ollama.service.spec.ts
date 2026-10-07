@@ -1,4 +1,9 @@
-import { OllamaService, ollamaNativeBase } from './ollama.service';
+import {
+  OLLAMA_MIN_VERSION,
+  OllamaService,
+  ollamaNativeBase,
+  versionAtLeast,
+} from './ollama.service';
 
 const json = (body: unknown, status = 200) =>
   Promise.resolve(
@@ -40,13 +45,15 @@ describe('OllamaService', () => {
   it('info: versión y modelos desde /api/version y /api/tags', async () => {
     fetchMock.mockImplementation((url: string) =>
       String(url).endsWith('/api/version')
-        ? json({ version: '0.5.1' })
+        ? json({ version: '0.12.7' })
         : json({ models: [{ name: 'qwen2.5vl:3b' }, { name: 'x:1' }] }),
     );
     expect(await svc.info('http://localhost:11434/v1')).toEqual({
       alcanzable: true,
-      version: '0.5.1',
+      version: '0.12.7',
       modelos: ['qwen2.5vl:3b', 'x:1'],
+      versionMinima: OLLAMA_MIN_VERSION,
+      requiereActualizar: false,
     });
     expect(fetchMock.mock.calls[0][0]).toBe(
       'http://localhost:11434/api/version',
@@ -58,6 +65,7 @@ describe('OllamaService', () => {
     expect(await svc.info('http://localhost:1/v1')).toEqual({
       alcanzable: false,
       modelos: [],
+      versionMinima: OLLAMA_MIN_VERSION,
     });
     expect((await svc.info('ftp://x')).alcanzable).toBe(false);
   });
@@ -130,5 +138,30 @@ describe('OllamaService', () => {
     svc.startPull('http://h:1', 'm');
     await tick();
     expect(svc.status('m').estado).toBe('listo');
+  });
+  it('info: avisa que hay que actualizar Ollama si es anterior a 0.12.7 (Qwen3-VL)', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      String(url).endsWith('/api/version')
+        ? json({ version: '0.11.4' })
+        : json({ models: [] }),
+    );
+    const info = await svc.info('http://localhost:11434/v1');
+    expect(info).toMatchObject({
+      alcanzable: true,
+      version: '0.11.4',
+      requiereActualizar: true,
+      versionMinima: '0.12.7',
+    });
+  });
+
+  it('versionAtLeast compara versiones y tolera sufijos o texto ilegible', () => {
+    expect(versionAtLeast('0.12.7', '0.12.7')).toBe(true);
+    expect(versionAtLeast('0.12.6', '0.12.7')).toBe(false);
+    expect(versionAtLeast('0.13.0', '0.12.7')).toBe(true);
+    expect(versionAtLeast('1.0.0', '0.12.7')).toBe(true);
+    expect(versionAtLeast('0.9.9', '0.12.7')).toBe(false);
+    expect(versionAtLeast('0.12.7-rc1', '0.12.7')).toBe(true);
+    expect(versionAtLeast('v0.12.8', '0.12.7')).toBe(true);
+    expect(versionAtLeast('desconocida', '0.12.7')).toBe(true);
   });
 });

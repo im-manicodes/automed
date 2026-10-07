@@ -53,6 +53,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [logoutReq])
 
-  const value = useMemo(() => ({ session, login, logout }), [session, login, logout])
+  const aceptarSesion = useCallback((user: User) => setSession({ status: 'authenticated', user }), [])
+
+  const value = useMemo(() => ({ session, login, logout, aceptarSesion }), [session, login, logout, aceptarSesion])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

@@ -68,7 +68,7 @@ function table(defaults: () => Row = () => ({}), uniques: string[] = []) {
 
 /** BD en memoria mínima para tests de auth/conexión (sin Postgres). */
 export function fakePrisma() {
-  return {
+  const db = {
     user: table(
       () => ({ createdAt: new Date(), passwordChangedAt: new Date() }),
       ['email'],
@@ -94,5 +94,10 @@ export function fakePrisma() {
     reportRow: table(() => ({ createdAt: new Date() })),
     threadReportData: table(),
     hospitalEvent: table(),
+  };
+  // Transacción simulada: sin aislamiento ni rollback (suficiente para las pruebas).
+  return {
+    ...db,
+    $transaction: <T>(fn: (tx: typeof db) => Promise<T>) => fn(db),
   };
 }

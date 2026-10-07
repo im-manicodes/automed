@@ -14,6 +14,28 @@ export interface OllamaInfo {
   alcanzable: boolean;
   version?: string;
   modelos: string[];
+  /** Versión mínima de Ollama para el modelo recomendado (Qwen3-VL). */
+  versionMinima: string;
+  /** true si Ollama responde pero su versión es anterior a `versionMinima`. */
+  requiereActualizar?: boolean;
+}
+
+/** Qwen3-VL exige Ollama 0.12.7 o superior (https://ollama.com/library/qwen3-vl). */
+export const OLLAMA_MIN_VERSION = '0.12.7';
+
+/** Compara versiones tipo "0.12.7" (ignora sufijos como -rc1). Versión ilegible => true (no molestar). */
+export function versionAtLeast(version: string, min: string): boolean {
+  const parse = (v: string) => {
+    const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(v.trim());
+    return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+  };
+  const a = parse(version);
+  const b = parse(min);
+  if (!a || !b) return true;
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] > b[i];
+  }
+  return true;
 }
 
 const QUICK_TIMEOUT_MS = 2500;
@@ -86,19 +108,33 @@ export class OllamaService {
 
   async info(url: string): Promise<OllamaInfo> {
     const base = httpBase(url);
-    if (!base) return { alcanzable: false, modelos: [] };
+    if (!base) {
+      return {
+        alcanzable: false,
+        modelos: [],
+        versionMinima: OLLAMA_MIN_VERSION,
+      };
+    }
     try {
       const v = (await this.getJson(base, '/api/version')) as {
         version?: unknown;
       };
       const modelos = await this.listModels(url);
+      const version = typeof v.version === 'string' ? v.version : undefined;
       return {
         alcanzable: true,
-        version: typeof v.version === 'string' ? v.version : undefined,
+        version,
         modelos,
+        versionMinima: OLLAMA_MIN_VERSION,
+        requiereActualizar:
+          version !== undefined && !versionAtLeast(version, OLLAMA_MIN_VERSION),
       };
     } catch {
-      return { alcanzable: false, modelos: [] };
+      return {
+        alcanzable: false,
+        modelos: [],
+        versionMinima: OLLAMA_MIN_VERSION,
+      };
     }
   }
 
