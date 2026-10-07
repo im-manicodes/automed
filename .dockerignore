@@ -2,3 +2,9 @@
 **/dist
 .git
 .env
+docs
+deploy
+.github
+services
+**/*.md
+**/coverage
