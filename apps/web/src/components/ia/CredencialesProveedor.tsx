@@ -12,10 +12,12 @@ interface Props {
   onChange: (b: BorradorIa) => void
   hardware: HardwareIa | null
   onRecheck: () => Promise<unknown> | void
+  /** Avisa si Ollama y sus modelos están listos (solo con Ollama elegido). */
+  onOllamaListo?: (listo: boolean) => void
 }
 
 /** Credenciales o instalación según el proveedor elegido, con botón de prueba. */
-export default function CredencialesProveedor({ ajustes, borrador, onChange, hardware, onRecheck }: Props) {
+export default function CredencialesProveedor({ ajustes, borrador, onChange, hardware, onRecheck, onOllamaListo }: Props) {
   const p = borrador.proveedor
   const modelo = borrador.modelos.resumen
   return (
@@ -27,7 +29,7 @@ export default function CredencialesProveedor({ ajustes, borrador, onChange, har
         <CampoClave label="Clave de Anthropic" guardada={ajustes.claves.anthropic} value={borrador.claveAnthropic} onChange={(v) => onChange({ ...borrador, claveAnthropic: v })} />
       )}
       {p === 'ollama' && (
-        <PanelOllama hardware={hardware} onRecheck={onRecheck} modelos={Object.values(borrador.modelos)} />
+        <PanelOllama hardware={hardware} onRecheck={onRecheck} modelos={Object.values(borrador.modelos)} onListoChange={onOllamaListo} />
       )}
       {p === 'bedrock' && (
         <div className="space-y-2">

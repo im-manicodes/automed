@@ -29,3 +29,31 @@ export function formatDia(fecha: string | null | undefined): string {
   if (!m) return ''
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
 }
+
+const UNIDADES = ['B', 'KB', 'MB', 'GB', 'TB'] as const
+
+function escala(bytes: number, unidad: number): string {
+  const v = bytes / 1024 ** unidad
+  return v.toLocaleString('es', { maximumFractionDigits: unidad === 0 ? 0 : 1 })
+}
+
+function unidadDe(bytes: number): number {
+  let u = 0
+  while (u < UNIDADES.length - 1 && bytes >= 1024 ** (u + 1)) u++
+  return u
+}
+
+/** 3_500_000_000 -> '3,3 GB'. */
+export function formatoBytes(bytes: number): string {
+  const b = Number.isFinite(bytes) && bytes > 0 ? bytes : 0
+  const u = unidadDe(b)
+  return `${escala(b, u)} ${UNIDADES[u]}`
+}
+
+/** Avance de una descarga con unidad común: '1,2 de 3,3 GB · 36 %'. */
+export function formatoAvance(completado: number, total: number): string {
+  if (!(total > 0)) return ''
+  const u = unidadDe(total)
+  const pct = Math.min(100, Math.round((completado / total) * 100))
+  return `${escala(Math.min(completado, total), u)} de ${escala(total, u)} ${UNIDADES[u]} · ${pct} %`
+}

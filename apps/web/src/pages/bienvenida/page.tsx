@@ -36,6 +36,7 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
   const faltaOcr = ocr.data ? faltaParaOcr(motor, ocr.data, ajustes, claves) : null
   const [usarServidor, setUsarServidor] = useState(false)
   const [eligio, setEligio] = useState(false)
+  const [ollamaListo, setOllamaListo] = useState(false)
 
   const terminar = async (destino: string, conConfig: boolean) => {
     try {
@@ -70,7 +71,8 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
     setPaso((p) => (p === 2 && usarServidor ? PASO_OCR : p + 1))
   }
   const atras = () => setPaso((p) => (p === PASO_OCR && usarServidor ? 2 : p - 1))
-  const bloqueado = (paso === 2 && !usarServidor && !eligio) || (paso === 3 && faltaClave(borrador, ajustes)) || (paso === PASO_OCR && (faltaOcr !== null || guardandoOcr))
+  const esperaOllama = borrador.proveedor === 'ollama' && !usarServidor && !ollamaListo
+  const bloqueado = (paso === 2 && !usarServidor && !eligio) || (paso === 3 && (faltaClave(borrador, ajustes) || esperaOllama)) || (paso === PASO_OCR && (faltaOcr !== null || guardandoOcr))
   const conConfig = !usarServidor
 
   return (
@@ -102,6 +104,7 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
               onChange={(p) => {
                 setBorrador((b) => conProveedor(b, ajustes, p))
                 setEligio(true)
+                setOllamaListo(false)
                 setUsarServidor(false)
               }}
             />
@@ -122,7 +125,7 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
           <>
             <h1 className="text-2xl font-bold">{borrador.proveedor === 'ollama' ? 'Instala tu IA local' : 'Conecta tu cuenta'}</h1>
             <p className="text-slate-700">Proveedor: <strong>{nombreProveedor(borrador.proveedor)}</strong></p>
-            <CredencialesProveedor ajustes={ajustes} borrador={borrador} onChange={setBorrador} hardware={hw.data} onRecheck={() => hw.refetch()} />
+            <CredencialesProveedor ajustes={ajustes} borrador={borrador} onChange={setBorrador} hardware={hw.data} onRecheck={() => hw.refetch()} onOllamaListo={setOllamaListo} />
           </>
         )}
 
@@ -188,6 +191,11 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
             {paso > 1 && <button type="button" className="btn btn-secondary" onClick={atras}><LuArrowLeft className="size-5" aria-hidden />Atrás</button>}
             <button type="button" className="btn flex-1" disabled={bloqueado} onClick={() => void siguiente()}>Siguiente<LuArrowRight className="size-5" aria-hidden /></button>
           </div>
+        )}
+        {paso === 3 && esperaOllama && !faltaClave(borrador, ajustes) && (
+          <p role="status" className="text-sm text-slate-700">
+            {hw.data && !hw.data.ollama.alcanzable ? 'Instala Ollama para continuar.' : 'Estamos descargando el modelo. Podrás continuar cuando termine.'}
+          </p>
         )}
         {paso === TOTAL && <button type="button" className="btn btn-secondary" onClick={atras}><LuArrowLeft className="size-5" aria-hidden />Atrás</button>}
         {paso < TOTAL && (

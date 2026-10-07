@@ -2,9 +2,9 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { ToastProvider } from '../../context/toasts'
-import { ajustesIa, hardwareIa } from '../../test/ajustesIa'
+import { ajustesIa, hardwareIa, hardwareSinModelo, hardwareSinOllama } from '../../test/ajustesIa'
 import { ajustesOcr } from '../../test/ajustesOcr'
-import { mockFetch, type MockHandler } from '../../test/mockFetch'
+import { callsOf, mockFetch, type MockHandler } from '../../test/mockFetch'
 import Bienvenida from './page'
 
 function Ubicacion() {
@@ -107,5 +107,80 @@ describe('Asistente de bienvenida', () => {
     await user.click(await screen.findByRole('button', { name: 'Ir a mis tickets' }))
     await waitFor(() => expect(screen.getByTestId('ubicacion')).toHaveTextContent('/tickets'))
     expect(puts(f)).toEqual([{ bienvenidaCompletada: true }])
+  })
+
+  describe('con Ollama', () => {
+    const M = 'qwen3-vl:4b-instruct'
+    const POST = 'POST /api/settings/ia/ollama/pull'
+    const GET_PULL = `GET /api/settings/ia/ollama/pull?modelo=${encodeURIComponent(M)}`
+
+    async function aPasoOllama() {
+      const user = userEvent.setup()
+      await user.click(await screen.findByRole('button', { name: /Siguiente/ }))
+      await user.click(await screen.findByRole('radio', { name: /Ollama/ }))
+      await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+      return user
+    }
+
+    it('descarga sola y habilita Siguiente al terminar; Atrás y Omitir siguen activos', async () => {
+      let hw = hardwareSinModelo()
+      let pull: 'descargando' | 'listo' = 'descargando'
+      const f = mockFetch({
+        ...rutas(),
+        'GET /api/settings/ia/hardware': () => ({ body: hw }),
+        [POST]: { status: 202, body: { modelo: M, estado: 'descargando' } },
+        [GET_PULL]: () => ({ body: { modelo: M, estado: pull, completado: 1, total: 2 } }),
+      })
+      renderPage()
+      const user = await aPasoOllama()
+      await waitFor(() => expect(callsOf(f)).toContain(POST))
+      const siguiente = screen.getByRole('button', { name: /Siguiente/ })
+      expect(siguiente).toBeDisabled()
+      expect(await screen.findByText('Estamos descargando el modelo. Podrás continuar cuando termine.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Atrás/ })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Omitir por ahora' })).toBeEnabled()
+      hw = hardwareSinModelo([M])
+      pull = 'listo'
+      await waitFor(() => expect(siguiente).toBeEnabled(), { timeout: 4000 })
+      expect(callsOf(f).filter((c) => c === POST)).toHaveLength(1)
+      await user.click(siguiente)
+      expect(await screen.findByText('Qué modelo usar en cada tarea')).toBeInTheDocument()
+    })
+
+    it('con el modelo ya instalado no descarga y Siguiente queda habilitado', async () => {
+      const f = mockFetch(rutas())
+      renderPage()
+      await aPasoOllama()
+      await waitFor(() => expect(screen.getByRole('button', { name: /Siguiente/ })).toBeEnabled())
+      expect(callsOf(f)).not.toContain(POST)
+    })
+
+    it('con Ollama desactualizado no descarga, avisa y bloquea', async () => {
+      const f = mockFetch(rutas({ body: hardwareIa({ ollama: { alcanzable: true, version: '0.11.4', modelos: [], versionMinima: '0.12.7', requiereActualizar: true } }) }))
+      renderPage()
+      await aPasoOllama()
+      expect(await screen.findByText(/anterior a la versión 0\.12\.7/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Siguiente/ })).toBeDisabled()
+      expect(callsOf(f)).not.toContain(POST)
+    })
+
+    it('sin Ollama pide instalarlo y bloquea', async () => {
+      mockFetch(rutas({ body: hardwareSinOllama() }))
+      renderPage()
+      await aPasoOllama()
+      expect(await screen.findByText('Instala Ollama para continuar.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Siguiente/ })).toBeDisabled()
+    })
+
+    it('con otro proveedor no se bloquea ni se descarga nada', async () => {
+      const f = mockFetch(rutas({ body: hardwareSinModelo() }))
+      renderPage()
+      const user = userEvent.setup()
+      await user.click(await screen.findByRole('button', { name: /Siguiente/ }))
+      await user.click(await screen.findByRole('radio', { name: /Bedrock/ }))
+      await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+      expect(screen.getByRole('button', { name: /Siguiente/ })).toBeEnabled()
+      expect(callsOf(f).filter((c) => c.startsWith('POST') && c.includes('pull'))).toHaveLength(0)
+    })
   })
 })

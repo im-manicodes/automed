@@ -229,6 +229,7 @@
 - Falta: revisión visual manual en navegador (móvil y escritorio); edición posterior de eventos (por diseño: se elimina y se vuelve a añadir).
 
 ## Instalable de escritorio
+- Hecho: **descarga automática del modelo local** al elegir Ollama (`useModelosOllama`: detecta Ollama cada 3 s, descarga sola los modelos que falten uno a uno, progreso por polling; «Siguiente» del asistente bloqueado hasta que estén instalados; botón Reintentar si falla o si el servidor olvida la descarga). Errores de descarga en español sin eco del texto crudo (`mapPullError`). El modelo NO se empaqueta (~3,3 GB) y Ollama NO se instala desde la app (guía + enlace). No probado contra un Ollama real.
 - Corregido: el nombre de la app (`app.setName('auto-med')` y `productName`) fija la carpeta de datos en `~/.config/auto-med` (verificado en Linux con el paquete real; Windows sin probar).
 - Limitación conocida: con el OCR en «Ninguno» una página escaneada falla con «Configura el OCR en Ajustes» y la cola de trabajos reintenta hasta `JOBS_MAX_ATTEMPTS` antes de dejar el hilo en error (falta un error no reintentable). (Windows + Linux)
 - Hecho:

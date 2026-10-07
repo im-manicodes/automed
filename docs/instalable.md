@@ -76,8 +76,8 @@ Al pulsar el botón, la app crea un entorno virtual en `python/venv` dentro de s
 ## Instalar o actualizar Ollama (IA local)
 
 1. Descarga Ollama desde <https://ollama.com/download> e instálalo. **Versión mínima: 0.12.7** (necesaria para Qwen3-VL). Si ya lo tienes y es más viejo, vuelve a instalar la última versión desde la misma página.
-2. Opcional: descarga el modelo a mano con `ollama pull qwen3-vl:4b-instruct`. No es necesario: la app puede descargarlo desde el asistente.
-3. En el asistente elige "Ollama" y pulsa "Probar".
+2. En el asistente elige "Ollama". **El modelo no viene dentro de la app** (pesa unos 3,3 GB), pero **la app lo descarga sola** en cuanto lo eliges: no hay que pulsar nada. Si Ollama todavía no está instalado, el asistente lo detecta apenas lo instales y empieza la descarga. Verás una barra de progreso; **«Siguiente» se habilita cuando el modelo termina de descargarse** (puede tardar varios minutos según tu internet y necesitas unos 4 GB libres en disco). La descarga continúa aunque cierres la ventana de la app.
+3. Si la descarga falla (sin internet, sin espacio en disco, Ollama desactualizado) la app te lo dice con un mensaje y aparece el botón **Reintentar**. También puedes bajar el modelo a mano con `ollama pull qwen3-vl:4b-instruct`.
 
 ## Credenciales de AWS (Textract y Bedrock)
 

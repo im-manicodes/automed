@@ -26,3 +26,11 @@ export const hardwareIa = (o: Partial<HardwareIa> = {}): HardwareIa => ({
   ollamaApto: { apto: true, velocidad: 'lenta', motivo: 'Funcionará, pero sin tarjeta gráfica será lento.' },
   ...o,
 })
+
+/** Ollama instalado y alcanzable pero sin el modelo elegido. */
+export const hardwareSinModelo = (modelos: string[] = []): HardwareIa =>
+  hardwareIa({ ollama: { alcanzable: true, version: '0.12.8', modelos } })
+
+/** Ollama que todavía no responde. */
+export const hardwareSinOllama = (): HardwareIa =>
+  hardwareIa({ ollama: { alcanzable: false, modelos: [] } })

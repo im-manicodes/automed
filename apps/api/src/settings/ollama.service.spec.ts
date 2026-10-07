@@ -1,6 +1,7 @@
 import {
   OLLAMA_MIN_VERSION,
   OllamaService,
+  mapPullError,
   ollamaNativeBase,
   versionAtLeast,
 } from './ollama.service';
@@ -118,19 +119,39 @@ describe('OllamaService', () => {
     await tick();
     const s = svc.status('m');
     expect(s.estado).toBe('error');
-    expect(s.error).toBe('No se pudo conectar con Ollama.');
+    expect(s.error).toBe(
+      'No se pudo descargar: revisa tu conexión a internet.',
+    );
+    expect(JSON.stringify(s)).not.toContain('secreto interno');
   });
 
-  it('pull: error en el flujo -> estado error', async () => {
-    fetchMock.mockResolvedValue(
-      ndjson([{ error: 'pull model manifest: 500' }]),
-    );
-    svc.startPull('http://h:1', 'm');
-    await tick();
-    expect(svc.status('m')).toMatchObject({
-      estado: 'error',
-      error: 'Ollama no pudo descargar el modelo.',
-    });
+  it.each([
+    ['write: no space left on device', 'No hay espacio suficiente'],
+    ['pull model manifest: file does not exist', 'no encontró ese modelo'],
+    ['this model requires a newer version of Ollama', 'versión más reciente'],
+    ['dial tcp: lookup x: no such host', 'revisa tu conexión'],
+    ['algo raro SECRETO-123', 'Ollama no pudo descargar el modelo.'],
+  ])(
+    'pull: error NDJSON %s -> mensaje claro sin eco',
+    async (raw, esperado) => {
+      fetchMock.mockResolvedValue(ndjson([{ error: raw }]));
+      svc.startPull('http://h:1', 'm');
+      await tick();
+      const s = svc.status('m');
+      expect(s.estado).toBe('error');
+      expect(s.error).toContain(esperado);
+      expect(JSON.stringify(s)).not.toContain(raw);
+    },
+  );
+
+  it('mapPullError: categorías, mayúsculas y vacío', () => {
+    expect(mapPullError('DISK FULL')).toContain('espacio');
+    expect(mapPullError('Not Enough Space')).toContain('espacio');
+    expect(mapPullError('model not found')).toContain('no encontró');
+    expect(mapPullError('Requires a newer ollama')).toContain('versión');
+    expect(mapPullError('i/o timeout')).toContain('conexión');
+    expect(mapPullError('unexpected EOF')).toContain('conexión');
+    expect(mapPullError('')).toBe('Ollama no pudo descargar el modelo.');
   });
 
   it('pull: tras error se puede reintentar', async () => {

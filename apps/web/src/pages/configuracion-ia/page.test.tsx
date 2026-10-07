@@ -112,3 +112,25 @@ describe('Configuración de IA: lectura de PDFs escaneados', () => {
     expect(document.body.innerHTML).not.toContain('secreto-bedrock-2')
   })
 })
+
+describe('Configuración de IA: Ollama', () => {
+  it('descarga sola el modelo que falta y Guardar no se bloquea', async () => {
+    const M = 'qwen3-vl:4b-instruct'
+    const f = mockFetch({
+      'GET /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, proveedor: 'ollama' }) },
+      'GET /api/settings/ia/hardware': { body: hardwareIa({ ollama: { alcanzable: true, version: '0.12.8', modelos: [] } }) },
+      'POST /api/settings/ia/ollama/pull': { status: 202, body: { modelo: M, estado: 'descargando' } },
+      [`GET /api/settings/ia/ollama/pull?modelo=${encodeURIComponent(M)}`]: { body: { modelo: M, estado: 'descargando', completado: 1, total: 2 } },
+    })
+    render(
+      <MemoryRouter>
+        <ToastProvider>
+          <ConfiguracionIa />
+        </ToastProvider>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('Descargando…')).toBeInTheDocument()
+    expect(f.mock.calls.some(([u, i]) => String(u) === '/api/settings/ia/ollama/pull' && i?.method === 'POST')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Guardar' })).toBeEnabled()
+  })
+})

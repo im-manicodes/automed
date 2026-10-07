@@ -68,6 +68,43 @@ function httpBase(url: string): string | null {
   }
 }
 
+const MSG_DISCO =
+  'No hay espacio suficiente en el disco; se necesitan unos 4 GB libres.';
+const MSG_MODELO =
+  'Ollama no encontró ese modelo; revisa el nombre o actualiza Ollama.';
+const MSG_VERSION =
+  'Este modelo necesita una versión más reciente de Ollama; actualízala e inténtalo de nuevo.';
+const MSG_RED = 'No se pudo descargar: revisa tu conexión a internet.';
+const MSG_GENERICO = 'Ollama no pudo descargar el modelo.';
+
+/**
+ * Traduce el error crudo de Ollama a un texto claro en español. Función pura:
+ * el texto crudo nunca se devuelve ni se guarda.
+ */
+export function mapPullError(raw: string): string {
+  const t = String(raw ?? '').toLowerCase();
+  const has = (...parts: string[]) => parts.some((p) => t.includes(p));
+  if (has('no space left', 'disk full', 'not enough space')) return MSG_DISCO;
+  if (has('newer version of ollama', 'requires a newer')) return MSG_VERSION;
+  if (has('not found', 'file does not exist', 'manifest')) return MSG_MODELO;
+  if (
+    has(
+      'connection',
+      'timeout',
+      'timed out',
+      'no such host',
+      'dial tcp',
+      'network',
+      'eof',
+      'fetch failed',
+      'abort',
+    )
+  ) {
+    return MSG_RED;
+  }
+  return MSG_GENERICO;
+}
+
 interface Entry extends PullStatus {
   updatedAt: number;
 }
@@ -201,7 +238,7 @@ export class OllamaService {
         this.fail(
           e,
           res.status === 404
-            ? 'Ollama no encontró ese modelo.'
+            ? MSG_MODELO
             : 'Ollama no pudo iniciar la descarga.',
         );
         return;
@@ -227,7 +264,10 @@ export class OllamaService {
         }
         if (msg.error !== undefined) {
           failed = true;
-          this.fail(e, 'Ollama no pudo descargar el modelo.');
+          this.fail(
+            e,
+            mapPullError(typeof msg.error === 'string' ? msg.error : ''),
+          );
           return;
         }
         if (typeof msg.total === 'number' && msg.total > 0) {
@@ -259,7 +299,7 @@ export class OllamaService {
         this.fail(e, 'La descarga se interrumpió.');
       }
     } catch {
-      this.fail(e, 'No se pudo conectar con Ollama.');
+      this.fail(e, MSG_RED);
     } finally {
       clearTimeout(timer);
     }
