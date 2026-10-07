@@ -78,7 +78,7 @@ COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER}
 - Las páginas escaneadas conservan el flujo OCR -> regiones -> revisión; su markdown sigue siendo texto plano por líneas (mejora de estructura: siguiente fase).
 
 ### Ollama (solo desarrollo/pruebas; producción: Bedrock)
-LLM local con GPU NVIDIA (runtime nvidia de Docker). El contenido sensible no sale de la máquina. En `.env`: `LLM_PROVIDER=ollama`, `LLM_MODEL_TEXT=qwen2.5vl:3b` (con visión, ~3 GB; cabe en 6 GB de VRAM), `OLLAMA_CONTEXT_LENGTH=8192` y `SYNTH_MAX_INPUT_TOKENS` <= ese contexto menos margen (p. ej. 6000); si no, Ollama trunca. `ollama-pull` descarga los modelos al primer arranque (volumen `ollamamodels`). Dentro de Docker la api usa `OLLAMA_BASE_URL=http://ollama:11434/v1`; desde el host, `http://localhost:11434/v1`.
+LLM local con GPU NVIDIA (runtime nvidia de Docker). El contenido sensible no sale de la máquina. En `.env`: `LLM_PROVIDER=ollama`, `LLM_MODEL_TEXT=qwen3-vl:4b-instruct` (Qwen3-VL 4B con visión, ~3,3 GB; cabe en 6 GB de VRAM; requiere Ollama >= 0.12.7 y la variante `-instruct`: el tag `qwen3-vl:4b` a secas es la de razonamiento), `OLLAMA_CONTEXT_LENGTH=8192` y `SYNTH_MAX_INPUT_TOKENS` <= ese contexto menos margen (p. ej. 6000); si no, Ollama trunca. `ollama-pull` descarga los modelos al primer arranque (volumen `ollamamodels`). Dentro de Docker la api usa `OLLAMA_BASE_URL=http://ollama:11434/v1`; desde el host, `http://localhost:11434/v1`.
 
 ### Perfil OCR local (solo desarrollo/pruebas)
 ```bash

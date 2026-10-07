@@ -8,7 +8,8 @@ Síntesis con IA de hilos de Outlook (tickets), con OCR de PDFs escaneados y cor
 ```
 apps/api   NestJS + Prisma + PostgreSQL
 apps/web   Vite + React + Tailwind (mobile-first, español)
-docs/      estado-del-proyecto.md, despliegue.md, benchmark-ocr.md, entra-id-registro.md
+apps/desktop  instalable de escritorio (Electron; Postgres embebido; Windows y Linux)
+docs/      estado-del-proyecto.md, despliegue.md, benchmark-ocr.md, entra-id-registro.md, instalable.md
 services/pdf-extract  PDF digital -> markdown con PyMuPDF (sin OCR; siempre activo en compose)
 services/ocr-local  OCR local (PaddleOCR/Tesseract, perfil `ocr`, solo pruebas)
 docker-compose.yml  rustfs, api, web (Postgres externo vía DATABASE_URL_DOCKER en .env)
@@ -16,6 +17,7 @@ Dockerfile  imagen única de producción (API + frontend + pdf-extract); la publ
 docker-compose.dev.yml  hot reload en Docker (solo desarrollo, se activa con COMPOSE_FILE en .env)
 deploy/dokku  bootstrap.sh y env.example para preparar Dokku en el Droplet
 .github/workflows/deploy.yml  CI/CD: build -> GHCR -> Dokku (DigitalOcean)
+.github/workflows/release-desktop.yml  release del instalable (tag `v*` o manual; release en borrador)
 ```
 
 ## Arranque rápido (desarrollo)
@@ -190,6 +192,16 @@ Variables del seed (todas opcionales, ver `.env.example`): `SEED_USER_EMAIL`, `S
 
 ## Reporte diario en Excel
 Genera un Excel con el censo de pacientes hospitalizados (novedades del día, altas una sola vez) desde la app (`/api/reports`; descarga autenticada) o a una hora configurable (Ajustes `reporte.*`). Las columnas se editan en la plantilla de tipo "Reporte Excel". Usa solo los resúmenes ya existentes: no analiza hilos por su cuenta. **Contiene datos de salud de pacientes**: guarda el archivo (RustFS `reportes/`) y los respaldos con el mismo cuidado que los correos; en producción usa Bedrock. Requiere la dependencia `exceljs` (reconstruye la imagen de la api). Además, desde un ticket analizado y en `listo` se puede «Añadir al Excel»: la IA prepara un borrador de la actualización (una llamada con la síntesis vigente), el usuario lo revisa y confirma, y queda en la hoja acumulativa «Eventos» (`/api/threads/:id/event-draft`, `/api/threads/:id/events`, `DELETE /api/events/:id`). Tras actualizar aplica la migración `20261012100000_eventos_hospitalizacion` (en Docker con hot reload: `docker compose restart api`).
+
+## Instalable de escritorio
+`apps/desktop` empaqueta auto-med como programa para un solo usuario, sin servidor: Electron con PostgreSQL embebido, PDFs en disco y la API como proceso interno. Los datos quedan en la carpeta de datos de la app (en Linux `~/.config/...`, en Windows `%APPDATA%\...`; ver la guía).
+
+```bash
+pnpm desktop:dist:linux   # AppImage + deb en apps/desktop/release/
+pnpm desktop:dist:win     # instalador NSIS x64 (.exe)
+pnpm desktop:smoke        # prueba de humo del binario desempaquetado (carpeta de datos temporal)
+```
+Estado: el paquete de Linux se construyó y pasa la prueba de humo; **Windows no se ha probado**. Guía de instalación y operación: [`docs/instalable.md`](docs/instalable.md). Las releases en borrador las crea `.github/workflows/release-desktop.yml` al subir un tag `v*` (o a mano). Para conectar Outlook hay que registrar la app en Entra ID y fijar el `client id` en `apps/desktop/build-config.json` (ver `docs/entra-id-registro.md`).
 
 ## Estado
 Ver `docs/estado-del-proyecto.md`. Convenciones y reglas para agentes: `CLAUDE.md` / `AGENTS.md`.

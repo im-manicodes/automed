@@ -165,7 +165,7 @@
 
 ## Perfiles de compose y Ollama (dev)
 - `COMPOSE_PROFILES=${OCR_ENGINE},${LLM_PROVIDER}` en `.env`: `docker compose up` levanta `ocr-local` (perfil `local`) solo con `OCR_ENGINE=local` y `ollama` + `ollama-pull` (perfil `ollama`) solo con `LLM_PROVIDER=ollama`. Verificado con `docker compose config --services/--profiles`.
-- `LLM_PROVIDER=ollama` (solo dev): `OllamaLlmProvider` sobre cliente OpenAI-compatible (`max_tokens`, imágenes data URL), modelo por defecto `qwen2.5vl:3b`, `OLLAMA_BASE_URL`, `OLLAMA_CONTEXT_LENGTH`. Con tests unitarios; no probado contra un Ollama real (sin contenedores ni modelos en este entorno).
+- `LLM_PROVIDER=ollama` (solo dev): `OllamaLlmProvider` sobre cliente OpenAI-compatible (`max_tokens`, imágenes data URL), modelo por defecto `qwen3-vl:4b-instruct` (antes `qwen2.5vl:3b`; el tag `qwen3-vl:4b` es la variante de razonamiento y no se usa), `OLLAMA_BASE_URL`, `OLLAMA_CONTEXT_LENGTH`. Con tests unitarios; no probado contra un Ollama real (sin contenedores ni modelos en este entorno).
 
 ## UI responsive (tablet y PC, `apps/web`)
 - Hecho: `Layout` con barra lateral fija en >= md (w-48, w-60 en lg; "Mi cuenta" al pie, menú hacia arriba) y barra inferior solo < md; Tickets en 1 columna (md) / 2 columnas (lg), filtros con wrap y barra "Analizar" alineada al contenido; TicketDetalle en 2 columnas en lg (lateral sticky); Plantilla editor + vista previa lado a lado en lg; Ajustes en rejilla en md; Login con tarjeta en md+; revisión de dudas con ancho `md:max-w-7xl` dentro del nuevo Layout.
@@ -227,3 +227,22 @@
 - Tests: `EventoDialog.test.tsx` y `TicketDetalle.test.tsx` (API mockeada). Sin dependencias nuevas.
 - Hecho (revisión a pantalla completa): `EventoDialog` ahora ocupa toda la pantalla. En >= lg: izquierda (60 %) con pestañas «Resumen» (markdown de la síntesis vigente) y «Adjuntos» (vista previa de los PDF), derecha (40 %) el formulario con scroll propio y acciones fijas abajo. En < lg: pestañas «Formulario» / «Resumen» / «Adjuntos» (formulario montado y oculto con `hidden`, sin perder lo tecleado). Esc/Cerrar/Cancelar piden confirmación si hay cambios sin guardar (`ConfirmDialog`). Nuevos `components/AdjuntosRevision.tsx` (selector de documento; pide `attachmentsApi.pages` solo al abrir la pestaña; mensajes «Este ticket no tiene PDF.» / «Este documento no tiene vista previa disponible.») y `components/VisorPaginas.tsx` (anterior/siguiente, zoom con rueda/botones, arrastre, doble clic; reutiliza `usePaginaImagen`, `useRuedaZoom` y `revision/lib/viewport`). `TicketDetalle` pasa asunto, `synth.latest.markdown` y mensajes sin llamadas nuevas. Tests actualizados. Pendiente: revisión visual en navegador (375 y 1440 px).
 - Falta: revisión visual manual en navegador (móvil y escritorio); edición posterior de eventos (por diseño: se elimina y se vuelve a añadir).
+
+## Instalable de escritorio
+- Corregido: el nombre de la app (`app.setName('auto-med')` y `productName`) fija la carpeta de datos en `~/.config/auto-med` (verificado en Linux con el paquete real; Windows sin probar).
+- Limitación conocida: con el OCR en «Ninguno» una página escaneada falla con «Configura el OCR en Ajustes» y la cola de trabajos reintenta hasta `JOBS_MAX_ATTEMPTS` antes de dejar el hilo en error (falta un error no reintentable). (Windows + Linux)
+- Hecho:
+  - Shell Electron (`apps/desktop`): instancia única, ventana con `contextIsolation`/`sandbox`, menú mínimo (Recargar, Abrir carpeta de datos, Acerca de), pantallas de carga/error en español, modo `--smoke-test`.
+  - Secretos con `safeStorage` (`secrets.bin`; en Linux sin almacén, archivo 0600 con aviso). Postgres embebido (`embedded-postgres`, puerto libre, limpieza de `postmaster.pid` obsoleto).
+  - Migrador propio (`apps/api/src/db/migrate-runner.ts`) compatible con `_prisma_migrations`; Docker/Dokku siguen con `prisma migrate deploy`.
+  - Almacenamiento en disco (`FsStorageService`, `STORAGE_DRIVER=fs`) y extractor de texto de PDFs digitales en Node (`PDF_TEXT_MODE=node`).
+  - OCR elegible (`DynamicOcrEngine`, `/api/settings/ocr/*`, paso del asistente) con entorno Python gestionado (detección, guía, "Preparar el OCR", runner de `ocr-local`). Credenciales AWS (Textract/Bedrock) en el panel.
+  - Primer usuario por la web (`/auth/setup-status`, `/auth/setup`). Callback de Microsoft en escritorio (cliente público, loopback).
+  - Paquete Linux construido (AppImage ~237 MB, deb ~177 MB, directorio desempaquetado ~683 MB) y prueba de humo (`auto-med --no-sandbox --smoke-test` bajo xvfb con `AUTOMED_DATA_DIR` temporal): `/api/health` devuelve `{"status":"ok","db":true,"storage":true}`.
+  - Windows NSIS x64 configurado en `electron-builder.yml`. Workflow `.github/workflows/release-desktop.yml` (Linux + Windows, prueba de humo, release en borrador) y guía `docs/instalable.md`.
+- En curso: nada.
+- Falta:
+  - Probar en Windows (instalador, SmartScreen, antivirus, PATH de Python) y con ventana real (primer usuario, asistente, OCR); instalar y probar el `.deb`. El workflow nunca se ha ejecutado en GitHub.
+  - Registrar la app en Entra ID y poner el `client id` en `apps/desktop/build-config.json` (hoy vacío: Outlook no se puede conectar en el instalable).
+  - Iconos propios, firma de código y notarización, auto-actualización.
+  - OCR local real con PaddlePaddle (medir descarga y tiempos), exportar respaldo desde la app, macOS.

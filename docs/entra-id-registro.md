@@ -54,3 +54,13 @@ Texto sugerido para el administrador:
 - El refresh token se guarda cifrado con AES-256-GCM (`TOKEN_ENC_KEY`); si cambias la clave tendrás que volver a conectar Outlook.
 - Cada usuario de la app tiene una sola cuenta de Outlook; una misma cuenta de Outlook no puede conectarse a dos usuarios. `ALLOWED_EMAIL` y `SESSION_SECRET` ya no existen (quien entra a la app es quien tiene usuario y contraseña).
 - Renueva el secreto de cliente antes de que caduque.
+
+## Registro para el instalable de escritorio
+El instalable (`apps/desktop`) conecta Outlook como **cliente público** con redirección de loopback; es un registro distinto del de la versión web/Docker (o se pueden añadir estas plataformas al mismo registro).
+1. **Registros de aplicaciones > Nuevo registro** (o el registro existente), nombre p. ej. `auto-med escritorio`.
+2. Tipos de cuenta: **Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft** (multiinquilino + personales).
+3. **Autenticación > Agregar una plataforma > Aplicaciones móviles y de escritorio** (*Mobile and desktop applications*) y como URI de redirección escribe `http://localhost`. Para loopback Entra ignora el puerto, así que cubre `http://localhost:<puerto>/api/auth/callback` aunque la app elija un puerto libre distinto cada vez. No uses la plataforma "Web".
+4. **No crees secreto de cliente**: el instalable es un cliente público (usa PKCE) y no puede guardar secretos.
+5. **Permisos de API > Microsoft Graph > Permisos delegados**: `Mail.Read`, `offline_access` y `User.Read`.
+6. Copia el *Id. de aplicación (cliente)* y ponlo en `apps/desktop/build-config.json`, campo `msClientId` (deja `msTenantId` en `common`). Hoy ese valor está **vacío** en el repositorio: mientras siga vacío, "Conectar Outlook" no funciona en el instalable. Después hay que volver a construir el instalable.
+7. **Aviso de consentimiento de administrador:** en tenants corporativos, el administrador puede tener restringido el consentimiento de los usuarios; entonces quien conecte su correo verá "Se necesita aprobación del administrador" y el administrador del inquilino deberá conceder el permiso.

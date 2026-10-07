@@ -1,0 +1,5 @@
+{
+  "_comentario": "El desarrollador debe registrar la app en Microsoft Entra ID (tipo 'Mobile and desktop applications', redirect http://localhost, multiinquilino + cuentas personales, sin secreto) y poner aqui su client id. Vacio = Outlook no se podra conectar.",
+  "msClientId": "",
+  "msTenantId": "common"
+}
