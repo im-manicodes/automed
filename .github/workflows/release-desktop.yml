@@ -13,10 +13,10 @@ on:
 permissions:
   contents: read
 
-# Un build por ref; si hay otro en curso se espera (no se cancela a mitad de una release).
+# Un build por ref: si se vuelve a lanzar para la misma ref, cancela el que estaba corriendo.
 concurrency:
   group: release-desktop-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:

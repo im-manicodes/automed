@@ -5,17 +5,15 @@ on:
     branches:
       - main
 
-# Los despliegues no se cancelan a mitad (podría quedar el Droplet con imágenes
-# a medio actualizar): un push nuevo espera a que termine el anterior.
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false
-
 env:
   REGISTRY: ghcr.io
 
 jobs:
   build-and-push:
+    # Un push nuevo a la misma rama cancela la construcción anterior que siga corriendo.
+    concurrency:
+      group: build-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -59,6 +57,11 @@ jobs:
   deploy:
     needs: build-and-push
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # El despliegue en curso NO se cancela (el servidor podría quedar a medio actualizar): si llega
+    # otro, espera su turno y, de haber varios en cola, solo corre el más reciente.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production

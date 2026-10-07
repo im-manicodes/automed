@@ -207,7 +207,7 @@ Haz backup de la BD antes de actualizar si hay migraciones nuevas (`apps/api/pri
 | Muchas "dudas" en documentos limpios | Ajusta `OCR_CONFIDENCE_THRESHOLD` con `docs/benchmark-ocr.md`. |
 
 ## CI/CD: GitHub Actions + GHCR + Dokku (DigitalOcean)
-Guía paso a paso en el `README.md` ("Despliegue en producción"). Resumen técnico de `.github/workflows/deploy.yml` (push a `main`, sin tests previos; los despliegues se encolan, no se cancelan):
+Guía paso a paso en el `README.md` ("Despliegue en producción"). Resumen técnico de `.github/workflows/deploy.yml` (push a `main`, sin tests previos; un push nuevo cancela la construcción anterior que siga corriendo; un despliegue ya en curso no se cancela: el siguiente espera su turno y, si hay varios en cola, solo corre el más reciente):
 1. **build-and-push**: construye el `Dockerfile` de la raíz y publica `ghcr.io/<owner>/<repo>` con las etiquetas `latest` y el SHA del commit.
 2. **deploy** (solo si la variable de repositorio `DEPLOY_ENABLED` es `true`): por SSH como usuario `dokku` ejecuta `git:from-image automed <imagen>:<sha>` (despliegue sin caída) y comprueba `https://$APP_DOMAIN/api/health`.
 
