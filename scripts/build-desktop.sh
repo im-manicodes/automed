@@ -131,13 +131,19 @@ build_local() {
     export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
   fi
 
-  # Dependencias: solo si faltan o el lockfile cambió.
-  if [ ! -f node_modules/.modules.yaml ] || [ pnpm-lock.yaml -nt node_modules/.modules.yaml ]; then
+  # Dependencias: solo si faltan, el lockfile cambió o node_modules quedó sin devDependencies
+  # (un empaquetado previo puede dejarlo así; sin tsc/vite el build falla).
+  if [ ! -f node_modules/.modules.yaml ] || [ pnpm-lock.yaml -nt node_modules/.modules.yaml ] \
+    || grep -A3 '"included"' node_modules/.modules.yaml | grep -q '"devDependencies": false'; then
     say "Instalando dependencias (primera vez: puede tardar unos minutos)…"
     if [ "$DRY" -eq 1 ]; then printf '\n$ CI=true pnpm install --frozen-lockfile\n'; else CI=true pnpm install --frozen-lockfile; fi
   else
     say "Dependencias al día (node_modules)."
   fi
+
+  # El empaquetado (pnpm deploy / electron-builder) reinstala por su cuenta y cambia el estado de node_modules;
+  # sin esto, pnpm intenta `pnpm install --production` antes de cada comando y aborta sin terminal.
+  export pnpm_config_verify_deps_before_run=false
 
   if [ "$SMOKE" -eq 1 ] && [ "$dest" = "linux" ] && [ -z "${DISPLAY:-}" ] && ! command -v xvfb-run > /dev/null 2>&1; then
     die "La prueba de humo en Linux necesita xvfb (pantalla virtual). Instálalo con: sudo apt install xvfb"

@@ -59,7 +59,10 @@ function fail(msg) {
 function run(cmd, cmdArgs, cwd = root) {
   console.log(`\n$ ${cmd} ${cmdArgs.join(' ')}`);
   if (dry) return;
-  const r = spawnSync(cmd, cmdArgs, { stdio: 'inherit', cwd, shell: process.platform === 'win32' });
+  // El empaquetado reinstala dependencias y cambia el estado de node_modules; sin esto pnpm intenta
+  // `pnpm install --production` antes de cada comando y aborta sin terminal (`pnpm desktop:dist` directo).
+  const env = { ...process.env, pnpm_config_verify_deps_before_run: 'false' };
+  const r = spawnSync(cmd, cmdArgs, { stdio: 'inherit', cwd, env, shell: process.platform === 'win32' });
   if (r.status !== 0) fail(`Falló: ${cmd} ${cmdArgs.join(' ')} (código ${r.status ?? 'sin código'}).`);
 }
 
