@@ -68,12 +68,12 @@ export class OcrSettingsController {
     } = python;
     const servicioLocal: LocalServiceStatus = escritorio
       ? this.runner.getStatus()
-      : { estado: 'detenido' };
+      : await this.probeService.serverLocalStatus();
     return {
       motor: eff.motor,
       origen: eff.origen,
       textractMode: eff.textractMode,
-      entorno: { escritorio, so: this.python.so },
+      entorno: { escritorio, so: this.python.so, servidor: !escritorio },
       python: {
         requerido,
         rango,

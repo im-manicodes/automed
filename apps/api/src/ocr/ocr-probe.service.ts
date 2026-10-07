@@ -11,6 +11,7 @@ import { OcrSettingsService } from '../settings/ocr-settings.service';
 import { isDesktop } from './app-mode';
 import { readOcrConfig } from './ocr-config';
 import { OcrLocalRunner } from './ocr-local-runner.service';
+import type { LocalServiceStatus } from './ocr-local-runner.service';
 
 export interface OcrProbeResult {
   ok: boolean;
@@ -19,6 +20,10 @@ export interface OcrProbeResult {
 }
 
 const PROBE_TIMEOUT_MS = 20_000;
+/** Health check corto para mostrar el estado del OCR local en la versión web (servidor). */
+const STATUS_TIMEOUT_MS = 2500;
+const SERVER_DOWN_MSG =
+  'El servicio de OCR no responde. Revisa que el contenedor ocr-local esté en marcha.';
 /** Textract acepta como respuesta "válida" estos errores: la autenticación ya pasó. */
 const DOC_ERRORS = /BadDocument|UnsupportedDocument|InvalidParameter/i;
 
@@ -54,15 +59,32 @@ export class OcrProbeService {
     });
   }
 
-  protected async checkHealth(url: string) {
+  protected async checkHealth(url: string, timeoutMs = 5000) {
     const res = await fetch(`${url.replace(/\/$/, '')}/health`, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new Error('health');
     return (await res.json()) as {
       ok?: boolean;
       fallback_reason?: string | null;
     };
+  }
+
+  /**
+   * Estado del servicio OCR local en la versión web (OCR_LOCAL_URL, p. ej. el contenedor ocr-local).
+   * Health check corto; nunca lanza.
+   */
+  async serverLocalStatus(): Promise<LocalServiceStatus> {
+    try {
+      const h = await this.checkHealth(
+        readOcrConfig(this.config).localUrl,
+        STATUS_TIMEOUT_MS,
+      );
+      if (h.ok === false) throw new Error('unhealthy');
+      return { estado: 'listo', fallbackReason: h.fallback_reason ?? null };
+    } catch {
+      return { estado: 'detenido', mensaje: SERVER_DOWN_MSG };
+    }
   }
 
   async probe(): Promise<OcrProbeResult> {
@@ -109,8 +131,9 @@ export class OcrProbeService {
   private async probeLocal(
     done: (ok: boolean, m: string) => OcrProbeResult,
   ): Promise<OcrProbeResult> {
+    const desktop = isDesktop(this.config);
     let url: string | null;
-    if (isDesktop(this.config)) {
+    if (desktop) {
       url = this.runner.getUrl();
       if (!url) {
         return done(
@@ -131,10 +154,17 @@ export class OcrProbeService {
         true,
         h.fallback_reason
           ? 'El OCR responde, pero usa Tesseract como respaldo (menos preciso con manuscrito).'
-          : 'El OCR de tu computador responde bien.',
+          : desktop
+            ? 'El OCR de tu computador responde bien.'
+            : 'El servicio de OCR responde bien.',
       );
     } catch {
-      return done(false, 'No se pudo conectar con el OCR de tu computador.');
+      return done(
+        false,
+        desktop
+          ? 'No se pudo conectar con el OCR de tu computador.'
+          : 'No se pudo conectar con el servicio de OCR. Revisa que el contenedor ocr-local esté en marcha.',
+      );
     }
   }
 }

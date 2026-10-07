@@ -436,7 +436,7 @@ export interface HardwareIa {
   ramGb: number
   cpus: number
   gpu?: { nombre: string; vramGb: number }
-  ollama: { alcanzable: boolean; version?: string; modelos: string[]; versionMinima?: string; requiereActualizar?: boolean }
+  ollama: { alcanzable: boolean; version?: string; modelos: string[]; versionMinima?: string; requiereActualizar?: boolean; motivo?: 'rechazada' | 'tiempo' | 'invalida'; urlDetectada?: string }
   ollamaApto: { apto: boolean; velocidad: 'rapida' | 'lenta' | null; motivo: string }
 }
 
@@ -473,7 +473,7 @@ export interface AjustesOcr {
   motor: MotorOcr
   origen: 'panel' | 'servidor'
   textractMode: 'detect' | 'analyze'
-  entorno: { escritorio: boolean; so: 'windows' | 'linux' | 'otro' }
+  entorno: { escritorio: boolean; servidor: boolean; so: 'windows' | 'linux' | 'otro' }
   python: {
     requerido: string
     rango: string

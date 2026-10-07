@@ -45,7 +45,7 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
     progress: jest.fn(),
   };
   const runner = { getStatus: jest.fn(), reconcile: jest.fn() };
-  const probe = { probe: jest.fn() };
+  const probe = { probe: jest.fn(), serverLocalStatus: jest.fn() };
 
   const http = () => request(app.getHttpServer());
   const authed = (r: request.Test) => r.set('Cookie', cookie);
@@ -72,6 +72,11 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
     runner.getStatus.mockReturnValue({ estado: 'detenido' });
     runner.reconcile.mockResolvedValue(undefined);
     probe.probe.mockResolvedValue({ ok: false, ms: 1, mensaje: 'x' });
+    probe.serverLocalStatus.mockResolvedValue({
+      estado: 'detenido',
+      mensaje:
+        'El servicio de OCR no responde. Revisa que el contenedor ocr-local esté en marcha.',
+    });
     const cfg = { ...env, ...extra };
     const mod = await Test.createTestingModule({
       imports: [
@@ -144,7 +149,7 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
         motor: 'local',
         origen: 'servidor',
         textractMode: 'detect',
-        entorno: { escritorio: false, so: 'linux' },
+        entorno: { escritorio: false, so: 'linux', servidor: true },
         python: {
           requerido: '3.11',
           rango: '3.9 a 3.12',
@@ -157,9 +162,25 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
           },
         },
         entornoPython: { estado: 'sin_preparar' },
-        servicioLocal: { estado: 'detenido' },
+        servicioLocal: {
+          estado: 'detenido',
+          mensaje: expect.stringContaining('ocr-local'),
+        },
       });
       expect(python.detect).not.toHaveBeenCalled();
+      expect(runner.getStatus).not.toHaveBeenCalled();
+    });
+
+    it('GET: servicioLocal listo cuando el health del servidor responde', async () => {
+      probe.serverLocalStatus.mockResolvedValue({
+        estado: 'listo',
+        fallbackReason: null,
+      });
+      const res = await authed(http().get('/api/settings/ocr')).expect(200);
+      expect(res.body.servicioLocal).toEqual({
+        estado: 'listo',
+        fallbackReason: null,
+      });
     });
 
     it('PUT guarda parcial y devuelve la misma forma; valida en español', async () => {
@@ -216,7 +237,11 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
         fallbackReason: null,
       });
       const res = await authed(http().get('/api/settings/ocr')).expect(200);
-      expect(res.body.entorno.escritorio).toBe(true);
+      expect(res.body.entorno).toMatchObject({
+        escritorio: true,
+        servidor: false,
+      });
+      expect(probe.serverLocalStatus).not.toHaveBeenCalled();
       expect(res.body.python).toMatchObject({
         detectado: true,
         version: '3.11.4',

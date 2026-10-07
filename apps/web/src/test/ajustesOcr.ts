@@ -13,7 +13,7 @@ export const ajustesOcr = (o: Partial<AjustesOcr> = {}): AjustesOcr => ({
   motor: 'ninguno',
   origen: 'servidor',
   textractMode: 'detect',
-  entorno: { escritorio: true, so: 'linux' },
+  entorno: { escritorio: true, servidor: false, so: 'linux' },
   python: { requerido: '3.11', rango: '3.10 a 3.12', detectado: true, version: '3.11.9', ejecutable: '/usr/bin/python3.11', compatible: true, guia: guiaPython() },
   entornoPython: { estado: 'sin_preparar' },
   servicioLocal: { estado: 'detenido' },

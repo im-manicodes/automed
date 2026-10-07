@@ -18,6 +18,34 @@ export interface OllamaInfo {
   versionMinima: string;
   /** true si Ollama responde pero su versión es anterior a `versionMinima`. */
   requiereActualizar?: boolean;
+  /** Por qué no es alcanzable (solo si `alcanzable` es false). */
+  motivo?: 'rechazada' | 'tiempo' | 'invalida';
+  /** URL que sí respondió, cuando difiere de la configurada (solo `detect`). */
+  urlDetectada?: string;
+}
+
+const REFUSED_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+]);
+
+function failureReason(err: unknown): 'rechazada' | 'tiempo' | undefined {
+  const e = err as {
+    name?: string;
+    code?: string;
+    cause?: { code?: string };
+  } | null;
+  if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return 'tiempo';
+  const code = e?.cause?.code ?? e?.code;
+  if (code && REFUSED_CODES.has(code)) return 'rechazada';
+  if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') {
+    return 'tiempo';
+  }
+  return undefined;
 }
 
 /** Qwen3-VL exige Ollama 0.12.7 o superior (https://ollama.com/library/qwen3-vl). */
@@ -150,6 +178,7 @@ export class OllamaService {
         alcanzable: false,
         modelos: [],
         versionMinima: OLLAMA_MIN_VERSION,
+        motivo: 'invalida',
       };
     }
     try {
@@ -166,13 +195,38 @@ export class OllamaService {
         requiereActualizar:
           version !== undefined && !versionAtLeast(version, OLLAMA_MIN_VERSION),
       };
-    } catch {
-      return {
+    } catch (err) {
+      const out: OllamaInfo = {
         alcanzable: false,
         modelos: [],
         versionMinima: OLLAMA_MIN_VERSION,
       };
+      const motivo = failureReason(err);
+      if (motivo) out.motivo = motivo;
+      return out;
     }
+  }
+
+  /**
+   * Prueba la URL configurada y luego las candidatas (en serie, sin repetir).
+   * Devuelve la info de la primera alcanzable; `urlDetectada` solo si no es la configurada.
+   * Si ninguna responde, devuelve la info de la configurada.
+   */
+  async detect(
+    urlConfigurada: string,
+    candidatas: string[],
+  ): Promise<OllamaInfo> {
+    const first = await this.info(urlConfigurada);
+    if (first.alcanzable) return first;
+    const seen = new Set([urlConfigurada.trim()]);
+    for (const c of candidatas) {
+      const url = c.trim();
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      const info = await this.info(url);
+      if (info.alcanzable) return { ...info, urlDetectada: url };
+    }
+    return first;
   }
 
   status(modelo: string): PullStatus {

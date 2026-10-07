@@ -189,11 +189,11 @@ describe('Asistente: lectura de PDFs escaneados', () => {
     expect(putsA(f, '/api/settings/ia')).toEqual([])
   })
 
-  it('fuera de escritorio la opción local está deshabilitada y explica por qué', async () => {
-    mockFetch(rutas({ body: ajustesOcr({ entorno: { escritorio: false, so: 'linux' } }) }))
+  it('en servidor la opción local se puede elegir', async () => {
+    mockFetch(rutas({ body: ajustesOcr({ entorno: { escritorio: false, servidor: true, so: 'linux' } }) }))
     await irAlPasoOcr()
-    expect(screen.getByRole('radio', { name: /En mi computador/ })).toBeDisabled()
-    expect(screen.getByText(/solo funciona si la aplicación está instalada en tu computador/)).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /En mi computador/ })).toBeEnabled()
+    expect(screen.queryByText(/No disponible aquí/)).not.toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Amazon Textract/ })).toBeEnabled()
   })
 })

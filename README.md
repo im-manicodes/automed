@@ -32,9 +32,9 @@ pnpm dev                                  # api :3000, web :5173
 ## Todo con Docker
 ```bash
 docker compose up -d --build   # web http://localhost:8080; api healthy en /api/health
-# ocr-local, ollama + ollama-pull (GPU) y relay NO arrancan solos: actívalos con `--profile local|ollama|relay`.
+# `ocr-local` (OCR local en CPU) y `pdf-extract` arrancan siempre; `relay` NO arranca solo: actívalo con `--profile relay`. Ollama no va en Docker: usa el instalado en tu equipo (docs/despliegue.md).
 # `pdf-extract` (PDF digital -> markdown sin OCR) se levanta siempre; la API usa OCR solo en páginas escaneadas.
-# o con COMPOSE_PROFILES=local,ollama,relay en .env (opcional, ver .env.example). El proveedor de IA y el OCR se eligen en la web.
+# o con COMPOSE_PROFILES=relay en .env (opcional, ver .env.example). El proveedor de IA y el OCR se eligen en la web.
 ```
 ### Desarrollo con Docker y hot reload
 Añade a tu `.env` local (gitignored) esta línea (en `.env.example` está comentada; no la pongas en producción):

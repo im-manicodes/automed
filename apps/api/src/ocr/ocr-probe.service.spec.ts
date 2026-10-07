@@ -6,8 +6,8 @@ class Probe extends OcrProbeService {
   protected createTextract() {
     return { send: this.send } as never;
   }
-  protected checkHealth(url: string) {
-    return this.health(url);
+  protected checkHealth(url: string, timeoutMs?: number) {
+    return this.health(url, timeoutMs);
   }
 }
 
@@ -68,11 +68,50 @@ describe('OcrProbeService', () => {
     const { p } = make('local', { OCR_LOCAL_URL: 'http://ocr:8000' });
     p.health.mockResolvedValue({ ok: true, fallback_reason: 'ImportError' });
     const r = await p.probe();
-    expect(p.health).toHaveBeenCalledWith('http://ocr:8000');
+    expect(p.health).toHaveBeenCalledWith('http://ocr:8000', undefined);
     expect(r).toMatchObject({ ok: true });
     expect(r.mensaje).toMatch(/Tesseract/);
     p.health.mockRejectedValue(new Error('down'));
     expect((await p.probe()).ok).toBe(false);
+  });
+
+  it('local (servidor): health OK -> mensaje sin «de tu computador»', async () => {
+    const { p } = make('local', { OCR_LOCAL_URL: 'http://ocr:8000' });
+    p.health.mockResolvedValue({ ok: true, fallback_reason: null });
+    const r = await p.probe();
+    expect(r).toMatchObject({
+      ok: true,
+      mensaje: 'El servicio de OCR responde bien.',
+    });
+  });
+
+  it('local (servidor): health caído -> menciona el contenedor ocr-local', async () => {
+    const { p } = make('local', { OCR_LOCAL_URL: 'http://ocr:8000' });
+    p.health.mockRejectedValue(new Error('down'));
+    const r = await p.probe();
+    expect(r.ok).toBe(false);
+    expect(r.mensaje).toBe(
+      'No se pudo conectar con el servicio de OCR. Revisa que el contenedor ocr-local esté en marcha.',
+    );
+    expect(r.mensaje).not.toMatch(/computador/);
+  });
+
+  it('serverLocalStatus: listo con health corto y sin lanzar nunca', async () => {
+    const { p } = make('local', { OCR_LOCAL_URL: 'http://ocr:8000' });
+    p.health.mockResolvedValue({ ok: true, fallback_reason: 'ImportError' });
+    expect(await p.serverLocalStatus()).toEqual({
+      estado: 'listo',
+      fallbackReason: 'ImportError',
+    });
+    expect(p.health).toHaveBeenCalledWith('http://ocr:8000', 2500);
+    p.health.mockResolvedValue({ ok: false });
+    expect((await p.serverLocalStatus()).estado).toBe('detenido');
+    p.health.mockRejectedValue(new Error('down'));
+    expect(await p.serverLocalStatus()).toEqual({
+      estado: 'detenido',
+      mensaje:
+        'El servicio de OCR no responde. Revisa que el contenedor ocr-local esté en marcha.',
+    });
   });
 
   it('local (escritorio) sin servicio en marcha', async () => {

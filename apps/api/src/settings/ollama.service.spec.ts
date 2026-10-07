@@ -71,6 +71,68 @@ describe('OllamaService', () => {
     expect((await svc.info('ftp://x')).alcanzable).toBe(false);
   });
 
+  it('info: motivo rechazada (ECONNREFUSED en cause), tiempo y invalida', async () => {
+    fetchMock.mockRejectedValueOnce(
+      Object.assign(new TypeError('fetch failed'), {
+        cause: { code: 'ECONNREFUSED' },
+      }),
+    );
+    expect((await svc.info('http://localhost:1/v1')).motivo).toBe('rechazada');
+    fetchMock.mockRejectedValueOnce(
+      Object.assign(new Error('t'), { name: 'TimeoutError' }),
+    );
+    expect((await svc.info('http://localhost:1/v1')).motivo).toBe('tiempo');
+    const inv = await svc.info('ftp://x');
+    expect(inv).toMatchObject({ alcanzable: false, motivo: 'invalida' });
+  });
+
+  describe('detect', () => {
+    const ok = () => json({ version: '0.12.7', models: [] });
+    const CONF = 'http://host.docker.internal:11434/v1';
+    const CAND = ['http://172.17.0.1:11434/v1', 'http://localhost:11434/v1'];
+
+    it('devuelve la primera candidata alcanzable con urlDetectada', async () => {
+      fetchMock.mockImplementation((url: string) =>
+        String(url).startsWith('http://172.17.0.1')
+          ? ok()
+          : Promise.reject(
+              Object.assign(new TypeError('x'), {
+                cause: { code: 'ECONNREFUSED' },
+              }),
+            ),
+      );
+      const r = await svc.detect(CONF, [CONF, ...CAND]);
+      expect(r.alcanzable).toBe(true);
+      expect(r.urlDetectada).toBe('http://172.17.0.1:11434/v1');
+      const hosts = fetchMock.mock.calls.map((c) => String(c[0]));
+      expect(
+        hosts.filter((h) => h.startsWith(ollamaNativeBase(CONF))),
+      ).toHaveLength(1);
+      expect(hosts.some((h) => h.startsWith('http://localhost'))).toBe(false);
+    });
+
+    it('ninguna responde: info de la configurada con su motivo', async () => {
+      fetchMock.mockRejectedValue(
+        Object.assign(new TypeError('x'), { cause: { code: 'ECONNREFUSED' } }),
+      );
+      const r = await svc.detect(CONF, CAND);
+      expect(r).toMatchObject({ alcanzable: false, motivo: 'rechazada' });
+      expect(r.urlDetectada).toBeUndefined();
+    });
+
+    it('configurada ya alcanzable: sin urlDetectada ni más pruebas', async () => {
+      fetchMock.mockImplementation(() => ok());
+      const r = await svc.detect(CONF, CAND);
+      expect(r.alcanzable).toBe(true);
+      expect(r.urlDetectada).toBeUndefined();
+      expect(
+        fetchMock.mock.calls.every((c) =>
+          String(c[0]).startsWith('http://host.docker.internal'),
+        ),
+      ).toBe(true);
+    });
+  });
+
   it('status: inactivo si nunca se inició', () => {
     expect(svc.status('m')).toEqual({
       modelo: 'm',

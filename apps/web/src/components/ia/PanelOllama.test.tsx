@@ -62,6 +62,38 @@ describe('PanelOllama', () => {
     expect(screen.getByRole('button', { name: 'Probar de nuevo' })).toBeInTheDocument()
   })
 
+  it('en Docker sin conexión muestra la guía y Copiar escribe el comando', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    render(<PanelOllama hardware={{ ...hardwareSinOllama(), entorno: 'docker' }} onRecheck={() => {}} modelos={[M]} />)
+    expect(screen.getByText(/Ollama no acepta conexiones desde Docker/)).toBeInTheDocument()
+    expect(screen.queryByText(/No encontramos Ollama/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Probar de nuevo' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Descargar Ollama' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Copiar/ }))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('OLLAMA_HOST=0.0.0.0'))
+    expect(await screen.findByRole('button', { name: /Copiado/ })).toBeInTheDocument()
+  })
+
+  it('en local la guía de Docker no aparece', () => {
+    render(<PanelOllama hardware={{ ...hardwareSinOllama(), entorno: 'local' }} onRecheck={() => {}} modelos={[M]} />)
+    expect(screen.getByText(/No encontramos Ollama/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Copiar/ })).toBeNull()
+  })
+
+  it('guarda una sola vez la URL detectada y vuelve a consultar', async () => {
+    const PUT = 'PUT /api/settings/ia'
+    const f = mockFetch({ [PUT]: { body: {} } })
+    const onRecheck = vi.fn()
+    const hw = hardwareIa({ ollama: { alcanzable: true, modelos: [M], urlDetectada: 'http://172.17.0.1:11434/v1' } })
+    const { rerender } = render(<PanelOllama hardware={hw} onRecheck={onRecheck} modelos={[M]} />)
+    await waitFor(() => expect(onRecheck).toHaveBeenCalledTimes(1))
+    rerender(<PanelOllama hardware={{ ...hw }} onRecheck={onRecheck} modelos={[M]} />)
+    expect(callsOf(f).filter((c) => c === PUT)).toHaveLength(1)
+    expect(onRecheck).toHaveBeenCalledTimes(1)
+  })
+
   it('activo=false no hace nada', () => {
     const f = mockFetch({})
     render(<PanelOllama hardware={hardwareSinModelo()} onRecheck={() => {}} modelos={[M]} activo={false} />)

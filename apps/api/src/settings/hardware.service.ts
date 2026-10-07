@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { cpus, totalmem } from 'os';
 import { AiSettingsService } from './ai-settings.service';
 import { OllamaService } from './ollama.service';
+import { ollamaCandidates, readGateway } from './ollama-candidates';
 import type { OllamaInfo } from './ollama.service';
 
 export interface Gpu {
@@ -117,9 +118,16 @@ export class HardwareService {
       appleSilicon ? Promise.resolve(undefined) : this.detectGpu(),
       this.ai.getEffective(),
     ]);
-    const ollama = await this.ollama.info(cfg.ollamaUrl);
+    const entorno = this.entorno();
+    const ollama = await this.ollama.detect(
+      cfg.ollamaUrl,
+      ollamaCandidates({
+        docker: entorno === 'docker',
+        gateway: entorno === 'docker' ? readGateway() : undefined,
+      }),
+    );
     const info: HardwareInfo = {
-      entorno: this.entorno(),
+      entorno,
       ramGb,
       cpus: cpus().length,
       ollama,

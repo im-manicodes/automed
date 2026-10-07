@@ -289,3 +289,16 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 - Hecho: `docker-compose.yml` ya no referencia `${OCR_ENGINE}`/`${LLM_PROVIDER}`; `ocr-local`, `ollama`/`ollama-pull` y `relay` se activan por perfil explícito (`--profile` o `COMPOSE_PROFILES=local,ollama,relay`, comentado en `.env.example`). Validado con `docker compose config` (con y sin perfiles). Docs actualizadas (CLAUDE.md, AGENTS.md, README, despliegue, benchmark-ocr).
 - Nota: los hitos anteriores de este archivo mencionan las variables antiguas como histórico.
 - Falta: probar el arranque de la API con el `.env` reducido en un esquema temporal; en Docker, elegir «local»/Ollama en la web no levanta el contenedor (hay que activar el perfil y apuntar la URL).
+
+## Hito: Ollama solo en el host (también en modo web)
+- Hecho: eliminados de `docker-compose.yml` los servicios `ollama` y `ollama-pull`, el perfil `ollama` y el volumen `ollamamodels`; `OLLAMA_BASE_URL` por defecto de la api = `http://host.docker.internal:11434/v1` (el `extra_hosts` ya existía). Modo web y escritorio usan igual el Ollama instalado en el equipo, con la URL en Ajustes -> IA.
+- Hecho: docs actualizadas (CLAUDE.md, AGENTS.md, README, `.env.example`, `docs/despliegue.md` con la guía de `OLLAMA_HOST=0.0.0.0` y `OLLAMA_CONTEXT_LENGTH` en el host).
+- Falta: probar contra un Ollama real en el host desde el contenedor `api`.
+
+## Hito: autodetección de Ollama del host desde Docker
+- Hecho: `OllamaService.detect` + `ollama-candidates.ts` (host.docker.internal, gateway de `/proc/net/route`, localhost), `motivo`/`urlDetectada` en `OllamaInfo` y en `GET /api/settings/ia/hardware`; `PanelOllama` guarda la URL detectada y, en Docker sin conexión, explica `OLLAMA_HOST=0.0.0.0` con botón Copiar. Docs en `docs/despliegue.md`.
+- Falta: probar con Ollama real del host tras aplicar el override (verificado: hoy escucha en 127.0.0.1 y el contenedor recibe ECONNREFUSED).
+
+## Hito: OCR local siempre activo en la versión web
+- Hecho: `ocr-local` sin perfil en `docker-compose.yml` (arranca con `docker compose up`, como `pdf-extract`); `GET /api/settings/ocr` informa `entorno.servidor` y el estado real del servicio (`servicioLocal`); la web ya no bloquea «OCR local» en servidor y muestra estado + Probar de nuevo. Docs actualizadas (CLAUDE.md, AGENTS.md, README, `.env.example`, despliegue, benchmark-ocr).
+- Falta: probar con el contenedor `ocr-local` real (imagen de varios GB; primer arranque descarga modelos de PaddleOCR al volumen `ocrmodels`).

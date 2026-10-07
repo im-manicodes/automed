@@ -27,8 +27,9 @@ services:
       WEB_ORIGIN: http://localhost:8080
       OCR_LOCAL_URL: http://ocr-local:8000
       PDF_EXTRACT_URL: http://pdf-extract:8001
-      # Con Ollama (elegido en la web), dentro de Docker el servicio se llama `ollama` (no localhost).
-      OLLAMA_BASE_URL: http://ollama:11434/v1
+      # Con Ollama (elegido en la web) se usa el Ollama instalado en el host (igual que en modo escritorio);
+      # desde el contenedor `localhost` no llega al host. Ollama debe escuchar en 0.0.0.0 (OLLAMA_HOST).
+      OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -69,11 +70,11 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
 
-  # OCR local en CPU, solo desarrollo. Perfil `local`: no corre salvo que lo actives explícitamente
-  # (`--profile local` o COMPOSE_PROFILES=local en .env). Luego elige OCR «local» en la web (Ajustes -> OCR)
-  # con URL http://ocr-local:8000. `api` no depende de él (así Textract no lo necesita).
+  # OCR local en CPU (PaddleOCR). Sin perfil: siempre activo en la versión web, como `pdf-extract`, para que
+  # Ajustes -> OCR lo detecte (la API lo consulta en OCR_LOCAL_URL=http://ocr-local:8000). Imagen pesada por
+  # PaddleOCR; los modelos se guardan en el volumen `ocrmodels`. `api` NO depende de él: si no responde,
+  # la API degrada (Textract no lo necesita).
   ocr-local:
-    profiles: ["local"]
     build: ./services/ocr-local
     environment:
       OCR_LOCAL_ENGINE: ${OCR_LOCAL_ENGINE:-paddle}
@@ -82,51 +83,6 @@ services:
       - ocrmodels:/models
     ports:
       - "127.0.0.1:8000:8000"
-
-  # LLM local con GPU NVIDIA, SOLO desarrollo/pruebas (producción: bedrock). Perfil `ollama`,
-  # activación explícita (`--profile ollama` o COMPOSE_PROFILES=ollama); luego elige Ollama en la web con
-  # URL http://ollama:11434/v1. El contenido no sale de la máquina.
-  ollama:
-    profiles: ["ollama"]
-    image: ollama/ollama:latest
-    environment:
-      # El contexto por defecto de Ollama (4096) truncaría las síntesis; SYNTH_MAX_INPUT_TOKENS debe ser menor.
-      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
-    volumes:
-      - ollamamodels:/root/.ollama
-    ports:
-      - "127.0.0.1:11434:11434"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 15s
-
-  # One-shot: descarga el/los modelos cuando ollama está sano y termina.
-  ollama-pull:
-    profiles: ["ollama"]
-    image: ollama/ollama:latest
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-      LLM_MODEL_TEXT: ${LLM_MODEL_TEXT:-qwen3-vl:4b-instruct}
-      LLM_MODEL_VISION: ${LLM_MODEL_VISION:-}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        ollama pull "$$LLM_MODEL_TEXT"
-        if [ -n "$$LLM_MODEL_VISION" ] && [ "$$LLM_MODEL_VISION" != "$$LLM_MODEL_TEXT" ]; then ollama pull "$$LLM_MODEL_VISION"; fi
-    restart: "no"
 
   # Relay de «Usar desde el celular» (apps/relay): servicio OPCIONAL, solo perfil `relay` (no corre con
   # `docker compose up` normal; actívalo con `--profile relay` o COMPOSE_PROFILES=relay). Sin BD: guarda solo devices.json en
@@ -158,4 +114,3 @@ volumes:
   relaydata:
   rustfsdata:
   ocrmodels:
-  ollamamodels:

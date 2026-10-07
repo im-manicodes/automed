@@ -4,6 +4,7 @@ import type { ClavesAws } from '../../lib/ocr'
 import BotonProbarOcr from './BotonProbarOcr'
 import CamposAws from './CamposAws'
 import PanelPython from './PanelPython'
+import PanelServicioOcr from './PanelServicioOcr'
 import SelectorOcr from './SelectorOcr'
 
 interface Props {
@@ -25,6 +26,7 @@ export default function ConfigOcr({ ajustes, motor, onMotor, awsGuardada, claves
     <div className="space-y-4">
       <SelectorOcr value={motor} onChange={onMotor} entorno={ajustes.entorno} />
       {motor === 'local' && ajustes.entorno.escritorio && <PanelPython ajustes={ajustes} onRecheck={onRecheck} />}
+      {motor === 'local' && ajustes.entorno.servidor && !ajustes.entorno.escritorio && <PanelServicioOcr ajustes={ajustes} onRecheck={onRecheck} />}
       {motor === 'textract' && (
         <div className="space-y-4">
           <CamposAws guardada={awsGuardada} value={claves} onChange={onClaves} />

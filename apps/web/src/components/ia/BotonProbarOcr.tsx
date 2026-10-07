@@ -8,9 +8,13 @@ interface Props {
   /** Se ejecuta antes de probar (guarda las claves escritas, porque la prueba usa las guardadas). */
   antes?: () => Promise<unknown>
   disabled?: boolean
+  /** Texto del botón. */
+  etiqueta?: string
+  /** Nota bajo el botón; null para ocultarla. */
+  nota?: string | null
 }
 
-export default function BotonProbarOcr({ antes, disabled }: Props) {
+export default function BotonProbarOcr({ antes, disabled, etiqueta = 'Probar Textract', nota = 'Para probar, primero se guardan las claves que escribiste.' }: Props) {
   const { mutate, loading } = usePruebaOcr()
   const [res, setRes] = useState<PruebaOcrResultado | null>(null)
   const [preparando, setPreparando] = useState(false)
@@ -31,9 +35,9 @@ export default function BotonProbarOcr({ antes, disabled }: Props) {
   return (
     <div className="space-y-2">
       <button type="button" className="btn btn-secondary" disabled={disabled || loading || preparando} onClick={() => void probar()}>
-        <LuZap className="size-5" aria-hidden />{loading || preparando ? 'Probando…' : 'Probar Textract'}
+        <LuZap className="size-5" aria-hidden />{loading || preparando ? 'Probando…' : etiqueta}
       </button>
-      <p className="text-sm text-slate-700">Para probar, primero se guardan las claves que escribiste.</p>
+      {nota && <p className="text-sm text-slate-700">{nota}</p>}
       <div aria-live="polite">
         {res && (res.ok ? (
           <p role="status" className="text-green-900"><LuCheck className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Funciona ({res.ms} ms)</p>

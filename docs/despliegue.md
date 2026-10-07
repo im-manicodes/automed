@@ -58,26 +58,39 @@ La api (en contenedor) debe poder llegar a Postgres en el host:
 - Si Postgres corre en otro contenedor con el puerto publicado, `host.docker.internal:5432` también funciona.
 - Si el firewall del host bloquea el bridge, permite el puerto 5432 desde la red de Docker.
 
-### Perfiles opcionales (OCR local, Ollama, relay)
-`docker compose up` (sin flags) NO levanta `ocr-local`, `ollama` ni `relay`: se activan de forma explícita, con `--profile` o definiendo en `.env` (opcional, comentado en `.env.example`):
+### Perfiles opcionales (relay)
+`docker compose up` (sin flags) NO levanta `relay`: se activa de forma explícita, con `--profile` o definiendo en `.env` (opcional, comentado en `.env.example`):
 ```
-COMPOSE_PROFILES=local,ollama,relay
+COMPOSE_PROFILES=relay
 ```
-- Perfil `local` -> `ocr-local`; perfil `ollama` -> `ollama` + `ollama-pull`; perfil `relay` -> `relay`. `api` no depende de ellos.
-- El proveedor LLM y el motor OCR se eligen en la web, no en `.env`. En Docker, elegir «OCR local» u «Ollama» en la web no levanta el contenedor (la API no controla Docker): activa además el perfil y apunta la URL en Ajustes (`http://ocr-local:8000`, `http://ollama:11434/v1`).
-- Verifica con `docker compose config --services` y `docker compose --profile local --profile ollama --profile relay config --services`.
+- Perfil `relay` -> `relay`. `ocr-local` y `pdf-extract` no tienen perfil: arrancan siempre. `api` no depende de ninguno de ellos.
+- El proveedor LLM y el motor OCR se eligen en la web, no en `.env`. En Docker, `ocr-local` ya corre con `docker compose up` y la API lo usa por `OCR_LOCAL_URL` (`http://ocr-local:8000`): en la web solo eliges «OCR local» y ves su estado real. Ollama no tiene contenedor: ver la sección «Ollama» más abajo.
+- Verifica con `docker compose config --services` y `docker compose --profile relay config --services`.
 
 ### Servicio `pdf-extract` (PDF digital sin OCR)
 - Se levanta siempre (sin perfil), imagen ligera `python:3.12-slim` con PyMuPDF + pymupdf4llm; healthcheck `GET /health`; puerto `127.0.0.1:8001`. `api` no depende de él: si no responde o `PDF_TEXT_MODE=off`, la API usa el OCR para todas las páginas (con un warning en el log). Tras actualizar: `docker compose up --build` y añade a tu `.env` las variables `PDF_*` nuevas (ver `.env.example`; las existentes no cambian). Prueba: `curl localhost:8001/health`.
 - **Licencia:** PyMuPDF y pymupdf4llm son AGPL-3.0 (o licencia comercial de Artifex). Para uso interno de un solo usuario, sin ofrecer el servicio a terceros por red, es aceptable; si el servicio se expusiera a otros usuarios, revisa las obligaciones de la AGPL o cambia la librería.
 - Las páginas escaneadas conservan el flujo OCR -> regiones -> revisión; su markdown sigue siendo texto plano por líneas (mejora de estructura: siguiente fase).
 
-### Ollama (solo desarrollo/pruebas; producción: Bedrock)
-LLM local con GPU NVIDIA (runtime nvidia de Docker). El contenido sensible no sale de la máquina. Activa el perfil `ollama` y en la web elige Ollama con el modelo `qwen3-vl:4b-instruct` (Qwen3-VL 4B con visión, ~3,3 GB; cabe en 6 GB de VRAM; requiere Ollama >= 0.12.7 y la variante `-instruct`: el tag `qwen3-vl:4b` a secas es la de razonamiento), el contenedor usa `OLLAMA_CONTEXT_LENGTH` (8192 por defecto, override opcional en `.env`) y `SYNTH_MAX_INPUT_TOKENS` (Ajustes -> IA) <= ese contexto menos margen (p. ej. 6000); si no, Ollama trunca. `ollama-pull` descarga los modelos al primer arranque (volumen `ollamamodels`). Dentro de Docker la URL por defecto de Ollama es `http://ollama:11434/v1` (cámbiala en la web si hace falta); desde el host, `http://localhost:11434/v1`.
+### Ollama (en el host; producción: Bedrock)
+Ollama NO corre en un contenedor: se usa el instalado en el equipo (igual que en el modo escritorio) y el contenido sensible no sale de la máquina. Como con Postgres (`listen_addresses`/`pg_hba`), el host necesita **un ajuste único** para que el contenedor `api` lo alcance:
+1. Instala Ollama (>= 0.12.7, necesario para Qwen3-VL) desde <https://ollama.com/download>.
+2. Ollama escucha por defecto solo en `127.0.0.1`, que un contenedor no ve. En Linux con systemd crea el override (mejor con `tee` que con `systemctl edit`, que si se cierra sin guardar no deja nada):
+```
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"\nEnvironment="OLLAMA_CONTEXT_LENGTH=8192"\n' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+ss -ltn | grep 11434     # debe mostrar *:11434 o 0.0.0.0:11434
+```
+   Si hay firewall, permite el puerto 11434 solo desde la red de Docker; no lo expongas a Internet. En Docker Desktop (Mac/Windows) normalmente no hace falta.
+3. **Autodetección:** al abrir el asistente (o Ajustes -> IA) la API prueba la URL configurada y, en Docker, `host.docker.internal`, el gateway de la red del contenedor y `localhost`; si encuentra Ollama en otra dirección, la web la guarda sola. Si ninguna responde, la web muestra «Ollama no acepta conexiones desde Docker» con estos mismos pasos y un botón **Copiar**.
+4. La URL por defecto en Docker es `http://host.docker.internal:11434/v1` (`OLLAMA_BASE_URL` del compose; la api tiene `extra_hosts: host.docker.internal:host-gateway`). La app descarga el modelo recomendado `qwen3-vl:4b-instruct` (~3,3 GB; usa la variante `-instruct`: el tag `qwen3-vl:4b` es la de razonamiento).
+5. El contexto por defecto de Ollama (4096) trunca las síntesis: mantén `OLLAMA_CONTEXT_LENGTH=8192` en el host y `SYNTH_MAX_INPUT_TOKENS` (Ajustes -> IA) por debajo de ese contexto menos margen (p. ej. 6000).
+Prueba: `docker compose exec api node -e "fetch('http://host.docker.internal:11434/api/version').then(r=>r.text()).then(console.log)"`. Fuera de Docker (`pnpm dev`, escritorio) la URL es `http://localhost:11434/v1`.
 
-### Perfil OCR local (solo desarrollo/pruebas)
+### Servicio OCR local (`ocr-local`, siempre activo en la versión web)
 ```bash
-docker compose up -d ocr-local     # :8000 (perfil `local`); en la web elige OCR local con URL http://localhost:8000 (o http://ocr-local:8000 desde la api en compose)
+docker compose up -d ocr-local     # :8000 (sin perfil: ya corre con `docker compose up`); la api lo usa por http://ocr-local:8000
 curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":null}
 ```
 - La imagen pesa unos GB (PaddlePaddle + Tesseract); los modelos se descargan al primer arranque al volumen `ocrmodels`.
