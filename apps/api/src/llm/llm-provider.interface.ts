@@ -1,3 +1,14 @@
+/** Tarea para la que se usa el LLM; el modelo se elige por tarea (ver AiSettingsService). */
+export type LlmTask = 'resumen' | 'whatsapp' | 'evento' | 'reporte' | 'vision';
+
+export const LLM_TASKS: readonly LlmTask[] = [
+  'resumen',
+  'whatsapp',
+  'evento',
+  'reporte',
+  'vision',
+];
+
 export interface LlmRequest {
   system?: string;
   prompt: string;
@@ -6,18 +17,22 @@ export interface LlmRequest {
   maxTokens?: number;
   /** Temperatura baja por defecto; se omite en modelos que no aceptan muestreo. */
   temperature?: number;
+  /** Tarea (elige el modelo en el proveedor dinámico). */
+  task?: LlmTask;
+  /** Modelo explícito para esta petición (tiene prioridad sobre el defecto texto/visión). */
+  model?: string;
 }
 
 export interface LlmCallOptions {
   maxTokens?: number;
   temperature?: number;
+  task?: LlmTask;
 }
 
-/** Proveedor LLM intercambiable (LLM_PROVIDER=anthropic|openai|bedrock). */
+/** Proveedor LLM intercambiable (ollama | openai | anthropic | bedrock). */
 export interface LlmProvider {
-  /** Modelo usado para texto (se guarda en Synthesis.model). */
-  readonly modelText: string;
-  readonly modelVision: string;
+  /** Modelo que se usa para la tarea (se guarda, p. ej., en Synthesis.model). */
+  modelFor(task: LlmTask): Promise<string>;
   complete(request: LlmRequest): Promise<string>;
   /** Texto: system + user, temperatura baja. */
   text(system: string, user: string, opts?: LlmCallOptions): Promise<string>;

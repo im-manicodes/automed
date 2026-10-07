@@ -1,19 +1,15 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { SettingsModule } from '../settings/settings.module';
 import { LlmService } from './llm.service';
 import { LLM_PROVIDER } from './llm-provider.interface';
-import { readLlmConfig } from './llm-config';
-import { createLlmProvider } from './llm-provider.factory';
+import { DynamicLlmProvider } from './dynamic-llm.provider';
 
 @Module({
+  imports: [SettingsModule],
   providers: [
     LlmService,
-    {
-      provide: LLM_PROVIDER,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) =>
-        createLlmProvider(readLlmConfig(config)),
-    },
+    DynamicLlmProvider,
+    { provide: LLM_PROVIDER, useExisting: DynamicLlmProvider },
   ],
   exports: [LLM_PROVIDER],
 })

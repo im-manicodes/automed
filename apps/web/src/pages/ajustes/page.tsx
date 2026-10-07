@@ -3,15 +3,18 @@ import ErrorBox from '../../components/ErrorBox'
 import Spinner from '../../components/Spinner'
 import { useSession } from '../../context/session-context'
 import OutlookCard from './components/OutlookCard'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { plural } from '../../lib/format'
 import { useMailStatus } from '../../hooks/useMail'
 import { useJobsStatus } from './hooks/useAjustes'
 import { usePolling } from '../../hooks/usePolling'
+import { useAjustesIa } from '../../hooks/useAjustesIa'
+import { nombreProveedor } from '../../lib/ia'
 import { LuCheck, LuTriangleAlert, LuHourglass } from 'react-icons/lu'
 
 export default function Ajustes() {
   const { session, logout } = useSession()
+  const { data: ia } = useAjustesIa()
   const { data: mail, error: mailError, refetch: refetchMail } = useMailStatus()
   const { data: jobs, error: jobsError, refetch: refetchJobs } = useJobsStatus()
   // Un fallo de una recarga silenciosa (polling) con datos ya cargados no se muestra.
@@ -71,6 +74,12 @@ export default function Ajustes() {
           </ul>
         </div>
       )}
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-lg font-bold">Inteligencia artificial</h3>
+        {ia && <p className="text-slate-700">Proveedor actual: <strong>{nombreProveedor(ia.proveedor)}</strong></p>}
+        <Link to="/ajustes/ia" className="btn btn-secondary w-full">Configurar</Link>
+      </div>
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="text-lg font-bold">Sesión</h3>

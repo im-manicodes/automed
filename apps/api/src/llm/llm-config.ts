@@ -15,7 +15,7 @@ export interface LlmConfig {
   temperature: number;
 }
 
-const DEFAULT_MODELS: Record<LlmProviderName, string> = {
+export const DEFAULT_MODELS: Record<LlmProviderName, string> = {
   anthropic: 'claude-sonnet-5-5',
   // ID/perfil de inferencia de Bedrock: verificar en la consola de la región y sobreescribir.
   bedrock: 'anthropic.claude-sonnet-5-5',

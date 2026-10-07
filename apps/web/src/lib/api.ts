@@ -362,3 +362,64 @@ export async function apiBlob(path: string, opts: { method?: string; body?: unkn
   }
   return res.blob()
 }
+
+// --- Configuración de IA (/settings/ia) ---
+export type LlmTask = 'resumen' | 'whatsapp' | 'evento' | 'reporte' | 'vision'
+export type ProveedorIa = 'ollama' | 'openai' | 'anthropic' | 'bedrock'
+
+export interface AjustesIa {
+  necesitaBienvenida: boolean
+  proveedor: ProveedorIa
+  origen: 'panel' | 'servidor'
+  modelos: Record<LlmTask, string>
+  ollamaUrl: string
+  awsRegion: string
+  maxInputTokens: number
+  /** Solo si hay clave guardada; la clave en sí nunca llega al navegador. */
+  claves: { openai: boolean; anthropic: boolean }
+  sugeridos: Record<ProveedorIa, { texto: string[]; vision: string[] }>
+}
+
+export interface CambiosAjustesIa {
+  proveedor?: ProveedorIa
+  modelos?: Partial<Record<LlmTask, string>>
+  ollamaUrl?: string
+  awsRegion?: string
+  maxInputTokens?: number
+  /** string = nueva clave, null = quitar, ausente = no cambiar. */
+  claveOpenai?: string | null
+  claveAnthropic?: string | null
+  bienvenidaCompletada?: true
+}
+
+export interface PruebaIaBorrador {
+  proveedor?: ProveedorIa
+  modelo?: string
+  claveOpenai?: string
+  claveAnthropic?: string
+  ollamaUrl?: string
+  awsRegion?: string
+}
+
+export interface PruebaIaResultado {
+  ok: boolean
+  ms: number
+  mensaje: string
+}
+
+export interface HardwareIa {
+  entorno: 'docker' | 'local'
+  ramGb: number
+  cpus: number
+  gpu?: { nombre: string; vramGb: number }
+  ollama: { alcanzable: boolean; version?: string; modelos: string[] }
+  ollamaApto: { apto: boolean; velocidad: 'rapida' | 'lenta' | null; motivo: string }
+}
+
+export interface DescargaOllama {
+  modelo: string
+  estado: 'descargando' | 'listo' | 'error' | 'inactivo'
+  completado: number
+  total: number
+  error?: string
+}

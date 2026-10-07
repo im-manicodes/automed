@@ -25,12 +25,14 @@ function setup(messages: any[], pages: any[] = []) {
     ),
   };
   const llm: any = {
-    modelText: 'm',
+    modelFor: jest.fn().mockResolvedValue('m'),
     text: jest.fn().mockResolvedValue('## Hola\n- **Pide** pago'),
   };
-  const config: any = { get: () => undefined };
+  const aiSettings: any = {
+    getEffective: jest.fn().mockResolvedValue({ maxInputTokens: 60000 }),
+  };
   return {
-    svc: new SynthesisService(prisma, templates, llm, config),
+    svc: new SynthesisService(prisma, templates, llm, aiSettings),
     templates,
     prisma,
     llm,

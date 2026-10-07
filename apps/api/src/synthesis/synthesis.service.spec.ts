@@ -93,12 +93,13 @@ function setup(opts: SetupOpts = {}) {
     }),
   };
   const llm: any = {
-    modelText: 'modelo-x',
+    modelFor: jest.fn().mockResolvedValue('modelo-x'),
     text: jest.fn().mockResolvedValue('## Resumen\nTodo bien'),
   };
-  const config: any = {
-    get: (k: string) =>
-      k === 'SYNTH_MAX_INPUT_TOKENS' ? opts.maxTokens : undefined,
+  const aiSettings: any = {
+    getEffective: jest
+      .fn()
+      .mockResolvedValue({ maxInputTokens: Number(opts.maxTokens ?? 60000) }),
   };
   const addMessage = (id: string, body: string, sha?: string) =>
     messages.push({
@@ -120,7 +121,7 @@ function setup(opts: SetupOpts = {}) {
       regions: [{ x: 0, y: 0, text, status: 'ok', userText: null }],
     });
   return {
-    svc: new SynthesisService(prisma, templates, llm, config),
+    svc: new SynthesisService(prisma, templates, llm, aiSettings),
     prisma,
     llm,
     templates,

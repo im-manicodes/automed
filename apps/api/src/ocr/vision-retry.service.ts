@@ -67,7 +67,7 @@ export class VisionRetryService {
     const raw = await this.llm.vision(
       { mediaType: 'image/png', data: crop },
       `Lectura automática previa (puede estar mal): "${ocrText}". Transcribe el recorte.`,
-      { system: SYSTEM, maxTokens: 300, temperature: 0 },
+      { system: SYSTEM, maxTokens: 300, temperature: 0, task: 'vision' },
     );
     return parseVisionReading(raw);
   }

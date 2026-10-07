@@ -6,10 +6,10 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import type { ThreadSynthesizer } from '../jobs/pipeline-hooks.interface';
 import { parseReportColumns } from '../templates/report-columns';
+import { AiSettingsService } from '../settings/ai-settings.service';
 import { LLM_PROVIDER } from '../llm/llm-provider.interface';
 import type { LlmProvider } from '../llm/llm-provider.interface';
 import { PrismaService } from '../prisma/prisma.service';
@@ -84,16 +84,17 @@ export function stripFences(s: string): string {
 @Injectable()
 export class SynthesisService implements ThreadSynthesizer {
   private readonly logger = new Logger(SynthesisService.name);
-  private readonly maxInputTokens: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly templates: TemplatesService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
-    config: ConfigService,
-  ) {
-    const n = Number(config.get<string>('SYNTH_MAX_INPUT_TOKENS'));
-    this.maxInputTokens = Number.isFinite(n) && n >= 2000 ? n : 60000;
+    private readonly aiSettings: AiSettingsService,
+  ) {}
+
+  /** Máximo de tokens de entrada vigente (panel > SYNTH_MAX_INPUT_TOKENS), leído por llamada. */
+  private async maxInputTokens(): Promise<number> {
+    return (await this.aiSettings.getEffective()).maxInputTokens;
   }
 
   /** Enganche del pipeline (THREAD_SYNTHESIZER). */
@@ -188,7 +189,7 @@ export class SynthesisService implements ThreadSynthesizer {
           version,
           markdown,
           inputHash,
-          model: this.llm.modelText,
+          model: await this.llm.modelFor('resumen'),
           templateId: tpl.id,
           templateVersion: tpl.version,
           coveredMessageIds: allIds,
@@ -241,7 +242,7 @@ export class SynthesisService implements ThreadSynthesizer {
         version,
         markdown,
         inputHash,
-        model: this.llm.modelText,
+        model: await this.llm.modelFor('resumen'),
         templateId: template.id,
         templateVersion: template.version,
         coveredMessageIds: allIds,
@@ -299,13 +300,14 @@ export class SynthesisService implements ThreadSynthesizer {
       const out = await this.llm.text(
         WHATSAPP_SYSTEM_PROMPT,
         buildWhatsappPrompt(tpl, SAMPLE_WHATSAPP_EMAIL_TEXT),
-        { maxTokens: 800 },
+        { maxTokens: 800, task: 'whatsapp' },
       );
       return { markdown: sanearParaWhatsApp(stripFences(out)) };
     }
     const out = await this.llm.text(
       SYSTEM_PROMPT,
       buildFinalPrompt(tpl, SAMPLE_THREAD_TEXT, false),
+      { task: 'resumen' },
     );
     return { markdown: stripFences(out) };
   }
@@ -342,7 +344,7 @@ export class SynthesisService implements ThreadSynthesizer {
     // Respeta SYNTH_MAX_INPUT_TOKENS: se recorta el OCR si no cabe.
     const maxChars = Math.max(
       2000,
-      (this.maxInputTokens - PROMPT_OVERHEAD_TOKENS) * 4,
+      ((await this.maxInputTokens()) - PROMPT_OVERHEAD_TOKENS) * 4,
     );
     let body = [formatMessage(last, 1), ...docs].join('\n\n');
     if (body.length > maxChars)
@@ -353,7 +355,7 @@ export class SynthesisService implements ThreadSynthesizer {
       out = await this.llm.text(
         WHATSAPP_SYSTEM_PROMPT,
         buildWhatsappPrompt(tpl.markdown, body),
-        { maxTokens: 800 },
+        { maxTokens: 800, task: 'whatsapp' },
       );
     } catch {
       this.logger.warn(
@@ -488,7 +490,7 @@ export class SynthesisService implements ThreadSynthesizer {
     opts?: { maxTokens?: number },
   ) {
     meter.tokens += estimateTokens(system) + estimateTokens(user);
-    return this.llm.text(system, user, opts);
+    return this.llm.text(system, user, { ...opts, task: 'resumen' });
   }
 
   /**
@@ -505,7 +507,7 @@ export class SynthesisService implements ThreadSynthesizer {
 
     const chunkTokens = Math.max(
       1000,
-      this.maxInputTokens - PROMPT_OVERHEAD_TOKENS,
+      (await this.maxInputTokens()) - PROMPT_OVERHEAD_TOKENS,
     );
     const chunks = chunkBlocks(blocks, chunkTokens);
     this.logger.log(`Entrada grande: map-reduce en ${chunks.length} tramos`);
@@ -554,7 +556,7 @@ export class SynthesisService implements ThreadSynthesizer {
       PROMPT_OVERHEAD_TOKENS;
     const { text, mapped } = await this.fit(
       blocks,
-      Math.max(1000, this.maxInputTokens - overhead),
+      Math.max(1000, (await this.maxInputTokens()) - overhead),
       meter,
     );
     return stripFences(
@@ -584,7 +586,7 @@ export class SynthesisService implements ThreadSynthesizer {
       PROMPT_OVERHEAD_TOKENS;
     const { text, mapped } = await this.fit(
       updateBlocks,
-      Math.max(1000, this.maxInputTokens - overhead),
+      Math.max(1000, (await this.maxInputTokens()) - overhead),
       meter,
     );
     return stripFences(

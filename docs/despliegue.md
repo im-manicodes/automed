@@ -36,7 +36,7 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `OCR_LOCAL_URL`, `OCR_LOCAL_TIMEOUT_MS`, `OCR_LOCAL_ENGINE`, `OCR_LANG` | Servicio OCR local (`paddle` o `tesseract`). |
 | `PDF_TEXT_MODE`, `PDF_EXTRACT_URL`, `PDF_EXTRACT_TIMEOUT_MS`, `PDF_TEXT_MIN_CHARS` | Servicio `pdf-extract` (`auto` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. En compose `PDF_EXTRACT_URL` ya apunta a `http://pdf-extract:8001`. |
 | `TEXTRACT_MODE` | `detect` (DetectDocumentText) o `analyze` (AnalyzeDocument FORMS+TABLES, más caro). |
-| `LLM_PROVIDER` | `anthropic`, `openai` o `bedrock`. |
+| `LLM_PROVIDER` | `anthropic`, `openai`, `bedrock` u `ollama`. **Valor por defecto**: lo que el usuario configure en la web (asistente de bienvenida en el primer inicio de sesión, o Ajustes -> Inteligencia artificial) tiene prioridad y se guarda en la base de datos; lo mismo aplica a `LLM_MODEL_*`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_BASE_URL`, `AWS_REGION` y `SYNTH_MAX_INPUT_TOKENS`. Las credenciales de Bedrock siguen siendo las estándar de AWS (rol o variables), no se piden en la web. |
 | `LLM_MODEL_TEXT`, `LLM_MODEL_VISION` | Modelos; vacío = por defecto del proveedor. En Bedrock pon el ID real (sección 5). |
 | `LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `SYNTH_MAX_INPUT_TOKENS` | Límites y costo del LLM. |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | Claves para pruebas. |

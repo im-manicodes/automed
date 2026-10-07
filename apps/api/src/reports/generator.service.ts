@@ -51,13 +51,14 @@ export class GeneratorService {
     synthesisMarkdown: string,
     columnas: ReportColumn[],
     previous: PreviousEventHint | null = null,
+    task: 'reporte' | 'evento' = 'reporte',
   ): Promise<ExtractedPatient | null> {
     for (const retry of [false, true]) {
       try {
         const raw = await this.llm.text(
           REPORT_SYSTEM_PROMPT,
           buildReportPrompt(synthesisMarkdown, columnas, retry, previous),
-          { maxTokens: 1800 },
+          { maxTokens: 1800, task },
         );
         const parsed = parseExtraction(raw, columnas);
         if (parsed) return parsed;

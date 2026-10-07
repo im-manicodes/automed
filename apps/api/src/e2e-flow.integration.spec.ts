@@ -20,6 +20,7 @@ import { PdfRasterizerService } from './ocr/pdf-rasterizer.service';
 import { VisionRetryService } from './ocr/vision-retry.service';
 import { OCR_ENGINE } from './ocr/ocr-engine.interface';
 import type { OcrEngine } from './ocr/ocr-engine.interface';
+import { AiSettingsService } from './settings/ai-settings.service';
 import { LLM_PROVIDER } from './llm/llm-provider.interface';
 import type { LlmProvider } from './llm/llm-provider.interface';
 import { SynthesisService } from './synthesis/synthesis.service';
@@ -130,8 +131,8 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
   };
   let n = 0;
   const llm: LlmProvider = {
-    modelText: 'mock-text',
-    modelVision: 'mock-vision',
+    modelFor: (task) =>
+      Promise.resolve(task === 'vision' ? 'mock-vision' : 'mock-text'),
     complete: () => Promise.resolve(''),
     vision: () => Promise.resolve('{"text":"x","confidence":0.1}'),
     text: (_system, user) => {
@@ -191,6 +192,12 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
         EventsService,
         { provide: OCR_ENGINE, useValue: ocrEngine },
         { provide: LLM_PROVIDER, useValue: llm },
+        {
+          provide: AiSettingsService,
+          useValue: {
+            getEffective: () => Promise.resolve({ maxInputTokens: 60000 }),
+          },
+        },
         { provide: ATTACHMENT_PROCESSOR, useExisting: OcrService },
         { provide: THREAD_SYNTHESIZER, useExisting: SynthesisService },
       ],

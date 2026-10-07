@@ -7,6 +7,7 @@ function matches(row: Row, where: Row = {}): boolean {
     if (k === 'NOT') return !matches(row, cond);
     if (cond && typeof cond === 'object' && !(cond instanceof Date)) {
       if ('not' in cond) return row[k] !== cond.not && row[k] != cond.not;
+      if ('in' in cond) return cond.in.includes(row[k]);
       if ('lt' in cond) return row[k] < cond.lt;
       if ('startsWith' in cond)
         return typeof row[k] === 'string' && row[k].startsWith(cond.startsWith);
@@ -22,6 +23,18 @@ function table(defaults: () => Row = () => ({}), uniques: string[] = []) {
     rows,
     findUnique: ({ where }: any) => Promise.resolve(find(where)),
     findFirst: ({ where }: any = {}) => Promise.resolve(find(where)),
+    findMany: ({ where }: any = {}) =>
+      Promise.resolve(rows.filter((r) => matches(r, where))),
+    upsert: ({ where, update, create }: any) => {
+      const row = find(where);
+      if (row) {
+        Object.assign(row, update);
+        return Promise.resolve(row);
+      }
+      const created = { id: randomUUID(), ...defaults(), ...create };
+      rows.push(created);
+      return Promise.resolve(created);
+    },
     count: ({ where }: any = {}) =>
       Promise.resolve(rows.filter((r) => matches(r, where)).length),
     create: ({ data }: any) => {

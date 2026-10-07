@@ -194,6 +194,7 @@ export class EventsService {
             datos: asData(prev.data),
           }
         : null,
+      'evento',
     );
     if (!ex) {
       this.logger.warn(`No se pudo preparar el borrador (hilo ${threadId})`);

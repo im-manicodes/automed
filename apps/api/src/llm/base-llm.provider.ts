@@ -4,23 +4,24 @@ import type {
   LlmCallOptions,
   LlmProvider,
   LlmRequest,
+  LlmTask,
 } from './llm-provider.interface';
 import { withRetry } from './llm-retry';
 
 /**
  * Base de los adaptadores: elige modelo (texto/visión), aplica reintentos con backoff y
- * resuelve temperatura/max tokens. Los adaptadores solo implementan `call`.
+ * acepta un modelo por petición y resuelve temperatura/max tokens. Los adaptadores solo implementan `call`.
  */
 export abstract class BaseLlmProvider implements LlmProvider {
-  readonly modelText: string;
-  readonly modelVision: string;
-
   protected constructor(
     protected readonly cfg: LlmConfig,
     private readonly sleep?: (ms: number) => Promise<void>,
-  ) {
-    this.modelText = cfg.modelText;
-    this.modelVision = cfg.modelVision;
+  ) {}
+
+  modelFor(task: LlmTask): Promise<string> {
+    return Promise.resolve(
+      task === 'vision' ? this.cfg.modelVision : this.cfg.modelText,
+    );
   }
 
   /** Una llamada sin reintentos. `temperature` ya viene resuelta (undefined = no enviar). */
@@ -32,7 +33,9 @@ export abstract class BaseLlmProvider implements LlmProvider {
   ): Promise<string>;
 
   complete(request: LlmRequest): Promise<string> {
-    const model = request.images?.length ? this.modelVision : this.modelText;
+    const model =
+      request.model ??
+      (request.images?.length ? this.cfg.modelVision : this.cfg.modelText);
     const maxTokens = request.maxTokens ?? this.cfg.defaultMaxTokens;
     const t = request.temperature ?? this.cfg.temperature;
     const temperature = modelAcceptsTemperature(model) ? t : undefined;

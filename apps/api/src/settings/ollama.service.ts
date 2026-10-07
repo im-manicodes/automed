@@ -1,0 +1,240 @@
+import { Injectable } from '@nestjs/common';
+
+export type PullEstado = 'descargando' | 'listo' | 'error' | 'inactivo';
+
+export interface PullStatus {
+  modelo: string;
+  estado: PullEstado;
+  completado: number;
+  total: number;
+  error?: string;
+}
+
+export interface OllamaInfo {
+  alcanzable: boolean;
+  version?: string;
+  modelos: string[];
+}
+
+const QUICK_TIMEOUT_MS = 2500;
+const PULL_CONNECT_TIMEOUT_MS = 15_000;
+const PULL_IDLE_TIMEOUT_MS = 120_000;
+const KEEP_FINISHED_MS = 30 * 60_000;
+const MODEL_RE = /^[A-Za-z0-9._:/-]{1,200}$/;
+
+/** Base nativa de Ollama: la URL configurada (compatible OpenAI) sin el sufijo `/v1`. */
+export function ollamaNativeBase(url: string): string {
+  return url
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/v1$/i, '')
+    .replace(/\/+$/, '');
+}
+
+export function isValidModelName(m: unknown): m is string {
+  return typeof m === 'string' && MODEL_RE.test(m);
+}
+
+function httpBase(url: string): string | null {
+  try {
+    const u = new URL(ollamaNativeBase(url));
+    return u.protocol === 'http:' || u.protocol === 'https:'
+      ? ollamaNativeBase(url)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+interface Entry extends PullStatus {
+  updatedAt: number;
+}
+
+/** Cliente mínimo de la API nativa de Ollama (lista, versión y descarga de modelos). */
+@Injectable()
+export class OllamaService {
+  private readonly pulls = new Map<string, Entry>();
+
+  private async getJson(
+    base: string,
+    path: string,
+    timeoutMs = QUICK_TIMEOUT_MS,
+  ): Promise<unknown> {
+    // redirect: 'manual' evita seguir redirecciones hacia otros hosts.
+    const res = await fetch(`${base}${path}`, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async listModels(url: string): Promise<string[]> {
+    const base = httpBase(url);
+    if (!base) return [];
+    try {
+      const data = (await this.getJson(base, '/api/tags')) as {
+        models?: { name?: unknown }[];
+      };
+      return (data.models ?? [])
+        .map((m) => m.name)
+        .filter((n): n is string => typeof n === 'string');
+    } catch {
+      return [];
+    }
+  }
+
+  async info(url: string): Promise<OllamaInfo> {
+    const base = httpBase(url);
+    if (!base) return { alcanzable: false, modelos: [] };
+    try {
+      const v = (await this.getJson(base, '/api/version')) as {
+        version?: unknown;
+      };
+      const modelos = await this.listModels(url);
+      return {
+        alcanzable: true,
+        version: typeof v.version === 'string' ? v.version : undefined,
+        modelos,
+      };
+    } catch {
+      return { alcanzable: false, modelos: [] };
+    }
+  }
+
+  status(modelo: string): PullStatus {
+    this.cleanup();
+    const e = this.pulls.get(modelo);
+    if (!e) return { modelo, estado: 'inactivo', completado: 0, total: 0 };
+    const out: PullStatus = {
+      modelo,
+      estado: e.estado,
+      completado: e.completado,
+      total: e.total,
+    };
+    if (e.error) out.error = e.error;
+    return out;
+  }
+
+  /** Inicia la descarga en segundo plano (idempotente si ya hay una en curso). */
+  startPull(url: string, modelo: string): PullStatus {
+    this.cleanup();
+    const current = this.pulls.get(modelo);
+    if (current?.estado === 'descargando') return this.status(modelo);
+    const entry: Entry = {
+      modelo,
+      estado: 'descargando',
+      completado: 0,
+      total: 0,
+      updatedAt: Date.now(),
+    };
+    this.pulls.set(modelo, entry);
+    const base = httpBase(url);
+    if (!base) {
+      this.fail(entry, 'La dirección de Ollama no es válida.');
+      return this.status(modelo);
+    }
+    void this.runPull(base, entry);
+    return this.status(modelo);
+  }
+
+  private fail(e: Entry, msg: string) {
+    e.estado = 'error';
+    e.error = msg;
+    e.updatedAt = Date.now();
+  }
+
+  private async runPull(base: string, e: Entry): Promise<void> {
+    const controller = new AbortController();
+    let timer = setTimeout(() => controller.abort(), PULL_CONNECT_TIMEOUT_MS);
+    timer.unref();
+    const touch = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(), PULL_IDLE_TIMEOUT_MS);
+      timer.unref();
+    };
+    try {
+      const res = await fetch(`${base}/api/pull`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: e.modelo, stream: true }),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        this.fail(
+          e,
+          res.status === 404
+            ? 'Ollama no encontró ese modelo.'
+            : 'Ollama no pudo iniciar la descarga.',
+        );
+        return;
+      }
+      touch();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let failed = false;
+      let success = false;
+      const handle = (line: string) => {
+        if (!line.trim()) return;
+        let msg: {
+          status?: string;
+          error?: unknown;
+          completed?: number;
+          total?: number;
+        };
+        try {
+          msg = JSON.parse(line) as typeof msg;
+        } catch {
+          return;
+        }
+        if (msg.error !== undefined) {
+          failed = true;
+          this.fail(e, 'Ollama no pudo descargar el modelo.');
+          return;
+        }
+        if (typeof msg.total === 'number' && msg.total > 0) {
+          e.total = msg.total;
+          e.completado =
+            typeof msg.completed === 'number' ? msg.completed : e.completado;
+        }
+        if (msg.status === 'success') success = true;
+        e.updatedAt = Date.now();
+      };
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        touch();
+        buf += decoder.decode(value, { stream: true });
+        let i: number;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          handle(buf.slice(0, i));
+          buf = buf.slice(i + 1);
+        }
+      }
+      handle(buf);
+      if (failed) return;
+      if (success) {
+        e.estado = 'listo';
+        if (e.total > 0) e.completado = e.total;
+        e.updatedAt = Date.now();
+      } else {
+        this.fail(e, 'La descarga se interrumpió.');
+      }
+    } catch {
+      this.fail(e, 'No se pudo conectar con Ollama.');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private cleanup() {
+    const now = Date.now();
+    for (const [k, v] of this.pulls) {
+      if (v.estado !== 'descargando' && now - v.updatedAt > KEEP_FINISHED_MS) {
+        this.pulls.delete(k);
+      }
+    }
+  }
+}
