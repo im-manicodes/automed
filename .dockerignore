@@ -3,8 +3,10 @@
 .git
 .env
 docs
-deploy
+deploy/dokku
 .github
-services
+services/ocr-local
+services/*/tests
+**/__pycache__
 **/*.md
 **/coverage

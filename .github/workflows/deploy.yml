@@ -1,4 +1,4 @@
-name: Deploy to Production (GHCR + DigitalOcean)
+name: Build image and deploy (GHCR + Dokku)
 
 on:
   push:
@@ -20,20 +20,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: write # subir imágenes a GHCR
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - name: api
-            context: .
-            file: apps/api/Dockerfile
-          - name: web
-            context: .
-            file: apps/web/Dockerfile
-          - name: pdf-extract
-            context: services/pdf-extract
-            file: services/pdf-extract/Dockerfile
+      packages: write # subir la imagen a GHCR
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -50,25 +37,28 @@ jobs:
 
       # GHCR exige minúsculas y github.repository puede traer mayúsculas (FLOTUZ/automed).
       - name: Set lowercase image name
-        run: echo "IMAGE=${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')-${{ matrix.name }}" >> "$GITHUB_ENV"
+        run: echo "IMAGE=${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
-      # El build (pnpm install/build, prisma generate) ocurre dentro de cada Dockerfile.
-      # La configuración de runtime (DATABASE_URL, JWT_SECRET, claves…) vive en el .env
-      # del Droplet; GitHub Actions no la ve.
+      # Imagen única (Dockerfile de la raíz): API + front compilado + pdf-extract.
+      # La configuración de runtime (DATABASE_URL, JWT_SECRET, claves…) la pone el servidor
+      # al arrancar el contenedor; GitHub Actions no la ve.
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
+          context: .
+          file: ./Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
+  # Solo corre cuando defines la variable de repositorio DEPLOY_ENABLED=true (Settings -> Variables),
+  # es decir, cuando ya tienes el servidor Dokku preparado. Mientras tanto solo se publica la imagen.
   deploy:
     needs: build-and-push
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
@@ -92,15 +82,12 @@ jobs:
             StrictHostKeyChecking yes
           CFG
 
-      # Orden: pdf-extract y api primero (api migra la BD al arrancar), web al final.
-      # Dokku hace despliegue sin caída: si el contenedor nuevo no arranca, deja el anterior.
-      - name: Deploy images with Dokku
+      # Despliegue sin caída: si el contenedor nuevo no arranca, Dokku deja el anterior.
+      # La imagen migra la base de datos al arrancar.
+      - name: Deploy image with Dokku
         run: |
-          PREFIX="${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          for app in pdf-extract api web; do
-            echo "== $app =="
-            ssh dokku "git:from-image $app $PREFIX-$app:${{ github.sha }}"
-          done
+          IMAGE="${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          ssh dokku "git:from-image automed $IMAGE:${{ github.sha }}"
 
       - name: Check the site is healthy
         run: |

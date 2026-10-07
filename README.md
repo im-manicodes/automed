@@ -12,6 +12,7 @@ docs/      estado-del-proyecto.md, despliegue.md, benchmark-ocr.md, entra-id-reg
 services/pdf-extract  PDF digital -> markdown con PyMuPDF (sin OCR; siempre activo en compose)
 services/ocr-local  OCR local (PaddleOCR/Tesseract, perfil `ocr`, solo pruebas)
 docker-compose.yml  rustfs, api, web (Postgres externo vía DATABASE_URL_DOCKER en .env)
+Dockerfile  imagen única de producción (API + frontend + pdf-extract); la publica el CI en GHCR
 docker-compose.dev.yml  hot reload en Docker (solo desarrollo, se activa con COMPOSE_FILE en .env)
 deploy/dokku  bootstrap.sh y env.example para preparar Dokku en el Droplet
 .github/workflows/deploy.yml  CI/CD: build -> GHCR -> Dokku (DigitalOcean)
@@ -43,7 +44,11 @@ Después `docker compose up` (sin `--build` en cada cambio) usa `docker-compose.
 Guía completa (variables, Entra ID, Textract/Bedrock, backups, problemas): `docs/despliegue.md`. Medir el OCR con tus PDFs: `docs/benchmark-ocr.md`.
 
 ## Despliegue en producción (GitHub Actions + GHCR + Dokku en DigitalOcean)
-Cada push a `main` construye las imágenes `api`, `web` y `pdf-extract`, las sube a GitHub Container Registry y le pide a **Dokku** (instalado en un Droplet) que las despliegue por SSH. Dokku corre cada servicio como una app: `web` (nginx, la única pública, con HTTPS de Let's Encrypt), `api`, `pdf-extract`, `rustfs` y un Postgres del plugin oficial; se hablan por una red interna. Los secretos de la app viven en la config de Dokku, no en GitHub. Los pasos 1 a 5 se hacen una sola vez; después basta con `git push`.
+Cada push a `main` construye **una sola imagen** (`Dockerfile` de la raíz: API + frontend compilado + `pdf-extract`) y la sube a GitHub Container Registry (`ghcr.io/<owner>/<repo>`). Esa imagen es portable: se puede correr con `docker run`, Docker Compose o cualquier plataforma que acepte imágenes. Aquí se despliega con **Dokku** en un Droplet de DigitalOcean: la app `automed` (única pública, con HTTPS de Let's Encrypt), `rustfs` (almacenamiento) y un Postgres del plugin oficial, unidos por una red interna. Los secretos de la app viven en la config de Dokku, no en GitHub. Los pasos 1 a 5 se hacen una sola vez; después basta con `git push`.
+
+> **Aún sin servidor:** mientras no definas la variable de repositorio `DEPLOY_ENABLED=true` (paso 4), cada push solo construye y publica la imagen, sin intentar desplegar.
+
+La imagen lee su configuración de variables de entorno (ver `.env.example` y `deploy/dokku/env.example`) y necesita un PostgreSQL y un almacenamiento S3 (`S3_ENDPOINT`, `S3_BUCKET`, claves). Al arrancar aplica las migraciones y sirve la app en el puerto 3000 (`/api/health` para comprobarla). Como `pdf-extract` va dentro, `PDF_TEXT_MODE=off` lo desactiva.
 
 > Necesitas: un dominio (o subdominio) cuyo DNS controles, cuenta de DigitalOcean, este repositorio en GitHub y los datos de producción (Entra ID, AWS Bedrock/Textract; ver `docs/despliegue.md`).
 
@@ -54,7 +59,7 @@ Cada push a `main` construye las imágenes `api`, `web` y `pdf-extract`, las sub
 ```bash
 ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw --force enable
 ```
-(Docker se instala con Dokku.) Solo se publican 80 y 443; api, Postgres, RustFS y pdf-extract no son accesibles desde fuera.
+(Docker se instala con Dokku.) Solo se publican 80 y 443; Postgres y RustFS no son accesibles desde fuera.
 
 ### 2. Crear la clave SSH de GitHub Actions
 En tu máquina (clave nueva, solo para esto, sin contraseña):
@@ -90,6 +95,7 @@ En el repositorio, **Settings -> Environments -> New environment** llamado `prod
 | Secret | `DOKKU_SSH_KEY` | contenido completo de `deploy_key` (privada) |
 | Secret | `DOKKU_KNOWN_HOSTS` | salida de `ssh-keyscan` del paso 2 |
 | Variable | `APP_DOMAIN` | tu dominio (`automed.tudominio.com`), para el chequeo final de salud |
+| Variable | `DEPLOY_ENABLED` | `true` cuando el servidor esté listo; actívala al terminar el paso 3 |
 
 En **Settings -> Actions -> General -> Workflow permissions** deja "Read and write permissions" (el job de construcción ya pide `packages: write`).
 
@@ -97,19 +103,19 @@ En **Settings -> Actions -> General -> Workflow permissions** deja "Read and wri
 ```bash
 git push origin main
 ```
-Sigue el avance en la pestaña **Actions**. El workflow construye las imágenes y despliega `pdf-extract`, `api` y `web` (la api aplica las migraciones al arrancar). Cuando termine el primer despliegue de `web`, en el Droplet activa el HTTPS y crea el primer usuario:
+Sigue el avance en la pestaña **Actions**. El workflow construye la imagen y la despliega en `automed` (la app aplica las migraciones al arrancar). Cuando termine el primer despliegue, en el Droplet activa el HTTPS y crea el primer usuario:
 ```bash
-dokku letsencrypt:enable web && dokku letsencrypt:cron-job --add
-dokku enter api web node dist/cli/user.js create --email tu@correo.com --nombre "Tu nombre"
+dokku letsencrypt:enable automed && dokku letsencrypt:cron-job --add
+dokku enter automed web node dist/cli/user.js create --email tu@correo.com --nombre "Tu nombre"
 curl https://<DOMAIN>/api/health        # {"status":"ok","db":true,"storage":true}
 ```
-Abre `https://<DOMAIN>`, inicia sesión y entra a **Ajustes -> Conectar Outlook**. El job final de Actions verifica `/api/health` por HTTPS, así que el primer push fallará en ese paso hasta que actives Let's Encrypt (el despliegue en sí ya está hecho); vuelve a lanzar el workflow después.
+Abre `https://<DOMAIN>`, inicia sesión y entra a **Ajustes -> Conectar Outlook**. El job final de Actions verifica `/api/health` por HTTPS, así que el primer despliegue fallará en ese paso hasta que actives Let's Encrypt (el despliegue en sí ya está hecho); vuelve a lanzar el workflow después.
 
 ### Operación diaria
 - **Actualizar:** `git push origin main`. Dokku despliega sin caída: si el contenedor nuevo no arranca, deja el anterior.
-- **Estado y logs:** `dokku ps:report`, `dokku logs api -t`, `dokku logs web -t`.
-- **Volver a una versión anterior:** `dokku git:from-image api ghcr.io/<owner>/<repo>-api:<sha-del-commit-bueno>` (cada commit queda etiquetado en GHCR con su SHA; haz lo mismo con `web` si cambió). Si ese commit incluía migraciones de BD ya aplicadas, no se deshacen solas.
-- **Cambiar variables:** `dokku config:set api CLAVE=valor` (reinicia la api) o edita `automed.env` y repite `./bootstrap.sh`.
+- **Estado y logs:** `dokku ps:report automed`, `dokku logs automed -t`.
+- **Volver a una versión anterior:** `dokku git:from-image automed ghcr.io/<owner>/<repo>:<sha-del-commit-bueno>` (cada commit queda etiquetado en GHCR con su SHA). Si ese commit incluía migraciones de BD ya aplicadas, no se deshacen solas.
+- **Cambiar variables:** `dokku config:set automed CLAVE=valor` (reinicia la app) o edita `automed.env` y repite `./bootstrap.sh`.
 - **Respaldos:** son datos de salud. Activa los **backups del Droplet** en DigitalOcean (incluyen el volumen de RustFS y los datos de Postgres) y haz volcados puntuales: `dokku postgres:export automed-db > respaldo.dump`. El plugin también permite respaldos programados a un S3 (`dokku postgres:backup-schedule`).
 
 ### Problemas frecuentes
@@ -118,10 +124,10 @@ Abre `https://<DOMAIN>`, inicia sesión y entra a **Ajustes -> Conectar Outlook*
 | Actions falla con `Host key verification failed` | `DOKKU_KNOWN_HOSTS` vacío o de otra IP; repite `ssh-keyscan -t ed25519 <host>`. |
 | `Permission denied (publickey)` | No ejecutaste `dokku ssh-keys:add` con la pública, o el secret `DOKKU_SSH_KEY` no es la privada completa. |
 | `denied` o `unauthorized` al bajar la imagen | El token de `bootstrap.sh` caducó o no tiene `read:packages`; repite el script con uno nuevo. |
-| La api no arranca | Falta una variable (`dokku config api`) o BD inaccesible; revisa `dokku logs api`. |
+| La app no arranca | Falta una variable (`dokku config automed`) o BD inaccesible; revisa `dokku logs automed`. |
 | El login con Microsoft vuelve con error | `MS_REDIRECT_URI` distinta a la registrada en Entra ID. |
 | Error de certificado | El registro A no apunta al Droplet o 80/443 están bloqueados; revisa `dokku letsencrypt:list`. |
-| `web` responde 502 en `/api` | La api no está corriendo o no está en la red: `dokku network:report api` y `dokku ps:report api`. |
+| 502 o error al guardar archivos | La app no alcanza RustFS o Postgres: `dokku network:report automed` y `dokku ps:report rustfs`. |
 
 Detalle técnico del flujo: sección "CI/CD" de `docs/despliegue.md`.
 
