@@ -26,11 +26,6 @@ services:
     healthcheck:
       start_period: 120s   # prisma generate + migrate + primera compilación
 
-  pdf-extract:
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload", "--reload-dir", "/srv/app"]
-    volumes:
-      - ./services/pdf-extract/app:/srv/app
-
   web:
     image: auto-med-web-dev
     build:

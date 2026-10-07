@@ -8,12 +8,12 @@ interface Props {
   entorno: AjustesOcr['entorno']
 }
 
-/** Tarjetas para elegir cómo se leen los PDF escaneados. La opción local se ejecuta en el equipo de escritorio o en el servidor. */
+/** Tarjetas para elegir cómo se leen los PDF escaneados. */
 export default function SelectorOcr({ value, onChange, entorno }: Props) {
   return (
     <div role="radiogroup" aria-label="Lectura de PDFs escaneados" className="grid gap-3">
       {OPCIONES_OCR.map((o) => {
-        const bloqueado = o.id === 'local' && !entorno.escritorio && !entorno.servidor
+        const bloqueado = o.id === 'local' && !entorno.servidor
         const activo = value === o.id
         return (
           <button

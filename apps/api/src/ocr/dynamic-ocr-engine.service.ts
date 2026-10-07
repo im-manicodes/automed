@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
-import { isDesktop } from './app-mode';
 import { LocalOcrEngineService } from './local-ocr-engine.service';
-import { OcrLocalRunner } from './ocr-local-runner.service';
 import { readOcrConfig } from './ocr-config';
 import type { OcrEngine, OcrPageResult } from './ocr-engine.interface';
 import { TextractOcrEngineService } from './textract-ocr-engine.service';
@@ -25,7 +23,6 @@ export class DynamicOcrEngine implements OcrEngine {
     private readonly settings: OcrSettingsService,
     private readonly local: LocalOcrEngineService,
     private readonly textract: TextractOcrEngineService,
-    private readonly runner: OcrLocalRunner,
   ) {}
 
   /** Nombre del último motor usado (se guarda en OcrPage.engine). */
@@ -34,16 +31,6 @@ export class DynamicOcrEngine implements OcrEngine {
   }
 
   private localUrl(): string {
-    if (isDesktop(this.config)) {
-      const url = this.runner.getUrl();
-      if (url) return url;
-      const { estado } = this.runner.getStatus();
-      throw new Error(
-        estado === 'iniciando'
-          ? 'El OCR de tu computador se está iniciando. Inténtalo de nuevo en unos minutos.'
-          : 'El OCR de tu computador no está preparado. Revisa Ajustes.',
-      );
-    }
     return readOcrConfig(this.config).localUrl;
   }
 

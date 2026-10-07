@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SessionGuard } from '../auth/session.guard';
+import { MicrosoftSettingsService } from '../settings/microsoft-settings.service';
 import { MicrosoftService } from '../auth/microsoft.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/auth.types';
@@ -19,13 +20,19 @@ export class MailController {
   constructor(
     private readonly sync: MailSyncService,
     private readonly microsoft: MicrosoftService,
+    private readonly msSettings: MicrosoftSettingsService,
   ) {}
 
   /** Devuelve la URL de autorización de Microsoft; el frontend navega a ella. */
   @Post('connect')
   @HttpCode(200)
-  connect(@CurrentUser() user: AuthUser) {
-    return { url: this.microsoft.buildConnectUrl(user.id) };
+  async connect(@CurrentUser() user: AuthUser) {
+    if (!(await this.msSettings.isConfigured())) {
+      throw new ConflictException(
+        'Primero configura Microsoft en Ajustes (ID de cliente)',
+      );
+    }
+    return { url: await this.microsoft.buildConnectUrl(user.id) };
   }
 
   /** "Sincronizar ahora". Requiere Outlook conectado. Si ya hay una en curso responde started=false. */

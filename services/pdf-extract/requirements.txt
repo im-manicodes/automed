@@ -1,5 +1,0 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-# PyMuPDF y pymupdf4llm son AGPL-3.0 (uso interno de un solo usuario; ver docs/despliegue.md).
-pymupdf==1.25.5
-pymupdf4llm==0.0.24

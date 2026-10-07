@@ -11,11 +11,13 @@ import { LuHourglass } from 'react-icons/lu'
 
 interface Props {
   mail: MailStatus
+  /** Falso = falta el ID de cliente de Microsoft; se bloquea Conectar. */
+  configurado?: boolean
   onChanged: () => void | Promise<void>
 }
 
 /** Tarjeta "Tu correo de Outlook": no conectado, conectado o con error. */
-export default function OutlookCard({ mail, onChanged }: Props) {
+export default function OutlookCard({ mail, onChanged, configurado = true }: Props) {
   const { toast } = useToast()
   const [syncing, setSyncing] = useState(false)
   const syncMail = useSyncMail()
@@ -61,7 +63,12 @@ export default function OutlookCard({ mail, onChanged }: Props) {
           <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
             <LuLock className="size-4 shrink-0 mt-0.5 inline" aria-hidden /> Solo pedimos permiso para <strong>leer</strong> tus correos. No enviamos, borramos ni cambiamos nada en tu buzón.
           </p>
-          <ConectarOutlookButton />
+          {!configurado && (
+            <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+              <LuTriangleAlert className="size-4 shrink-0 mr-1.5 inline align-text-bottom" aria-hidden />Primero configura Microsoft (más abajo) para poder conectar tu Outlook.
+            </p>
+          )}
+          <ConectarOutlookButton disabled={!configurado} />
         </>
       )}
 

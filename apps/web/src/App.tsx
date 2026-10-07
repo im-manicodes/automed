@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import AvisoPcApagado from './components/AvisoPcApagado'
 import GuardaBienvenida from './components/GuardaBienvenida'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -10,7 +9,6 @@ import Bienvenida from './pages/bienvenida/page'
 import ConfiguracionIa from './pages/configuracion-ia/page'
 import Plantilla from './pages/plantilla/page'
 import Reportes from './pages/reportes/page'
-import UsarCelular from './pages/usar-celular/page'
 import TicketDetalle from './pages/ticket-detalle/page'
 import Tickets from './pages/tickets/page'
 
@@ -19,8 +17,7 @@ const RevisionPage = lazy(() => import('./pages/revision/page'))
 
 export default function App() {
   return (
-    <>
-    <AvisoPcApagado />
+
     <Routes>
       <Route element={<ProtectedRoute />}>
        <Route element={<GuardaBienvenida />}>
@@ -41,12 +38,10 @@ export default function App() {
           <Route path="/plantilla" element={<Plantilla />} />
           <Route path="/ajustes" element={<Ajustes />} />
           <Route path="/ajustes/ia" element={<ConfiguracionIa />} />
-          <Route path="/ajustes/celular" element={<UsarCelular />} />
           <Route path="*" element={<Navigate to="/tickets" replace />} />
         </Route>
        </Route>
       </Route>
     </Routes>
-    </>
   )
 }

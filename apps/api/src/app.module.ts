@@ -18,7 +18,6 @@ import { PrismaModule } from './prisma/prisma.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ReportsModule } from './reports/reports.module';
 import { EventsModule } from './events/events.module';
-import { RelayModule } from './relay/relay.module';
 
 @Module({
   imports: [
@@ -42,7 +41,6 @@ import { RelayModule } from './relay/relay.module';
     JobsModule,
     ReportsModule,
     EventsModule,
-    RelayModule,
   ],
   controllers: [AppController],
   providers: [AppService],

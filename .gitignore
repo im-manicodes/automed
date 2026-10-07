@@ -12,8 +12,3 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
-
-# apps/desktop
-apps/desktop/build-resources/
-apps/desktop/release/
-release-desktop/

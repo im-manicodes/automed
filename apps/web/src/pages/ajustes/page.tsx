@@ -3,10 +3,12 @@ import ErrorBox from '../../components/ErrorBox'
 import Spinner from '../../components/Spinner'
 import { useSession } from '../../context/session-context'
 import OutlookCard from './components/OutlookCard'
+import ConfigMicrosoftCard from './components/ConfigMicrosoftCard'
 import { Link, useSearchParams } from 'react-router-dom'
 import { plural } from '../../lib/format'
 import { useMailStatus } from '../../hooks/useMail'
 import { useJobsStatus } from './hooks/useAjustes'
+import { useConfigMicrosoft } from './hooks/useConfigMicrosoft'
 import { usePolling } from '../../hooks/usePolling'
 import { useAjustesIa } from '../../hooks/useAjustesIa'
 import { nombreProveedor } from '../../lib/ia'
@@ -16,6 +18,7 @@ export default function Ajustes() {
   const { session, logout } = useSession()
   const { data: ia } = useAjustesIa()
   const { data: mail, error: mailError, refetch: refetchMail } = useMailStatus()
+  const { data: msConfig, refetch: refetchMs } = useConfigMicrosoft()
   const { data: jobs, error: jobsError, refetch: refetchJobs } = useJobsStatus()
   // Un fallo de una recarga silenciosa (polling) con datos ya cargados no se muestra.
   const error = (!mail || !jobs) && (mailError ?? jobsError) ? (mailError ?? jobsError) : null
@@ -56,7 +59,8 @@ export default function Ajustes() {
       )}
 
       <div className="space-y-5 md:grid md:grid-cols-2 md:items-start md:gap-5 md:space-y-0">
-      {mail && <div className="md:col-span-2"><OutlookCard mail={mail} onChanged={() => load()} /></div>}
+      {mail && <div className="md:col-span-2"><OutlookCard mail={mail} configurado={msConfig?.configurado ?? true} onChanged={() => load()} /></div>}
+      {msConfig && <div className="md:col-span-2"><ConfigMicrosoftCard config={msConfig} onSaved={async () => { await refetchMs() }} /></div>}
 
       {jobs && (
         <div className="space-y-2 md:col-span-2 rounded-xl border border-slate-200 bg-white p-4">
@@ -79,12 +83,6 @@ export default function Ajustes() {
         <h3 className="text-lg font-bold">Inteligencia artificial</h3>
         {ia && <p className="text-slate-700">Proveedor actual: <strong>{nombreProveedor(ia.proveedor)}</strong></p>}
         <Link to="/ajustes/ia" className="btn btn-secondary w-full">Configurar</Link>
-      </div>
-
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="text-lg font-bold">Usar desde el celular</h3>
-        <p className="text-slate-700">Entra a auto-med desde tu celular con un código QR.</p>
-        <Link to="/ajustes/celular" className="btn btn-secondary w-full">Abrir</Link>
       </div>
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">

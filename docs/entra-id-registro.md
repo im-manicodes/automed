@@ -1,66 +1,46 @@
 # Registrar la app en Microsoft Entra ID
 
-Necesitas una app registrada para que auto-med lea tu buzón con Microsoft Graph. Se usa OAuth **delegado** (conectas Outlook una vez; la app guarda un refresh token cifrado) con permisos `Mail.Read` y `offline_access`.
+Necesitas una app registrada para que auto-med lea tu buzón con Microsoft Graph. Se usa OAuth **delegado** (conectas Outlook una vez; la app guarda un refresh token cifrado) con la app registrada como **cliente confidencial** (aplicación Web con secreto de cliente). Los datos del registro se pegan en la web, en **Ajustes -> Microsoft**; no hace falta tocar `.env`.
 
 ## 1. Crear el registro
 1. Entra a <https://entra.microsoft.com> con tu cuenta de la organización.
 2. **Identidad > Aplicaciones > Registros de aplicaciones > Nuevo registro**.
 3. Nombre: `auto-med`.
 4. Tipos de cuenta compatibles: **Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft** (así se puede conectar un correo de trabajo de cualquier inquilino o un @outlook.com/@hotmail.com).
-5. URI de redirección: plataforma **Web**, valor `http://localhost:3000/api/auth/callback` (en producción usa tu URL HTTPS, p. ej. `https://auto-med.midominio.com/api/auth/callback`). Debe coincidir exactamente con `MS_REDIRECT_URI`.
+5. URI de redirección: plataforma **Web** (no "aplicaciones móviles y de escritorio"), valor `https://<tu-host>/api/auth/callback` (el host público donde sirves la app; es `<WEB_ORIGIN>/api/auth/callback`). En pruebas locales: `http://localhost:3000/api/auth/callback` con `pnpm dev`, o `http://localhost:8080/api/auth/callback` con `docker compose up`. Debe coincidir exactamente con la URI que pongas en Ajustes -> Microsoft (la web te sugiere la correcta).
 6. **Registrar**.
 
 ## 2. Copiar los identificadores
 En la página **Información general** copia:
-- *Id. de aplicación (cliente)* -> `MS_CLIENT_ID`
-- *Id. de directorio (inquilino)*: **no se usa**; deja `MS_TENANT_ID=common`. Un GUID limitaría el acceso a ese único inquilino y rompería las cuentas personales.
+- *Id. de aplicación (cliente)* -> campo «Id. de aplicación» en Ajustes -> Microsoft.
+- *Id. de directorio (inquilino)*: **no se usa**; deja el inquilino en `common`. Un GUID limitaría el acceso a ese único inquilino y rompería las cuentas personales.
 
 ## 3. Crear el secreto de cliente
-**Certificados y secretos > Nuevo secreto de cliente**, elige caducidad (máx. 24 meses) y copia el **Valor** (solo se muestra una vez) -> `MS_CLIENT_SECRET`. Anota la fecha de caducidad para renovarlo.
+**Certificados y secretos > Nuevo secreto de cliente**, elige caducidad (máx. 24 meses) y copia el **Valor** (solo se muestra una vez) -> campo «Secreto de cliente» en Ajustes -> Microsoft. La app lo guarda cifrado (AES-GCM) y no lo vuelve a mostrar. Anota la fecha de caducidad para renovarlo.
 
 ## 4. Permisos de API (delegados)
-**Permisos de API > Agregar un permiso > Microsoft Graph > Permisos delegados**:
-- `Mail.Read`
-- `offline_access`
+Son los que pide la app (`SCOPES` en `apps/api/src/auth/microsoft.service.ts`: `offline_access Mail.Read User.Read`). **Permisos de API > Agregar un permiso > Microsoft Graph > Permisos delegados**:
+- `Mail.Read` (lectura del correo)
+- `offline_access` (refresh token para sincronizar sin volver a iniciar sesión)
 - `User.Read` (viene por defecto; se usa para leer tu correo y validar la cuenta)
 
-Si tu tenant lo permite, pulsa **Conceder consentimiento de administrador**; si no, el consentimiento se te pedirá a ti la primera vez que inicies sesión (`Mail.Read` delegado normalmente no requiere admin).
+Si tu tenant lo permite, pulsa **Conceder consentimiento de administrador**; si no, el consentimiento se te pedirá a ti la primera vez que conectes Outlook (`Mail.Read` delegado normalmente no requiere admin). Con cuentas personales el secreto y la URI se configuran igual. El consentimiento es por cuenta: cada cuenta que se conecte acepta los permisos la primera vez.
 
-Nota: con cuentas personales el secreto y la URI de redirección se configuran igual. El consentimiento es por cuenta: cada cuenta que se conecte acepta los permisos la primera vez (en organizaciones que exijan aprobación de administrador, lo concede ese inquilino).
-
-## 5. Configurar la API
-En `.env` (raíz) (nunca lo subas a git):
-```
-MS_TENANT_ID=common
-MS_CLIENT_ID=<id de aplicación>
-MS_CLIENT_SECRET=<valor del secreto>
-MS_REDIRECT_URI=http://localhost:3000/api/auth/callback
-TOKEN_ENC_KEY=<salida de: openssl rand -base64 32>
-```
-Define también `JWT_SECRET` (obligatorio; `openssl rand -base64 48`). El flujo ahora es:
-1. Crea tu usuario de la app: `pnpm --filter api user:create -- --email <correo> --nombre <nombre>` (pide la contraseña por prompt).
-2. **Inicia sesión en la app** (correo + contraseña; el login de la app ya no usa Microsoft).
-3. Ve a **Ajustes -> Conectar Outlook**: la app llama a `POST /api/mail/connect`, te lleva a Microsoft y, tras aceptar los permisos, Microsoft vuelve a `MS_REDIRECT_URI` (`/api/auth/callback`; misma URI de siempre). Ese retorno exige que sigas con sesión iniciada en la app (cookie SameSite=Lax) y que sea el mismo usuario que inició la conexión; luego te devuelve a `WEB_ORIGIN/ajustes?outlook=conectado`.
-4. Sincroniza (botón o cada `SYNC_INTERVAL_MIN`). **Desconectar** (Ajustes) borra solo los tokens de Microsoft y detiene la sincronización; conserva tickets, mensajes, adjuntos y síntesis.
+## 5. Pegar los datos en la web
+1. Crea tu usuario de la app: `docker compose exec api node dist/cli/user.js create --email <correo> --nombre <nombre>` (o `pnpm --filter api user:create -- ...`; pide la contraseña por prompt). Define antes `JWT_SECRET` (obligatorio; `openssl rand -base64 48`) y `TOKEN_ENC_KEY` (`openssl rand -base64 32`) en `.env`.
+2. **Inicia sesión en la app** (correo + contraseña; el login de la app no usa Microsoft).
+3. En **Ajustes -> Microsoft** rellena el id de aplicación, el inquilino (`common`), el secreto de cliente y la URI de redirección (por defecto la sugerida `<WEB_ORIGIN>/api/auth/callback`). Precedencia: panel > variables `MS_CLIENT_ID`, `MS_TENANT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` de `.env` (siguen valiendo como valores por defecto).
+4. Ve a **Ajustes -> Conectar Outlook**: la app te lleva a Microsoft y, tras aceptar los permisos, Microsoft vuelve a la URI de redirección (`/api/auth/callback`). Ese retorno exige que sigas con sesión iniciada en la app (cookie SameSite=Lax) y que sea el mismo usuario que inició la conexión; luego te devuelve a `WEB_ORIGIN/ajustes?outlook=conectado`.
+5. Sincroniza (botón o cada `SYNC_INTERVAL_MIN`). **Desconectar** (Ajustes) borra solo los tokens de Microsoft y detiene la sincronización; conserva tickets, mensajes, adjuntos y síntesis.
 
 ## Fallback: acceso app-only (si el tenant bloquea el consentimiento de usuario)
 Si aparece "Se necesita aprobación del administrador" y el admin no habilita el consentimiento delegado, se puede usar un permiso de **aplicación** (`Mail.Read` de tipo *Aplicación*, flujo client-credentials) **limitado a tu buzón** con una política de acceso a aplicaciones de Exchange. Este modo aún no está implementado en el código; se añadiría en un adaptador alterno de `AuthService`.
 
 Texto sugerido para el administrador:
 
-> Hola, necesito registrar la aplicación interna "auto-med" para leer (solo lectura) mi propio buzón con Microsoft Graph. Por favor: (1) concede consentimiento de administrador al permiso delegado `Mail.Read` (y `offline_access`) para la app con Id `<MS_CLIENT_ID>`; o, si la política no lo permite, (2) concede el permiso de aplicación `Mail.Read` y restríngelo únicamente a mi buzón (`<mi-correo>`) con una Application Access Policy de Exchange Online (`New-ApplicationAccessPolicy -AppId <MS_CLIENT_ID> -PolicyScopeGroupId <grupo-con-mi-buzón> -AccessRight RestrictAccess`). La app no escribe ni envía correos. Gracias.
+> Hola, necesito registrar la aplicación interna "auto-med" para leer (solo lectura) mi propio buzón con Microsoft Graph. Por favor: (1) concede consentimiento de administrador al permiso delegado `Mail.Read` (y `offline_access`) para la app con Id `<id de aplicación>`; o, si la política no lo permite, (2) concede el permiso de aplicación `Mail.Read` y restríngelo únicamente a mi buzón (`<mi-correo>`) con una Application Access Policy de Exchange Online (`New-ApplicationAccessPolicy -AppId <id de aplicación> -PolicyScopeGroupId <grupo-con-mi-buzón> -AccessRight RestrictAccess`). La app no escribe ni envía correos. Gracias.
 
 ## Notas de seguridad
-- El refresh token se guarda cifrado con AES-256-GCM (`TOKEN_ENC_KEY`); si cambias la clave tendrás que volver a conectar Outlook.
-- Cada usuario de la app tiene una sola cuenta de Outlook; una misma cuenta de Outlook no puede conectarse a dos usuarios. `ALLOWED_EMAIL` y `SESSION_SECRET` ya no existen (quien entra a la app es quien tiene usuario y contraseña).
+- El refresh token y el secreto de cliente se guardan cifrados con AES-256-GCM (`TOKEN_ENC_KEY`); si cambias la clave tendrás que volver a pegar el secreto y conectar Outlook.
+- Cada usuario de la app tiene una sola cuenta de Outlook; una misma cuenta de Outlook no puede conectarse a dos usuarios.
 - Renueva el secreto de cliente antes de que caduque.
-
-## Registro para el instalable de escritorio
-El instalable (`apps/desktop`) conecta Outlook como **cliente público** con redirección de loopback; es un registro distinto del de la versión web/Docker (o se pueden añadir estas plataformas al mismo registro).
-1. **Registros de aplicaciones > Nuevo registro** (o el registro existente), nombre p. ej. `auto-med escritorio`.
-2. Tipos de cuenta: **Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft** (multiinquilino + personales).
-3. **Autenticación > Agregar una plataforma > Aplicaciones móviles y de escritorio** (*Mobile and desktop applications*) y como URI de redirección escribe `http://localhost`. Para loopback Entra ignora el puerto, así que cubre `http://localhost:<puerto>/api/auth/callback` aunque la app elija un puerto libre distinto cada vez. No uses la plataforma "Web".
-4. **No crees secreto de cliente**: el instalable es un cliente público (usa PKCE) y no puede guardar secretos.
-5. **Permisos de API > Microsoft Graph > Permisos delegados**: `Mail.Read`, `offline_access` y `User.Read`.
-6. Copia el *Id. de aplicación (cliente)* y ponlo en `apps/desktop/build-config.json`, campo `msClientId` (deja `msTenantId` en `common`). Hoy ese valor está **vacío** en el repositorio: mientras siga vacío, "Conectar Outlook" no funciona en el instalable. Después hay que volver a construir el instalable.
-7. **Aviso de consentimiento de administrador:** en tenants corporativos, el administrador puede tener restringido el consentimiento de los usuarios; entonces quien conecte su correo verá "Se necesita aprobación del administrador" y el administrador del inquilino deberá conceder el permiso.

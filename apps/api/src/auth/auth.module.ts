@@ -10,6 +10,7 @@ import { PasswordService } from './password.service';
 import { MicrosoftService } from './microsoft.service';
 import { LoginThrottlerGuard } from './login-throttler.guard';
 import { IpThrottlerGuard } from './ip-throttler.guard';
+import { MicrosoftSettingsService } from '../settings/microsoft-settings.service';
 import { UsersService } from '../users/users.service';
 
 /** JWT_SECRET es obligatorio: sin él (o si es corto) la API no arranca. */
@@ -41,6 +42,7 @@ export function jwtSecretFrom(config: ConfigService): string {
     SessionGuard,
     PasswordService,
     MicrosoftService,
+    MicrosoftSettingsService,
     LoginThrottlerGuard,
     IpThrottlerGuard,
     UsersService,
@@ -52,6 +54,7 @@ export function jwtSecretFrom(config: ConfigService): string {
     SessionGuard,
     PasswordService,
     MicrosoftService,
+    MicrosoftSettingsService,
     UsersService,
     JwtModule,
   ],

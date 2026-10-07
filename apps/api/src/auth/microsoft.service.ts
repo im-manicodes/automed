@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { MicrosoftSettingsService } from '../settings/microsoft-settings.service';
 import { TokenCryptoService } from './token-crypto.service';
 
 const SCOPES = 'offline_access Mail.Read User.Read';
+const NOT_CONFIGURED = 'Primero configura Microsoft en Ajustes';
 const STATE_AUD = 'ms-state';
 const STATE_TTL_SEC = 10 * 60;
 
@@ -59,10 +60,10 @@ export function tokenErrorMessage(
     return 'La conexión con Outlook caducó; vuelve a conectarla';
   }
   if (code === '50020') {
-    return 'Esa cuenta no está permitida por el registro de la app en Microsoft; revisa el tipo de cuenta compatible o el valor de MS_TENANT_ID';
+    return 'Esa cuenta no está permitida por el registro de la app en Microsoft; revisa el tipo de cuenta compatible o el inquilino configurado';
   }
   if (code === '700016') {
-    return 'Microsoft no reconoce la aplicación en ese directorio; revisa MS_CLIENT_ID y el tipo de cuenta del registro';
+    return 'Microsoft no reconoce la aplicación en ese directorio; revisa el ID de cliente y el tipo de cuenta del registro';
   }
   if (error === 'consent_required' || code === '65001') {
     return 'Falta el consentimiento: acepta los permisos al conectar, o pide a tu administrador que los apruebe';
@@ -80,44 +81,32 @@ export class MicrosoftService {
   private cache: { token: string; exp: number } | null = null;
 
   constructor(
-    private readonly config: ConfigService,
+    private readonly settings: MicrosoftSettingsService,
     private readonly prisma: PrismaService,
     private readonly crypto: TokenCryptoService,
     private readonly jwt: JwtService,
-  ) {
-    const authority = resolveAuthority(this.config.get<string>('MS_TENANT_ID'));
-    if (GUID_RE.test(authority)) {
-      this.logger.warn(
-        'MS_TENANT_ID es un GUID: solo se admitirán cuentas de ese inquilino. Usa "common" para organizaciones y cuentas personales.',
-      );
-    }
+  ) {}
+
+  /** URI de retorno efectiva (panel > MS_REDIRECT_URI > sugerida). */
+  async redirectUri(): Promise<string> {
+    return (await this.settings.getEffective()).redirectUri;
   }
 
-  /**
-   * URI de retorno. Si MS_REDIRECT_URI no está definida y la app corre en modo escritorio
-   * (APP_MODE=desktop), se arma con el puerto real (loopback; Entra ignora el puerto en localhost).
-   */
-  redirectUri(): string {
-    const configured = this.config.get<string>('MS_REDIRECT_URI')?.trim();
-    if (configured) return configured;
-    if (this.config.get<string>('APP_MODE') === 'desktop') {
-      const port = this.config.get<string>('PORT') || '3000';
-      return `http://localhost:${port}/api/auth/callback`;
-    }
-    return this.config.getOrThrow<string>('MS_REDIRECT_URI');
-  }
-
-  private tokenUrl() {
-    const tenant = resolveAuthority(this.config.get<string>('MS_TENANT_ID'));
+  private async tokenUrl() {
+    const tenant = resolveAuthority(
+      (await this.settings.getEffective()).tenantId,
+    );
     return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
   }
 
-  private authorizeUrl() {
-    return this.tokenUrl().replace('/token', '/authorize');
+  private async authorizeUrl() {
+    return (await this.tokenUrl()).replace('/token', '/authorize');
   }
 
   /** URL de autorización (code + PKCE). El state es un JWT firmado, ligado al usuario y de vida corta. */
-  buildConnectUrl(userId: string): string {
+  async buildConnectUrl(userId: string): Promise<string> {
+    const cfg = await this.settings.getEffective();
+    if (!cfg.clientId) throw new OutlookConnectError(NOT_CONFIGURED);
     const verifier = randomBytes(32).toString('base64url');
     const challenge = createHash('sha256').update(verifier).digest('base64url');
     // El verifier viaja cifrado dentro del state: sobrevive reinicios y no queda legible en la URL.
@@ -126,9 +115,9 @@ export class MicrosoftService {
       { subject: userId, audience: STATE_AUD, expiresIn: STATE_TTL_SEC },
     );
     const params = new URLSearchParams({
-      client_id: this.config.getOrThrow('MS_CLIENT_ID'),
+      client_id: cfg.clientId,
       response_type: 'code',
-      redirect_uri: this.redirectUri(),
+      redirect_uri: cfg.redirectUri,
       response_mode: 'query',
       scope: SCOPES,
       state,
@@ -136,7 +125,7 @@ export class MicrosoftService {
       code_challenge_method: 'S256',
       prompt: 'select_account',
     });
-    return `${this.authorizeUrl()}?${params}`;
+    return `${await this.authorizeUrl()}?${params}`;
   }
 
   /**
@@ -167,14 +156,15 @@ export class MicrosoftService {
   }
 
   private async tokenRequest(body: Record<string, string>) {
+    const cfg = await this.settings.getEffective();
+    if (!cfg.clientId) throw new OutlookConnectError(NOT_CONFIGURED);
     const params = new URLSearchParams({
-      client_id: this.config.getOrThrow('MS_CLIENT_ID'),
+      client_id: cfg.clientId,
       scope: SCOPES,
       ...body,
     });
-    const secret = this.config.get<string>('MS_CLIENT_SECRET');
-    if (secret) params.set('client_secret', secret);
-    const res = await fetch(this.tokenUrl(), {
+    if (cfg.clientSecret) params.set('client_secret', cfg.clientSecret);
+    const res = await fetch(await this.tokenUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params,
@@ -211,7 +201,7 @@ export class MicrosoftService {
     const tokens = await this.tokenRequest({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: this.redirectUri(),
+      redirect_uri: await this.redirectUri(),
       code_verifier: verifier,
     });
     if (!tokens.refresh_token) {

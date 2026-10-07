@@ -55,32 +55,26 @@ describe('PanelOllama', () => {
     await waitFor(() => expect(callsOf(f).filter((c) => c === POST)).toHaveLength(2))
   })
 
-  it('Ollama no alcanzable: avisa que se detectará solo', () => {
+  it('Ollama no alcanzable: pide revisar la URL, da ejemplos y ofrece la descarga', () => {
     render(<PanelOllama hardware={hardwareSinOllama()} onRecheck={() => {}} modelos={[M]} />)
-    expect(screen.getByText(/No encontramos Ollama/)).toBeInTheDocument()
-    expect(screen.getByText(/lo detectaremos solos/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Probar de nuevo' })).toBeInTheDocument()
-  })
-
-  it('en Docker sin conexión muestra la guía y Copiar escribe el comando', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    const user = userEvent.setup()
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    render(<PanelOllama hardware={{ ...hardwareSinOllama(), entorno: 'docker' }} onRecheck={() => {}} modelos={[M]} />)
-    expect(screen.getByText(/El contenedor de Ollama no responde/)).toBeInTheDocument()
-    expect(screen.queryByText(/No encontramos Ollama/)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Probar de nuevo' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Descargar Ollama' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: /Copiar/ }))
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('docker compose up -d ollama'))
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('docker compose logs ollama'))
-    expect(await screen.findByRole('button', { name: /Copiado/ })).toBeInTheDocument()
-  })
-
-  it('en local la guía de Docker no aparece', () => {
-    render(<PanelOllama hardware={{ ...hardwareSinOllama(), entorno: 'local' }} onRecheck={() => {}} modelos={[M]} />)
-    expect(screen.getByText(/No encontramos Ollama/)).toBeInTheDocument()
+    expect(screen.getByText(/No se pudo conectar con Ollama: revisa la URL/)).toBeInTheDocument()
+    expect(screen.getByLabelText('URL de Ollama')).toBeInTheDocument()
+    expect(screen.getByText('http://host.docker.internal:11434/v1')).toBeInTheDocument()
+    expect(screen.getByText(/ip-del-servidor/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Descargar Ollama' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Copiar/ })).toBeNull()
+  })
+
+  it('guarda la URL escrita y vuelve a consultar', async () => {
+    const PUT = 'PUT /api/settings/ia'
+    const f = mockFetch({ [PUT]: { body: {} } })
+    const onRecheck = vi.fn()
+    const user = userEvent.setup()
+    render(<PanelOllama hardware={hardwareSinOllama()} onRecheck={onRecheck} modelos={[M]} />)
+    await user.type(screen.getByLabelText('URL de Ollama'), 'http://10.0.0.5:11434/v1')
+    await user.click(screen.getByRole('button', { name: /Guardar y probar/ }))
+    await waitFor(() => expect(onRecheck).toHaveBeenCalledTimes(1))
+    expect(callsOf(f).filter((c) => c === PUT)).toHaveLength(1)
   })
 
   it('guarda una sola vez la URL detectada y vuelve a consultar', async () => {

@@ -3,7 +3,7 @@
 Guía para dejar auto-med funcionando (1 usuario, 1 buzón de Outlook). Todo en español; los comandos se ejecutan desde la raíz del repo.
 
 ## 1. Requisitos
-- Docker + Docker Compose v2 (para rustfs, api y web; opcional `ocr-local`).
+- Docker + Docker Compose v2 (servicios `rustfs`, `api`, `web` y `ocr-local`).
 - Node 22 y pnpm 11 (solo para desarrollo local, migraciones manuales o el benchmark).
 - Un PostgreSQL **externo** accesible desde la máquina y desde los contenedores (el compose no lo incluye).
 - Una cuenta Microsoft (Outlook / Microsoft 365) y permiso para registrar una app en Entra ID (ver `docs/entra-id-registro.md`).
@@ -28,10 +28,10 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `JWT_SECRET` | **Obligatorio**, mínimo 32 caracteres (`openssl rand -base64 48`). Firma el JWT de sesión; sin él la API no arranca. Si lo cambias, todas las sesiones se cierran. |
 | `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL` | Duración del JWT de acceso (`15m`) y del refresh token (`30d`, rotativo). |
 | `COOKIE_SECURE` | (opcional) `true`/`false` fuerza el atributo `Secure` de las cookies de sesión; vacío = se deduce de `MS_REDIRECT_URI` (https => Secure). En producción tras HTTPS: `true`. |
-| `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` | Registro en Entra ID (ver sección 6). |
+| `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` | (opcionales) Valores por defecto del OAuth de Microsoft; lo normal es pegarlos en **Ajustes -> Microsoft** (el panel manda sobre `.env`). Ver sección 6. |
 | `SYNC_INTERVAL_MIN` | Cada cuántos minutos se sincroniza el correo (solo descarga/guarda; nunca analiza). `0` lo desactiva. |
 | `JOBS_ENABLED`, `JOBS_CONCURRENCY`, `JOBS_POLL_MS`, `JOBS_MAX_ATTEMPTS`, `JOBS_BACKOFF_*`, `JOBS_LOCK_TIMEOUT_SEC` | Cola de trabajos en PostgreSQL. `JOBS_ENABLED=false` apaga el worker **y** el polling del sync (útil para verificar el despliegue sin tocar nada externo). |
-| `PDF_TEXT_MODE`, `PDF_EXTRACT_URL`, `PDF_EXTRACT_TIMEOUT_MS`, `PDF_TEXT_MIN_CHARS` | (opcionales) Servicio `pdf-extract` (`auto` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. En compose `PDF_EXTRACT_URL` ya apunta a `http://pdf-extract:8001`. |
+| `PDF_TEXT_MODE`, `PDF_TEXT_MIN_CHARS` | (opcionales) Extractor de PDF digital en Node, dentro del proceso de la API (`node` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. No hay servicio Python aparte. |
 | `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*`, `OCR_LOCAL_TIMEOUT_MS`, `TEXTRACT_MODE` | (opcionales, comentados en `.env.example`) Ajustes finos de OCR; ver `docs/benchmark-ocr.md`. |
 | `LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `SYNTH_MAX_INPUT_TOKENS` | (opcionales) Límites y costo del LLM. |
 | (no van en `.env`) | **Proveedor LLM, modelos, claves (Anthropic/OpenAI), URL de Ollama, región AWS y motor OCR (`local`/`textract`) se eligen en la web** (asistente de bienvenida en el primer inicio de sesión, Ajustes -> Inteligencia artificial y Ajustes -> OCR) y se guardan en la base de datos (claves cifradas). Las variables `LLM_*`, `*_API_KEY`, `OLLAMA_BASE_URL`, `AWS_REGION`, `OCR_ENGINE` aún se leen como valores por defecto, pero ya no se documentan. Las credenciales de Bedrock/Textract siguen siendo las estándar de AWS (rol o variables), no se piden en la web. |
@@ -58,32 +58,17 @@ La api (en contenedor) debe poder llegar a Postgres en el host:
 - Si Postgres corre en otro contenedor con el puerto publicado, `host.docker.internal:5432` también funciona.
 - Si el firewall del host bloquea el bridge, permite el puerto 5432 desde la red de Docker.
 
-### Perfiles opcionales (relay)
-`docker compose up` (sin flags) NO levanta `relay`: se activa de forma explícita, con `--profile` o definiendo en `.env` (opcional, comentado en `.env.example`):
-```
-COMPOSE_PROFILES=relay
-```
-- Perfil `relay` -> `relay`. `ocr-local` y `pdf-extract` no tienen perfil: arrancan siempre. `api` no depende de ninguno de ellos.
-- El proveedor LLM y el motor OCR se eligen en la web, no en `.env`. En Docker, `ocr-local` ya corre con `docker compose up` y la API lo usa por `OCR_LOCAL_URL` (`http://ocr-local:8000`): en la web solo eliges «OCR local» y ves su estado real. Ollama corre en el servicio `ollama` del compose: ver la sección «Ollama» más abajo.
-- Verifica con `docker compose config --services` y `docker compose --profile relay config --services`.
-
-### Servicio `pdf-extract` (PDF digital sin OCR)
-- Se levanta siempre (sin perfil), imagen ligera `python:3.12-slim` con PyMuPDF + pymupdf4llm; healthcheck `GET /health`; puerto `127.0.0.1:8001`. `api` no depende de él: si no responde o `PDF_TEXT_MODE=off`, la API usa el OCR para todas las páginas (con un warning en el log). Tras actualizar: `docker compose up --build` y añade a tu `.env` las variables `PDF_*` nuevas (ver `.env.example`; las existentes no cambian). Prueba: `curl localhost:8001/health`.
-- **Licencia:** PyMuPDF y pymupdf4llm son AGPL-3.0 (o licencia comercial de Artifex). Para uso interno de un solo usuario, sin ofrecer el servicio a terceros por red, es aceptable; si el servicio se expusiera a otros usuarios, revisa las obligaciones de la AGPL o cambia la librería.
-- Las páginas escaneadas conservan el flujo OCR -> regiones -> revisión; su markdown sigue siendo texto plano por líneas (mejora de estructura: siguiente fase).
-
-### Ollama (servicio `ollama` del compose; producción: Bedrock)
-En Docker, Ollama corre en su propio contenedor (`ollama`, volumen `ollamamodels`): no se instala nada en el host y el contenido sensible no sale de la máquina. El modo escritorio (Electron) no usa Docker y sigue con el Ollama instalado en el equipo (`http://localhost:11434/v1`).
-1. `docker compose up -d ollama` (arranca con el resto en `docker compose up`). El servicio escucha en `0.0.0.0` dentro de la red del compose y publica `127.0.0.1:11434`; `api` lo usa por `OLLAMA_BASE_URL=http://ollama:11434/v1`.
-2. **Autodetección:** al abrir el asistente (o Ajustes -> IA) la API prueba la URL configurada y, en Docker, `ollama`, `host.docker.internal`, el gateway de la red del contenedor y `localhost`. Si ninguna responde, la web muestra «El contenedor de Ollama no responde» con `docker compose up -d ollama` y `docker compose logs ollama`.
-3. La app descarga el modelo recomendado `qwen3-vl:4b-instruct` (~3,3 GB; usa la variante `-instruct`: el tag `qwen3-vl:4b` es la de razonamiento) y lo guarda en el volumen `ollamamodels`.
-4. El contexto por defecto de Ollama (4096) trunca las síntesis: el compose fija `OLLAMA_CONTEXT_LENGTH=8192` (cámbialo en `.env`) y `SYNTH_MAX_INPUT_TOKENS` (Ajustes -> IA) debe quedar por debajo de ese contexto menos margen (p. ej. 6000).
-5. **GPU NVIDIA (opcional):** requiere `nvidia-container-toolkit` y el runtime `nvidia` de Docker. Añade a tu `.env` `COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml` y recrea: `docker compose up -d ollama`. Comprueba con `docker compose exec ollama nvidia-smi`. Sin ese archivo, Ollama corre en CPU.
-Prueba: `docker compose exec api node -e "fetch('http://ollama:11434/api/version').then(r=>r.text()).then(console.log)"`. Fuera de Docker (`pnpm dev`, escritorio) la URL es `http://localhost:11434/v1`.
+### Ollama (URL externa, editable en la web)
+Ollama NO forma parte del compose: lo instalas donde quieras (el equipo que hace de host, otro servidor de tu red, etc.) y pones su URL en **Ajustes -> Inteligencia artificial**. El contenido sensible no sale de tu red. Para el Ollama del propio host desde el contenedor `api` la URL es `http://host.docker.internal:11434/v1` (el compose añade `extra_hosts: host.docker.internal:host-gateway`); fuera de Docker (`pnpm dev`), `http://localhost:11434/v1`.
+1. En el servidor de Ollama, que escuche fuera de loopback y use un contexto suficiente: `OLLAMA_HOST=0.0.0.0` y `OLLAMA_CONTEXT_LENGTH=8192` (con systemd: `sudo systemctl edit ollama` y añade `Environment="OLLAMA_HOST=0.0.0.0"` / `Environment="OLLAMA_CONTEXT_LENGTH=8192"`, luego `sudo systemctl restart ollama`). Es un ajuste único en ese servidor, como con Postgres. Abre el puerto 11434 en el firewall solo a quien lo necesite.
+2. **Autodetección:** al abrir el asistente (o Ajustes -> IA) la API prueba la URL configurada y, en Docker, `host.docker.internal`, el gateway de la red del contenedor y `localhost` (`GET /api/settings/ia/hardware`: `ollama.urlDetectada`, `ollama.motivo`). Si ninguna responde, la web muestra los pasos para exponer Ollama.
+3. La app descarga el modelo recomendado `qwen3-vl:4b-instruct` (~3,3 GB; requiere Ollama >= 0.12.7; usa la variante `-instruct`: el tag `qwen3-vl:4b` es la de razonamiento) en ese servidor.
+4. El contexto por defecto de Ollama (4096) trunca las síntesis: `SYNTH_MAX_INPUT_TOKENS` (Ajustes -> IA) debe quedar por debajo de `OLLAMA_CONTEXT_LENGTH` menos margen (p. ej. 6000).
+Prueba desde el contenedor: `docker compose exec api node -e "fetch('http://host.docker.internal:11434/api/version').then(r=>r.text()).then(console.log)"`. Alternativas sin Ollama propio: OpenAI/Anthropic por API key, o Bedrock (producción) con credenciales AWS.
 
 ### Espacio en disco y builds
-- La imagen de `ocr-local` (PaddlePaddle) es la más pesada y se construye en dos etapas (builder + imagen final) para que el pico de disco sea bajo. Presupuesto en reposo: ~10-12 GB (ocr-local ~2 GB, ollama 1-4 GB, modelo 3,3 GB, resto ~1,5 GB). Con poco espacio, construye de a un servicio (`docker compose build ocr-local`) y vigila `df -h /`.
-- Tras cada `--build` ejecuta `./scripts/docker-clean.sh` (poda caché de build e imágenes sin etiqueta; nunca toca volúmenes).
+- La imagen de `ocr-local` (PaddlePaddle) es la más pesada y se construye en dos etapas (builder + imagen final) para que el pico de disco sea bajo. Presupuesto en reposo: ~4-5 GB (ocr-local ~2 GB, resto ~1,5 GB, más lo que crezca el volumen `rustfsdata`). Con poco espacio, construye de a un servicio (`docker compose build ocr-local`) y vigila `df -h /`.
+- **Espacio en disco:** tras cada `--build` ejecuta `./scripts/docker-clean.sh` (poda caché de build e imágenes sin etiqueta; nunca toca volúmenes).
 - Límite de la caché de BuildKit en `/etc/docker/daemon.json`: `{"builder": {"gc": {"enabled": true, "defaultKeepStorage": "5GB"}}}` y `sudo systemctl restart docker`.
 
 ### Servicio OCR local (`ocr-local`, siempre activo en la versión web)
@@ -93,7 +78,6 @@ curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":n
 ```
 - La imagen pesa ~2 GB (PaddlePaddle + Tesseract; build en dos etapas); los modelos se descargan al primer arranque al volumen `ocrmodels`.
 - `engine` indica el motor activo. Si PaddleOCR no carga, el servicio cae a Tesseract **y lo dice** en `fallback_reason` y en los logs. `OCR_LOCAL_ENGINE=tesseract` fuerza Tesseract.
-- Para que la api en compose use el OCR local, levántalo en el mismo compose (la URL por defecto en compose ya es `http://ocr-local:8000`).
 
 ## 4. Cambiar a Textract (producción)
 1. En la web (Ajustes -> OCR) elige Textract y la región (`AWS_REGION` con Textract); `TEXTRACT_MODE=detect` (o `analyze`) es override opcional en `.env`.
@@ -110,7 +94,7 @@ curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":n
 }
 ```
 (Si solo usas `TEXTRACT_MODE=detect`, basta `textract:DetectDocumentText`.) Textract síncrono limita a 10 MB por imagen: si una página lo supera, baja `OCR_RENDER_DPI`.
-4. No levantes `ocr-local` en producción.
+4. Con Textract, el contenedor `ocr-local` puede quedar sin usar (no lo necesita).
 
 ## 5. Bedrock como LLM
 1. En la web (bienvenida o Ajustes -> Inteligencia artificial) elige Bedrock y la región.
@@ -132,8 +116,10 @@ curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":n
 Con un perfil de inferencia entre regiones, el permiso debe cubrir el perfil **y** el modelo base en las regiones que el perfil use (suele hacerse con `arn:aws:bedrock:*::foundation-model/<model-id>`).
 4. Prueba con un hilo corto antes de analizar muchos.
 
-## 6. Registro en Entra ID
-Sigue `docs/entra-id-registro.md` (crear registro, secreto, permisos delegados `Mail.Read` + `offline_access`, redirect URI). Registra la app como "Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft" y rellena `MS_TENANT_ID=common` (no un GUID), `MS_CLIENT_ID`, `MS_CLIENT_SECRET` y `MS_REDIRECT_URI` (`http://localhost:3000/api/auth/callback` con compose; en producción la URL pública HTTPS, que debe coincidir con la registrada en Entra). El consentimiento es por cuenta conectada. Si el tenant de esa cuenta exige aprobación de administrador, el documento incluye el texto para pedirla.
+## 6. Registro en Entra ID y config de Microsoft desde Ajustes
+Sigue `docs/entra-id-registro.md` (registro de app web con secreto de cliente, permisos delegados `Mail.Read`, `offline_access` y `User.Read`, URI de redirección). Registra la app como "Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft".
+
+Los datos NO hace falta ponerlos en `.env`: se pegan en **Ajustes -> Microsoft** (id de aplicación, inquilino `common`, secreto de cliente y URI de redirección; el secreto se guarda cifrado y no se vuelve a mostrar). La web sugiere la URI de redirección `<WEB_ORIGIN>/api/auth/callback` (con compose, `http://localhost:8080/api/auth/callback`; en producción tu URL HTTPS pública), que debe coincidir exactamente con la registrada en Entra. Precedencia: panel > `MS_*` de `.env` (siguen valiendo como valores por defecto). El consentimiento es por cuenta conectada. Si el tenant de esa cuenta exige aprobación de administrador, el documento incluye el texto para pedirla.
 
 ## 7. Primer arranque
 1. `docker compose up -d --build` (la API aplica las migraciones al arrancar; requiere `JWT_SECRET` en `.env`).
@@ -143,7 +129,7 @@ Sigue `docs/entra-id-registro.md` (crear registro, secreto, permisos delegados `
    # sin Docker (desde la raíz): pnpm --filter api user:create -- --email tu@correo.com --nombre "Tu nombre"
    ```
    Si ya existía una cuenta de Outlook de antes de la fase 8, queda asignada a este primer usuario (con sus tickets). Para restablecer una contraseña: `docker compose exec api node dist/cli/user.js reset-password --email tu@correo.com` (cierra todas sus sesiones).
-3. Abre http://localhost:8080, **inicia sesión** con ese correo y contraseña, ve a **Ajustes -> Conectar Outlook** y acepta los permisos de Microsoft. Volverás a Ajustes con "Outlook conectado".
+3. Abre http://localhost:8080, **inicia sesión** con ese correo y contraseña, rellena **Ajustes -> Microsoft** (ver sección 6), ve a **Ajustes -> Conectar Outlook** y acepta los permisos de Microsoft. Volverás a Ajustes con "Outlook conectado".
 4. **Sincronizar** (botón en Tickets, o espera `SYNC_INTERVAL_MIN`). Los hilos aparecen como *Sin analizar*; no se ha enviado nada a OCR ni al LLM.
 5. Abre **un hilo de prueba** (de preferencia sin datos sensibles) y pulsa **Analizar**. Espera a *Listo* o *Necesita tu ayuda*.
 6. Si hay dudas, abre la revisión, corrige y verifica que la síntesis se actualiza (solo con lo nuevo).
@@ -211,55 +197,3 @@ Haz backup de la BD antes de actualizar si hay migraciones nuevas (`apps/api/pri
 | Textract: `AccessDenied` / imagen > 10 MB | Revisa IAM (sección 4) y baja `OCR_RENDER_DPI`. |
 | Bedrock: `ValidationException` / modelo no encontrado | ID de modelo o perfil incorrecto para la región (sección 5). |
 | Muchas "dudas" en documentos limpios | Ajusta `OCR_CONFIDENCE_THRESHOLD` con `docs/benchmark-ocr.md`. |
-
-## 11. Relay de «Usar desde el celular» (opcional)
-El relay (`apps/relay`) es un servicio pequeño y **sin base de datos** que conecta el celular con la app de escritorio: el escritorio abre un túnel WSS saliente y el relay le reenvía lo que llega del celular. Todo el tráfico de la API va **cifrado de extremo a extremo** (el relay solo ve bytes opacos y metadatos; ver `docs/relay-e2e.md`). Ya NO sirve el front de `apps/web`: solo una pantalla de arranque mínima (`apps/relay/bootstrap`, hash publicado en `docs/relay-e2e.md`); el front lo entrega el escritorio por el canal cifrado y el celular lo verifica. Es independiente del resto de servicios; un solo relay atiende a todos los escritorios.
-
-### Variables (`.env`, ver `.env.example`)
-| Variable | Qué hace |
-|---|---|
-| `RELAY_REGISTRATION_TOKEN` | **Obligatorio en producción.** Sin él cualquiera podría registrar dispositivos. Genéralo con `openssl rand -base64 32`. Debe ser **idéntico** en el relay y en el escritorio (`relayRegistrationToken` de `apps/desktop/build-config.json` al construir el instalable, o la variable `AUTOMED_RELAY_REGISTRATION_TOKEN` del escritorio). |
-| `RELAY_PORT` | Puerto en 127.0.0.1 del host (por defecto 8081); el proxy HTTPS apunta aquí. |
-| `RELAY_TRUST_PROXY` | `1` (por defecto) detrás de un proxy que pone `X-Forwarded-For`; el relay usa la IP real para sus límites. Con `1` el relay **debe** estar detrás de un proxy que sobrescriba esa cabecera (si no, la IP se falsea). |
-| `RELAY_COOKIE_SECURE` | `1` por defecto (cookies `Secure`); `0` solo para pruebas sin HTTPS. |
-| `RELAY_DATA_DIR` | Carpeta con `devices.json` (solo hashes SHA-256 de los secretos de dispositivo y los deviceId revocados). **Debe ser persistente**: si se pierde, los dispositivos ya vinculados se re-registran solos al reconectar, pero se pierde la lista de revocados. En compose es el volumen `relaydata` (`/data`). |
-
-### Levantarlo con Docker Compose
-El servicio `relay` está en el perfil `relay`: **no** corre con el `docker compose up` normal. Para activarlo añade `relay` a `COMPOSE_PROFILES` en `.env` (p. ej. `COMPOSE_PROFILES=relay`) o lánzalo solo:
-```bash
-docker compose --profile relay up -d --build relay
-curl localhost:8081/healthz        # {"ok":true}
-```
-Escucha solo en `127.0.0.1:${RELAY_PORT}`: **no lo publiques sin TLS**.
-
-### HTTPS (TLS) obligatorio
-El celular exige HTTPS (PWA, WebCrypto y cookies `Secure`) y el escritorio se conecta por WSS. Pon delante un proxy que termine TLS y soporte WebSocket (`/tunnel`), por ejemplo Caddy:
-```
-relay.tudominio.com {
-    reverse_proxy 127.0.0.1:8081
-}
-```
-(Caddy gestiona el certificado y el upgrade a WebSocket solo.) Con nginx hace falta `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 3600s;`, `proxy_request_buffering off; proxy_buffering off;` (descargas grandes) y `proxy_set_header X-Forwarded-For $remote_addr;` (que sobrescriba, no que añada). Con Dokku: despliega `apps/relay/Dockerfile` (contexto: raíz del monorepo) como otra app, monta un volumen persistente en `/data`, fija `RELAY_REGISTRATION_TOKEN` y activa Let's Encrypt.
-
-### Conectar los escritorios
-1. Construye el instalable con `relayUrl` (`https://relay.tudominio.com`) y `relayRegistrationToken` en `apps/desktop/build-config.json` (o define `AUTOMED_RELAY_URL` / `AUTOMED_RELAY_REGISTRATION_TOKEN` en el escritorio). Sin `relayUrl` la función aparece como no disponible.
-2. En la app: Ajustes -> «Usar desde el celular» (guía en `docs/instalable.md`).
-
-### Operación y límites
-- Sin contenido en logs: solo conexión/desconexión de túneles con los 6 primeros caracteres del deviceId.
-- Límites: 600 peticiones/min y 30 conexiones de túnel/min por IP, cuerpo de petición <= 1 MiB, 64 peticiones simultáneas por dispositivo.
-- Si el escritorio está apagado o sin internet, el relay responde 503 con `code: "pc_apagada"` y la web del celular muestra «Tu computadora está apagada o sin internet…» con botón «Reintentar».
-- El relay solo sirve el arranque (`apps/relay/bootstrap`: `index.html`, `boot.js`, `sw.js`, iconos); la imagen ya no compila `apps/web` y no hace falta actualizarlo con cada versión del escritorio (solo si cambia el arranque; entonces el escritorio y `docs/relay-e2e.md` traen el hash nuevo y el escritorio avisará si el relay sirve otro). Comprueba el hash: `curl -s https://<relay>/boot.js | sha256sum` debe coincidir con `docs/relay-e2e.md`. El relay imprime el hash combinado al arrancar. Límite residual: la primera carga confía en el relay (ver `docs/relay-e2e.md`).
-
-## CI/CD: GitHub Actions + GHCR + Dokku (DigitalOcean)
-Guía paso a paso en el `README.md` ("Despliegue en producción"). Resumen técnico de `.github/workflows/deploy.yml` (push a `main`, sin tests previos; un push nuevo cancela la construcción anterior que siga corriendo; un despliegue ya en curso no se cancela: el siguiente espera su turno y, si hay varios en cola, solo corre el más reciente):
-1. **build-and-push**: construye el `Dockerfile` de la raíz y publica `ghcr.io/<owner>/<repo>` con las etiquetas `latest` y el SHA del commit.
-2. **deploy** (solo si la variable de repositorio `DEPLOY_ENABLED` es `true`): por SSH como usuario `dokku` ejecuta `git:from-image automed <imagen>:<sha>` (despliegue sin caída) y comprueba `https://$APP_DOMAIN/api/health`.
-
-**Imagen única** (`Dockerfile` de la raíz, 3 etapas): compila el front (Vite), compila la API y deja solo dependencias de producción (`pnpm deploy --prod`; `prisma` está en `dependencies` porque el arranque ejecuta `migrate deploy`), y una etapa final `node:22-slim` con Python (venv con PyMuPDF para `pdf-extract`). Corre como usuario `node`. `deploy/entrypoint.sh` arranca `pdf-extract` en segundo plano (solo en 127.0.0.1:8001, se reinicia si cae; con `PDF_TEXT_MODE=off` no se lanza), aplica migraciones y arranca la API. La API sirve también el front compilado (`FRONTEND_BUILD_PATH=/app/frontend`, `serveFrontend` en `apps/api/src/app.setup.ts`: archivos con hash en `/assets` con caché larga, `index.html` como respaldo de las rutas de react-router, sin el CSP de la API, que es solo para JSON) y expone `/api/health`. `docker-compose.yml` y `docker-compose.dev.yml` siguen usando los servicios separados (`apps/api/Dockerfile`, `apps/web/Dockerfile` con nginx, `services/pdf-extract`) para desarrollo local. Medido en una prueba local en reposo: unos 220 MB de memoria para el contenedor completo.
-
-Topología en Dokku (creada por `deploy/dokku/bootstrap.sh`): red interna `automed` a la que se unen `automed` y `rustfs` (`attach-post-create`); la app llega a RustFS en `rustfs.web:9000`. Solo `automed` tiene proxy, dominio y HTTPS (`proxy:disable` en `rustfs`). Postgres es el plugin `dokku-postgres` (servicio `automed-db`, `DATABASE_URL` inyectada por `postgres:link`); RustFS usa el volumen Docker `automed-rustfs`. El login a GHCR se guarda en el servidor con `registry:login` (token `read:packages` solo en el Droplet); GitHub solo tiene la clave SSH, el known_hosts y el host.
-
-Notas: Dokku ignora el `HEALTHCHECK` de Docker; por defecto espera 10 s y comprueba que el contenedor siga vivo (si la migración falla, la app sale y el despliegue se aborta). La app debe escuchar en 3000 (`PORT=3000` se fija en su config porque Dokku inyecta otro `PORT`; el bootstrap mapea `http:80:3000`). Sin Dokku, la misma imagen sirve con `docker run -p 3000:3000 --env-file .env <imagen>` detrás de cualquier proxy con HTTPS.
-
-PyMuPDF es AGPL-3.0: la imagen lo incluye para uso interno (ver "Servicio `pdf-extract`" arriba).

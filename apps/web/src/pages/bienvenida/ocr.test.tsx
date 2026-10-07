@@ -2,11 +2,10 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from '../../context/toasts'
-import type { AjustesOcr, ProgresoPython } from '../../lib/api'
-import * as clipboard from '../../lib/clipboard'
+import type { AjustesOcr } from '../../lib/api'
 import { ajustesIa, hardwareIa } from '../../test/ajustesIa'
-import { ajustesOcr, pythonViejo, sinPython } from '../../test/ajustesOcr'
-import { callsOf, mockFetch, type MockHandler } from '../../test/mockFetch'
+import { ajustesOcr } from '../../test/ajustesOcr'
+import { mockFetch, type MockHandler } from '../../test/mockFetch'
 import Bienvenida from './page'
 
 afterEach(() => {
@@ -49,99 +48,14 @@ const putsA = (f: ReturnType<typeof mockFetch>, url: string) =>
   f.mock.calls.filter(([u, i]) => String(u) === url && i?.method === 'PUT').map(([, i]) => JSON.parse(String(i?.body)))
 
 describe('Asistente: lectura de PDFs escaneados', () => {
-  it('Python no encontrado: muestra la guía con comandos copiables y bloquea Siguiente', async () => {
-    mockFetch(rutas({ body: sinPython() }))
-    const copiar = vi.spyOn(clipboard, 'copiarTexto').mockResolvedValue(true)
-    const user = await irAlPasoOcr()
-    await user.click(screen.getByRole('radio', { name: /En mi computador/ }))
-
-    expect(screen.getByText(/No encontramos Python/)).toBeInTheDocument()
-    expect(screen.getByText('Instalar Python 3.11 en Linux')).toBeInTheDocument()
-    expect(screen.getByText('Abre una terminal.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Descargar Python/ })).toHaveAttribute('href', 'https://www.python.org/downloads/')
-    expect(siguiente()).toBeDisabled()
-
-    await user.click(screen.getByRole('button', { name: /Copiar comando: sudo apt install/ }))
-    expect(copiar).toHaveBeenCalledWith('sudo apt install python3.11 python3.11-venv')
-    expect(await screen.findByText('Copiado')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Verificar de nuevo' })).toBeInTheDocument()
-  })
-
-  it('"Verificar de nuevo" vuelve a consultar y detecta Python', async () => {
+  it('local con el servicio detenido bloquea Siguiente; con el servicio listo lo habilita', async () => {
     let n = 0
-    const f = mockFetch(rutas(() => ({ body: ++n === 1 ? sinPython() : ajustesOcr() })))
+    mockFetch(rutas(() => ({ body: ajustesOcr({ servicioLocal: { estado: ++n === 1 ? 'detenido' : 'listo' } }) })))
     const user = await irAlPasoOcr()
     await user.click(screen.getByRole('radio', { name: /En mi computador/ }))
-    await user.click(screen.getByRole('button', { name: 'Verificar de nuevo' }))
-    expect(await screen.findByText(/Python 3.11.9 es compatible/)).toBeInTheDocument()
-    expect(callsOf(f).filter((c) => c === 'GET /api/settings/ocr').length).toBeGreaterThanOrEqual(2)
-  })
-
-  it('versión no compatible: explica el motivo y muestra la guía', async () => {
-    mockFetch(rutas({ body: pythonViejo() }))
-    const user = await irAlPasoOcr()
-    await user.click(screen.getByRole('radio', { name: /En mi computador/ }))
-    expect(screen.getByText(/Encontramos Python 3.8.10/)).toBeInTheDocument()
-    expect(screen.getByText(/Es una versión muy antigua/)).toBeInTheDocument()
-    expect(screen.getByText('Instalar una versión más nueva de Python')).toBeInTheDocument()
     expect(siguiente()).toBeDisabled()
-  })
-
-  it('compatible: prepara el OCR, muestra el progreso por polling y habilita Siguiente', async () => {
-    let listo = false
-    let consultas = 0
-    const f = mockFetch(
-      rutas(() => ({ body: ajustesOcr({ entornoPython: { estado: listo ? 'listo' : 'sin_preparar' } }) }), {
-        'POST /api/settings/ocr/python/instalar': { status: 202, body: { estado: 'preparando' } },
-        'GET /api/settings/ocr/python/progreso': () => {
-          consultas++
-          const p: ProgresoPython = consultas < 4
-            ? { estado: 'preparando', lineas: ['Creando el entorno…'] }
-            : { estado: 'listo', lineas: ['Creando el entorno…', 'Listo'] }
-          if (p.estado === 'listo') listo = true
-          return { body: p }
-        },
-      }),
-    )
-    const user = await irAlPasoOcr()
-    await user.click(screen.getByRole('radio', { name: /En mi computador/ }))
-    expect(screen.getByText(/más de 1 GB/)).toBeInTheDocument()
-    expect(siguiente()).toBeDisabled()
-
-    await user.click(screen.getByRole('button', { name: 'Preparar el OCR' }))
-    expect(await screen.findByText('Creando el entorno…')).toBeInTheDocument()
-    expect(await screen.findByText('El OCR está preparado.', {}, { timeout: 5000 })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Probar de nuevo' }))
     await waitFor(() => expect(siguiente()).toBeEnabled())
-
-    await user.click(siguiente())
-    await screen.findByText('Todo listo')
-    expect(putsA(f, '/api/settings/ocr')).toEqual([{ motor: 'local' }])
-  })
-
-  it('error al preparar: muestra el mensaje en español y permite reintentar', async () => {
-    mockFetch(
-      rutas({ body: ajustesOcr() }, {
-        'POST /api/settings/ocr/python/instalar': { status: 202, body: { estado: 'preparando' } },
-        'GET /api/settings/ocr/python/progreso': { body: { estado: 'error', lineas: ['pip falló'], mensaje: 'No hay internet para descargar los paquetes.' } },
-      }),
-    )
-    const user = await irAlPasoOcr()
-    await user.click(screen.getByRole('radio', { name: /En mi computador/ }))
-    await user.click(screen.getByRole('button', { name: 'Preparar el OCR' }))
-    expect(await screen.findByText('No hay internet para descargar los paquetes.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeEnabled()
-    expect(siguiente()).toBeDisabled()
-    // Salida clara: elegir "Configurar después".
-    await user.click(screen.getByRole('radio', { name: /Configurar después/ }))
-    expect(siguiente()).toBeEnabled()
-  })
-
-  it('un 409 al instalar muestra el mensaje del servidor', async () => {
-    mockFetch(rutas({ body: ajustesOcr() }, { 'POST /api/settings/ocr/python/instalar': { status: 409, body: { message: 'Este Python no es compatible.' } } }))
-    const user = await irAlPasoOcr()
-    await user.click(screen.getByRole('radio', { name: /En mi computador/ }))
-    await user.click(screen.getByRole('button', { name: 'Preparar el OCR' }))
-    expect(await screen.findByText('Este Python no es compatible.')).toBeInTheDocument()
   })
 
   it('Textract sin claves bloquea Siguiente; con claves guarda, prueba y no deja las claves en pantalla', async () => {
@@ -190,7 +104,7 @@ describe('Asistente: lectura de PDFs escaneados', () => {
   })
 
   it('en servidor la opción local se puede elegir', async () => {
-    mockFetch(rutas({ body: ajustesOcr({ entorno: { escritorio: false, servidor: true, so: 'linux' } }) }))
+    mockFetch(rutas({ body: ajustesOcr() }))
     await irAlPasoOcr()
     expect(screen.getByRole('radio', { name: /En mi computador/ })).toBeEnabled()
     expect(screen.queryByText(/No disponible aquí/)).not.toBeInTheDocument()

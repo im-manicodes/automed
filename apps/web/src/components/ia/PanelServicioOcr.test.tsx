@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ajustesOcr } from '../../test/ajustesOcr'
 import PanelServicioOcr from './PanelServicioOcr'
 
-const servidor = { escritorio: false, servidor: true, so: 'linux' as const }
+const servidor = { servidor: true }
 
 describe('PanelServicioOcr', () => {
   it('listo: aviso verde sin respaldo', () => {

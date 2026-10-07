@@ -12,6 +12,7 @@ import { IpThrottlerGuard } from '../src/auth/ip-throttler.guard';
 import { LoginThrottlerGuard } from '../src/auth/login-throttler.guard';
 import { UsersService } from '../src/users/users.service';
 import { MicrosoftService } from '../src/auth/microsoft.service';
+import { MicrosoftSettingsService } from '../src/settings/microsoft-settings.service';
 import { PasswordService } from '../src/auth/password.service';
 import { SessionGuard } from '../src/auth/session.guard';
 import { TokenCryptoService } from '../src/auth/token-crypto.service';
@@ -61,6 +62,7 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
         AuthService,
         PasswordService,
         MicrosoftService,
+        MicrosoftSettingsService,
         TokenCryptoService,
         SessionGuard,
         LoginThrottlerGuard,

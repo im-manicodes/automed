@@ -1,7 +1,4 @@
-// Cliente de la API (cookie de sesión am_session, prefijo /api; bajo /d/<id> si se entra por el relay).
-import { apiUrl } from './base'
-import { secureFetch, usaE2e } from './e2e'
-import { CODIGO_PC_APAGADA, MENSAJE_PC_APAGADA, marcarPcApagada } from './pcApagada'
+// Cliente de la API (cookies de sesión, prefijo /api).
 
 export type ProcessStatus =
   | 'sin_analizar'
@@ -251,10 +248,6 @@ export class ApiError extends Error {
     this.name = 'ApiError'
     this.status = status
   }
-  /** El relay no logra hablar con la computadora (apagada, sin internet o sin respuesta). */
-  get pcApagada(): boolean {
-    return this.status === 503 && this.message === MENSAJE_PC_APAGADA
-  }
   /** Errores que no mejoran reintentando (sesión vencida, datos inválidos, no existe). */
   get definitivo(): boolean {
     return this.status >= 400 && this.status < 500 && this.status !== 408 && this.status !== 429
@@ -269,14 +262,6 @@ export function setUnauthorizedHandler(h: UnauthorizedHandler | null) {
   onUnauthorized = h
 }
 
-/** Respuesta del relay con code 'pc_apagada' (503/502/504): marca el aviso global y devuelve el texto fijo. */
-function detectaPcApagada(status: number, body: unknown): boolean {
-  if (status !== 502 && status !== 503 && status !== 504) return false
-  if ((body as { code?: unknown } | null)?.code !== CODIGO_PC_APAGADA) return false
-  marcarPcApagada()
-  return true
-}
-
 function messageFor(status: number, body: unknown): string {
   const m = (body as { message?: unknown } | null)?.message
   if (typeof m === 'string' && m) return m
@@ -288,16 +273,12 @@ function messageFor(status: number, body: unknown): string {
   return 'No se pudo completar la acción.'
 }
 
-/**
- * Única salida de red hacia la API. Directo (escritorio/Docker): fetch con cookies. Por el relay
- * (/d/<id>): sobre cifrado de extremo a extremo (lib/e2e.ts); el relay no ve rutas, cookies ni cuerpos.
- */
+/** Única salida de red hacia la API: fetch con cookies. */
 function apiFetch(path: string, opts: { method?: string; body?: unknown }): Promise<Response> {
   const method = opts.method ?? 'GET'
   const headers = opts.body !== undefined ? { 'Content-Type': 'application/json' } : undefined
   const body = opts.body !== undefined ? JSON.stringify(opts.body) : undefined
-  if (usaE2e()) return secureFetch(path, { method, headers, body })
-  return fetch(apiUrl(path), { method, credentials: 'include', headers, body })
+  return fetch(`/api${path}`, { method, credentials: 'include', headers, body })
 }
 
 async function rawRequest(path: string, opts: { method?: string; body?: unknown }): Promise<{ res: Response; data: unknown }> {
@@ -349,7 +330,6 @@ export async function api<T>(
     if (res.status === 401) onUnauthorized?.()
   }
   if (!res.ok) {
-    if (detectaPcApagada(res.status, data)) throw new ApiError(503, MENSAJE_PC_APAGADA)
     throw new ApiError(res.status, messageFor(res.status, data))
   }
   return data as T
@@ -374,7 +354,6 @@ export async function apiBlob(path: string, opts: { method?: string; body?: unkn
     } catch {
       data = null
     }
-    if (detectaPcApagada(res.status, data)) throw new ApiError(503, MENSAJE_PC_APAGADA)
     if (res.status === 404 || res.status === 409) {
       const m = (data as { message?: unknown } | null)?.message
       throw new ApiError(res.status, typeof m === 'string' && m ? m : 'El archivo todavía no está listo.')
@@ -382,6 +361,26 @@ export async function apiBlob(path: string, opts: { method?: string; body?: unkn
     throw new ApiError(res.status, messageFor(res.status, data))
   }
   return res.blob()
+}
+
+// --- Configuración de Microsoft (/settings/microsoft) ---
+export interface AjustesMicrosoft {
+  configurado: boolean
+  clientId: string
+  tenantId: string
+  /** Solo si hay secreto guardado; el secreto en sí nunca llega al navegador. */
+  tieneSecreto: boolean
+  redirectUri: string
+  redirectUriSugerida: string
+}
+
+export interface CambiosAjustesMicrosoft {
+  clientId?: string
+  tenantId?: string
+  /** string = nuevo secreto, null = quitar, ausente = no cambiar. */
+  clientSecret?: string | null
+  /** null = volver a la sugerida. */
+  redirectUri?: string | null
 }
 
 // --- Configuración de IA (/settings/ia) ---
@@ -462,41 +461,17 @@ export interface NuevoPrimerUsuario {
 // --- Lectura de PDFs escaneados (/settings/ocr) ---
 export type MotorOcr = 'local' | 'textract' | 'ninguno'
 
-export interface GuiaPython {
-  titulo: string
-  pasos: string[]
-  comandos: string[]
-  enlace?: string
-}
-
 export interface AjustesOcr {
   motor: MotorOcr
   origen: 'panel' | 'servidor'
   textractMode: 'detect' | 'analyze'
-  entorno: { escritorio: boolean; servidor: boolean; so: 'windows' | 'linux' | 'otro' }
-  python: {
-    requerido: string
-    rango: string
-    detectado: boolean
-    version?: string
-    ejecutable?: string
-    compatible: boolean
-    motivo?: string
-    guia: GuiaPython
-  }
-  entornoPython: { estado: 'sin_preparar' | 'preparando' | 'listo' | 'error'; mensaje?: string }
+  entorno: { servidor: boolean }
   servicioLocal: { estado: 'detenido' | 'iniciando' | 'listo' | 'error'; fallbackReason?: string | null; mensaje?: string }
 }
 
 export interface CambiosAjustesOcr {
   motor?: MotorOcr
   textractMode?: 'detect' | 'analyze'
-}
-
-export interface ProgresoPython {
-  estado: 'inactivo' | 'preparando' | 'listo' | 'error'
-  lineas: string[]
-  mensaje?: string
 }
 
 export interface PruebaOcrResultado {

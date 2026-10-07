@@ -11,15 +11,14 @@ import { AuthService } from '../src/auth/auth.service';
 import { LoginThrottlerGuard } from '../src/auth/login-throttler.guard';
 import { UsersService } from '../src/users/users.service';
 import { MicrosoftService } from '../src/auth/microsoft.service';
+import { MicrosoftSettingsService } from '../src/settings/microsoft-settings.service';
 import { PasswordService } from '../src/auth/password.service';
 import { SessionGuard } from '../src/auth/session.guard';
 import { TokenCryptoService } from '../src/auth/token-crypto.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { OcrSettingsController } from '../src/settings/ocr-settings.controller';
 import { OcrSettingsService } from '../src/settings/ocr-settings.service';
-import { OcrLocalRunner } from '../src/ocr/ocr-local-runner.service';
 import { OcrProbeService } from '../src/ocr/ocr-probe.service';
-import { PythonEnvService, buildGuide } from '../src/ocr/python-env.service';
 import { fakePrisma } from './helpers/fake-prisma';
 
 const SECRET = 's'.repeat(48);
@@ -33,18 +32,10 @@ const env: Record<string, string> = {
   MS_REDIRECT_URI: 'http://localhost:3000/api/auth/callback',
 };
 
-describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
+describe('Ajustes de OCR (e2e, sin BD ni red)', () => {
   let app: INestApplication<App>;
   let db: ReturnType<typeof fakePrisma>;
   let cookie: string;
-  const python = {
-    so: 'linux',
-    detect: jest.fn(),
-    entornoEstado: jest.fn(),
-    prepare: jest.fn(),
-    progress: jest.fn(),
-  };
-  const runner = { getStatus: jest.fn(), reconcile: jest.fn() };
   const probe = { probe: jest.fn(), serverLocalStatus: jest.fn() };
 
   const http = () => request(app.getHttpServer());
@@ -52,25 +43,9 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
 
   async function boot(extra: Record<string, string> = {}) {
     db = fakePrisma();
-    Object.values({ ...python, ...runner, ...probe }).forEach((f) => {
+    Object.values(probe).forEach((f) => {
       if (typeof f === 'function') f.mockReset();
     });
-    python.detect.mockResolvedValue({
-      requerido: '3.11',
-      rango: '3.9 a 3.12',
-      detectado: true,
-      version: '3.11.4',
-      ejecutable: '/usr/bin/python3.11',
-      compatible: true,
-      guia: buildGuide('linux'),
-      cmd: '/usr/bin/python3.11',
-      cmdArgs: [],
-    });
-    python.entornoEstado.mockReturnValue({ estado: 'sin_preparar' });
-    python.prepare.mockResolvedValue({ estado: 'preparando' });
-    python.progress.mockReturnValue({ estado: 'inactivo', lineas: [] });
-    runner.getStatus.mockReturnValue({ estado: 'detenido' });
-    runner.reconcile.mockResolvedValue(undefined);
     probe.probe.mockResolvedValue({ ok: false, ms: 1, mensaje: 'x' });
     probe.serverLocalStatus.mockResolvedValue({
       estado: 'detenido',
@@ -89,12 +64,11 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
         PasswordService,
         UsersService,
         MicrosoftService,
+        MicrosoftSettingsService,
         TokenCryptoService,
         SessionGuard,
         LoginThrottlerGuard,
         OcrSettingsService,
-        { provide: PythonEnvService, useValue: python },
-        { provide: OcrLocalRunner, useValue: runner },
         { provide: OcrProbeService, useValue: probe },
         {
           provide: ConfigService,
@@ -129,46 +103,27 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
     await app.close();
   });
 
-  describe('fuera de escritorio', () => {
+  describe('versión web', () => {
     beforeEach(() => boot());
 
     it('401 sin sesión en cada ruta', async () => {
       await http().get('/api/settings/ocr').expect(401);
       await http().put('/api/settings/ocr').send({}).expect(401);
-      await http()
-        .post('/api/settings/ocr/python/instalar')
-        .send({})
-        .expect(401);
-      await http().get('/api/settings/ocr/python/progreso').expect(401);
       await http().post('/api/settings/ocr/probar').send({}).expect(401);
     });
 
-    it('GET: forma del contrato, sin consultar Python', async () => {
+    it('GET: forma del contrato, ', async () => {
       const res = await authed(http().get('/api/settings/ocr')).expect(200);
       expect(res.body).toMatchObject({
         motor: 'local',
         origen: 'servidor',
         textractMode: 'detect',
-        entorno: { escritorio: false, so: 'linux', servidor: true },
-        python: {
-          requerido: '3.11',
-          rango: '3.9 a 3.12',
-          detectado: false,
-          compatible: false,
-          guia: {
-            titulo: expect.any(String),
-            pasos: expect.any(Array),
-            comandos: expect.any(Array),
-          },
-        },
-        entornoPython: { estado: 'sin_preparar' },
+        entorno: { servidor: true },
         servicioLocal: {
           estado: 'detenido',
           mensaje: expect.stringContaining('ocr-local'),
         },
       });
-      expect(python.detect).not.toHaveBeenCalled();
-      expect(runner.getStatus).not.toHaveBeenCalled();
     });
 
     it('GET: servicioLocal listo cuando el health del servidor responde', async () => {
@@ -188,7 +143,6 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
         http().put('/api/settings/ocr').send({ motor: 'ninguno' }),
       ).expect(200);
       expect(ok.body).toMatchObject({ motor: 'ninguno', origen: 'panel' });
-      expect(runner.reconcile).toHaveBeenCalled();
       const r2 = await authed(
         http().put('/api/settings/ocr').send({ textractMode: 'analyze' }),
       ).expect(200);
@@ -209,68 +163,12 @@ describe('Ajustes de OCR (e2e, sin BD, sin Python ni red)', () => {
       expect(bad2.status).toBe(400);
     });
 
-    it('409 en los endpoints de Python', async () => {
-      const a = await authed(
-        http().post('/api/settings/ocr/python/instalar').send({}),
-      );
-      expect(a.status).toBe(409);
-      expect(a.body.message).toBe('No disponible en este entorno');
-      await authed(http().get('/api/settings/ocr/python/progreso')).expect(409);
-      expect(python.prepare).not.toHaveBeenCalled();
-    });
-
     it('probar delega en el servicio de prueba', async () => {
       probe.probe.mockResolvedValue({ ok: true, ms: 5, mensaje: 'ok' });
       const res = await authed(
         http().post('/api/settings/ocr/probar').send({}),
       ).expect(200);
       expect(res.body).toEqual({ ok: true, ms: 5, mensaje: 'ok' });
-    });
-  });
-
-  describe('modo escritorio', () => {
-    beforeEach(() => boot({ APP_MODE: 'desktop' }));
-
-    it('GET incluye Python detectado, sin datos internos', async () => {
-      runner.getStatus.mockReturnValue({
-        estado: 'listo',
-        fallbackReason: null,
-      });
-      const res = await authed(http().get('/api/settings/ocr')).expect(200);
-      expect(res.body.entorno).toMatchObject({
-        escritorio: true,
-        servidor: false,
-      });
-      expect(probe.serverLocalStatus).not.toHaveBeenCalled();
-      expect(res.body.python).toMatchObject({
-        detectado: true,
-        version: '3.11.4',
-        compatible: true,
-      });
-      expect(res.body.python.cmd).toBeUndefined();
-      expect(res.body.servicioLocal).toEqual({
-        estado: 'listo',
-        fallbackReason: null,
-      });
-    });
-
-    it('instalar responde 202 y progreso devuelve líneas', async () => {
-      const a = await authed(
-        http().post('/api/settings/ocr/python/instalar').send({}),
-      );
-      expect(a.status).toBe(202);
-      expect(a.body).toEqual({ estado: 'preparando' });
-      python.progress.mockReturnValue({
-        estado: 'preparando',
-        lineas: ['Collecting x'],
-      });
-      const p = await authed(
-        http().get('/api/settings/ocr/python/progreso'),
-      ).expect(200);
-      expect(p.body).toEqual({
-        estado: 'preparando',
-        lineas: ['Collecting x'],
-      });
     });
   });
 });

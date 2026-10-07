@@ -10,22 +10,16 @@ function make(env: Record<string, string> = {}) {
   const settings = { getEffective: jest.fn(() => Promise.resolve(eff)) };
   const local = { recognize: jest.fn().mockResolvedValue(page) };
   const textract = { recognize: jest.fn().mockResolvedValue(page) };
-  const runner = {
-    getUrl: jest.fn(() => null as string | null),
-    getStatus: jest.fn(() => ({ estado: 'detenido' })),
-  };
   const engine = new DynamicOcrEngine(
     { get: (k: string) => env[k] } as never,
     settings as never,
     local as never,
     textract as never,
-    runner as never,
   );
   return {
     engine,
     local,
     textract,
-    runner,
     set: (e: any) => (eff = { ...eff, ...e }),
   };
 }
@@ -64,17 +58,5 @@ describe('DynamicOcrEngine', () => {
     );
     expect(local.recognize).not.toHaveBeenCalled();
     expect(textract.recognize).not.toHaveBeenCalled();
-  });
-
-  it('en escritorio usa la URL del runner o avisa si no está listo', async () => {
-    const { engine, local, runner } = make({ APP_MODE: 'desktop' });
-    await expect(engine.recognize(img, 1)).rejects.toThrow(/no está preparado/);
-    runner.getStatus.mockReturnValue({ estado: 'iniciando' });
-    await expect(engine.recognize(img, 1)).rejects.toThrow(/se está iniciando/);
-    runner.getUrl.mockReturnValue('http://127.0.0.1:5555');
-    await engine.recognize(img, 1);
-    expect(local.recognize).toHaveBeenCalledWith(img, 1, {
-      baseUrl: 'http://127.0.0.1:5555',
-    });
   });
 });

@@ -1,33 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { LuCheck, LuCopy, LuRotateCw, LuTriangleAlert } from 'react-icons/lu'
+import { LuCheck, LuRotateCw, LuTriangleAlert } from 'react-icons/lu'
 import { useGuardarAjustesIa } from '../../hooks/useAjustesIa'
 import { instalado, useModelosOllama, type EstadoModelo } from '../../hooks/useModelosOllama'
 import type { HardwareIa } from '../../lib/api'
 import { formatoAvance } from '../../lib/format'
-
-const COMANDO_DOCKER = `docker compose up -d ollama
-docker compose logs ollama`
-
-function GuiaDocker() {
-  const [copiado, setCopiado] = useState(false)
-  const copiar = async () => {
-    try {
-      await navigator.clipboard.writeText(COMANDO_DOCKER)
-      setCopiado(true)
-    } catch {
-      setCopiado(false)
-    }
-  }
-  return (
-    <div className="space-y-2">
-      <p className="text-slate-700">Abre una terminal en la carpeta del proyecto, inicia el contenedor y, si sigue sin responder, revisa su registro:</p>
-      <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 text-sm text-slate-50">{COMANDO_DOCKER}</pre>
-      <button type="button" className="btn btn-secondary" onClick={() => void copiar()}>
-        <LuCopy className="size-5" aria-hidden />{copiado ? 'Copiado' : 'Copiar'}
-      </button>
-    </div>
-  )
-}
 
 function DescargaModelo({ modelo, estado, onReintentar }: { modelo: string; estado?: EstadoModelo; onReintentar: () => void }) {
   const pct = estado && estado.total > 0 ? Math.min(100, Math.round((estado.completado / estado.total) * 100)) : 0
@@ -97,6 +73,18 @@ export default function PanelOllama({ hardware, onRecheck, modelos, activo = tru
       .then(() => onRecheckRef.current())
       .catch(() => {})
   }, [activo, urlDetectada])
+  const [url, setUrl] = useState('')
+  const guardarUrl = async () => {
+    setBuscando(true)
+    try {
+      await Promise.resolve(guardarRef.current({ body_params: { ollamaUrl: url.trim() } }))
+      await onRecheck()
+    } catch {
+      // el estado se vuelve a consultar abajo
+    } finally {
+      setBuscando(false)
+    }
+  }
   const recheck = async () => {
     setBuscando(true)
     try {
@@ -107,34 +95,34 @@ export default function PanelOllama({ hardware, onRecheck, modelos, activo = tru
   }
   if (!hardware) return <p className="text-slate-700">Buscando Ollama…</p>
 
-  if (!hardware.ollama.alcanzable && hardware.entorno === 'docker') {
-    return (
-      <div className="space-y-3">
-        <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-900">
-          <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />El contenedor de Ollama no responde.
-        </p>
-        <GuiaDocker />
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn btn-secondary" disabled={buscando} onClick={() => void recheck()}>
-            {buscando ? 'Buscando…' : 'Probar de nuevo'}
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   if (!hardware.ollama.alcanzable) {
     return (
       <div className="space-y-3">
         <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-900">
-          <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />No encontramos Ollama en este equipo.
+          <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />No se pudo conectar con Ollama: revisa la URL.
         </p>
-        <p className="text-slate-700">Instálalo y ábrelo: lo detectaremos solos y descargaremos el modelo por ti.</p>
+        <div className="space-y-2">
+          <label htmlFor="ollama-url" className="block font-semibold">URL de Ollama</label>
+          <input
+            id="ollama-url"
+            type="url"
+            className="w-full min-h-11 rounded-lg border border-slate-300 px-3"
+            placeholder="http://localhost:11434/v1"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <p className="text-sm text-slate-700">Ejemplos:</p>
+          <ul className="list-disc pl-6 text-sm text-slate-700 break-all">
+            <li>http://host.docker.internal:11434/v1</li>
+            <li>http://&lt;ip-del-servidor&gt;:11434/v1</li>
+          </ul>
+        </div>
+        <p className="text-slate-700">Si aún no lo tienes, instala Ollama y ábrelo: descargaremos el modelo por ti.</p>
         <div className="flex flex-wrap gap-2">
-          <a className="btn" href="https://ollama.com/download" target="_blank" rel="noreferrer">Descargar Ollama</a>
-          <button type="button" className="btn btn-secondary" disabled={buscando} onClick={() => void recheck()}>
-            {buscando ? 'Buscando…' : 'Probar de nuevo'}
+          <button type="button" className="btn" disabled={buscando || !url.trim()} onClick={() => void guardarUrl()}>
+            {buscando ? 'Buscando…' : 'Guardar y probar de nuevo'}
           </button>
+          <a className="btn btn-secondary" href="https://ollama.com/download" target="_blank" rel="noreferrer">Descargar Ollama</a>
         </div>
       </div>
     )

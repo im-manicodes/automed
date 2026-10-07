@@ -5,10 +5,10 @@ import type { MailStatus } from '../../../lib/api'
 import { callsOf, mockFetch } from '../../../test/mockFetch'
 import OutlookCard from './OutlookCard'
 
-function renderCard(mail: MailStatus, onChanged = vi.fn()) {
+function renderCard(mail: MailStatus, onChanged = vi.fn(), configurado = true) {
   render(
     <ToastProvider>
-      <OutlookCard mail={mail} onChanged={onChanged} />
+      <OutlookCard mail={mail} onChanged={onChanged} configurado={configurado} />
     </ToastProvider>,
   )
   return onChanged
@@ -24,6 +24,12 @@ describe('tarjeta de Outlook', () => {
     expect(screen.getByText(/leer/)).toBeInTheDocument()
     await u.click(screen.getByRole('button', { name: 'Conectar con Outlook' }))
     await waitFor(() => expect(callsOf(f)).toContain('POST /api/mail/connect'))
+  })
+
+  it('sin Microsoft configurado: avisa y deshabilita Conectar', () => {
+    renderCard({ connected: false, syncing: false }, vi.fn(), false)
+    expect(screen.getByText(/Primero configura Microsoft/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Conectar con Outlook' })).toBeDisabled()
   })
 
   it('conectado: muestra correo, sincroniza y desconecta con confirmación', async () => {

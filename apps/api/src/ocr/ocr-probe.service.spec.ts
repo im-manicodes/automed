@@ -12,10 +12,6 @@ class Probe extends OcrProbeService {
 }
 
 function make(motor: string, env: Record<string, string> = {}) {
-  const runner = {
-    getUrl: jest.fn(() => null as string | null),
-    getStatus: jest.fn(() => ({ estado: 'detenido' })),
-  };
   const p = new Probe(
     { get: (k: string) => env[k] } as never,
     { getEffective: async () => ({ motor }) } as never,
@@ -26,9 +22,8 @@ function make(motor: string, env: Record<string, string> = {}) {
         secretAccessKey: 'sec-ret',
       }),
     } as never,
-    runner as never,
   );
-  return { p, runner };
+  return { p };
 }
 
 describe('OcrProbeService', () => {
@@ -112,10 +107,5 @@ describe('OcrProbeService', () => {
       mensaje:
         'El servicio de OCR no responde. Revisa que el contenedor ocr-local esté en marcha.',
     });
-  });
-
-  it('local (escritorio) sin servicio en marcha', async () => {
-    const { p } = make('local', { APP_MODE: 'desktop' });
-    expect((await p.probe()).mensaje).toMatch(/no está en marcha/);
   });
 });

@@ -14,10 +14,8 @@ export interface OcrConfig {
   localTimeoutMs: number;
   textractMode: 'detect' | 'analyze';
   awsRegion: string;
-  /** auto: PDFs digitales -> markdown sin OCR vía servicio Python; node: igual pero con pdfjs en Node; off: todo por OCR. */
-  pdfTextMode: 'auto' | 'off' | 'node';
-  pdfExtractUrl: string;
-  pdfExtractTimeoutMs: number;
+  /** node: PDFs digitales -> markdown sin OCR con pdfjs en Node; off: todo por OCR. */
+  pdfTextMode: 'off' | 'node';
   pdfTextMinChars: number;
 }
 
@@ -42,17 +40,7 @@ export function readOcrConfig(config: Pick<ConfigService, 'get'>): OcrConfig {
     localTimeoutMs: num(get('OCR_LOCAL_TIMEOUT_MS'), 120000),
     textractMode: get('TEXTRACT_MODE') === 'analyze' ? 'analyze' : 'detect',
     awsRegion: get('AWS_REGION') ?? 'us-east-1',
-    pdfTextMode:
-      get('PDF_TEXT_MODE') === 'off'
-        ? 'off'
-        : get('PDF_TEXT_MODE') === 'node'
-          ? 'node'
-          : 'auto',
-    pdfExtractUrl: (get('PDF_EXTRACT_URL') ?? 'http://localhost:8001').replace(
-      /\/$/,
-      '',
-    ),
-    pdfExtractTimeoutMs: num(get('PDF_EXTRACT_TIMEOUT_MS'), 60000),
+    pdfTextMode: get('PDF_TEXT_MODE') === 'off' ? 'off' : 'node',
     pdfTextMinChars: num(get('PDF_TEXT_MIN_CHARS'), 60),
   };
 }

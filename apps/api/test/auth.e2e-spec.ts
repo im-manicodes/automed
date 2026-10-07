@@ -11,6 +11,7 @@ import { AuthService } from '../src/auth/auth.service';
 import { IpThrottlerGuard } from '../src/auth/ip-throttler.guard';
 import { LoginThrottlerGuard } from '../src/auth/login-throttler.guard';
 import { MicrosoftService } from '../src/auth/microsoft.service';
+import { MicrosoftSettingsService } from '../src/settings/microsoft-settings.service';
 import { PasswordService } from '../src/auth/password.service';
 import { SessionGuard } from '../src/auth/session.guard';
 import { TokenCryptoService } from '../src/auth/token-crypto.service';
@@ -89,6 +90,7 @@ describe('Auth + conexión Outlook (e2e, sin BD ni red)', () => {
         AuthService,
         PasswordService,
         MicrosoftService,
+        MicrosoftSettingsService,
         TokenCryptoService,
         SessionGuard,
         LoginThrottlerGuard,
@@ -337,6 +339,21 @@ describe('Auth + conexión Outlook (e2e, sin BD ni red)', () => {
           new Response(JSON.stringify({ mail: profileMail }), { status: 200 }),
         );
       });
+
+    it('connect responde 409 en español si falta el ID de cliente', async () => {
+      const saved = env.MS_CLIENT_ID;
+      delete (env as any).MS_CLIENT_ID;
+      try {
+        const s = await newSession();
+        const res = await http()
+          .post('/api/mail/connect')
+          .set('Cookie', header(s.cookies))
+          .expect(409);
+        expect(res.body.message).toMatch(/configura Microsoft/);
+      } finally {
+        (env as any).MS_CLIENT_ID = saved;
+      }
+    });
 
     it('connect exige sesión y devuelve url con PKCE y state firmado', async () => {
       await http().post('/api/mail/connect').expect(401);

@@ -7,7 +7,7 @@ export interface ClavesAws {
 }
 
 export const OPCIONES_OCR: { id: MotorOcr; nombre: string; descripcion: string }[] = [
-  { id: 'local', nombre: 'En mi computador', descripcion: 'Gratis y privado: se ejecuta en tu propio equipo o servidor; el contenido no sale de ahí.' },
+  { id: 'local', nombre: 'En mi computador', descripcion: 'Gratis y privado: se ejecuta en tu propio servidor; el contenido no sale de ahí.' },
   { id: 'textract', nombre: 'Amazon Textract', descripcion: 'Servicio de AWS, muy preciso con letra manuscrita. Necesita credenciales de AWS.' },
   { id: 'ninguno', nombre: 'Configurar después', descripcion: 'Los PDF normales se leen igual; una página escaneada pedirá configurar esto.' },
 ]
@@ -31,17 +31,10 @@ export function awsIncompleta(c: ClavesAws): boolean {
   return !a || !s
 }
 
-export function pythonListo(a: AjustesOcr): boolean {
-  return a.entorno.escritorio && a.python.compatible && a.entornoPython.estado === 'listo'
-}
-
 /** ¿Falta algo para poder usar el motor elegido? Devuelve el motivo o null. */
 export function faltaParaOcr(motor: MotorOcr, a: AjustesOcr, ia: Pick<AjustesIa, 'claves'>, claves: ClavesAws): string | null {
   if (motor === 'local') {
-    if (a.entorno.servidor && !a.entorno.escritorio) {
-      return a.servicioLocal.estado === 'listo' ? null : 'Primero levanta el servicio de OCR del servidor, o elige "Configurar después".'
-    }
-    return pythonListo(a) ? null : 'Primero prepara el OCR en tu computador, o elige "Configurar después".'
+    return a.servicioLocal.estado === 'listo' ? null : 'Primero levanta el servicio de OCR del servidor, o elige «Configurar después».'
   }
   if (motor === 'textract') {
     if (awsIncompleta(claves)) return 'Escribe las dos claves de AWS.'

@@ -38,7 +38,7 @@ Criterio práctico:
 6. Guarda el valor en `.env` (`OCR_CONFIDENCE_THRESHOLD=...`) y reinicia la api. Cambiar el umbral no reprocesa documentos ya analizados (usa *Reprocesar* en un hilo si quieres aplicarlo).
 
 ## Solo páginas escaneadas
-Desde el flujo híbrido, las páginas de PDF con capa de texto digital no pasan por el motor OCR (se convierten a markdown con `services/pdf-extract`, `OcrPage.engine='pdf-text'`). El benchmark y el umbral de confianza solo aplican a las páginas escaneadas/manuscritas; para medir un motor con un PDF digital, usa `PDF_TEXT_MODE=off`.
+Desde el flujo híbrido, las páginas de PDF con capa de texto digital no pasan por el motor OCR (se convierten a markdown con el extractor Node de la API, `OcrPage.engine='pdf-text'`). El benchmark y el umbral de confianza solo aplican a las páginas escaneadas/manuscritas; para medir un motor con un PDF digital, usa `PDF_TEXT_MODE=off`.
 
 ## Calidad del rasterizado
 `OCR_RENDER_DPI` (200-300) afecta precisión y tiempo; 250 es un buen punto. Con Textract síncrono, una página PNG > 10 MB falla: baja el DPI.

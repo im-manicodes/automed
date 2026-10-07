@@ -7,7 +7,6 @@ import type {
   AjustesOcr,
   CambiosAjustesOcr,
   MotorOcr,
-  ProgresoPython,
   PruebaOcrResultado,
 } from '../lib/api'
 import { cambiosAws, type ClavesAws } from '../lib/ocr'
@@ -20,15 +19,6 @@ export function useAjustesOcr(cb: Callbacks<AjustesOcr> & { enabled?: boolean } 
 
 export function useGuardarAjustesOcr(cb: Callbacks<AjustesOcr> = {}) {
   return useMutation<AjustesOcr, CambiosAjustesOcr>({ url: '/settings/ocr', method: 'PUT', ...cb })
-}
-
-export function useInstalarPython() {
-  return useMutation<{ estado: string }>({ url: '/settings/ocr/python/instalar' })
-}
-
-/** Progreso de la preparación del entorno de Python; solo consulta cuando `enabled`. */
-export function useProgresoPython(enabled: boolean, cb: Callbacks<ProgresoPython> = {}) {
-  return useQuery<ProgresoPython>({ url: '/settings/ocr/python/progreso', enabled, ...cb })
 }
 
 export function usePruebaOcr() {

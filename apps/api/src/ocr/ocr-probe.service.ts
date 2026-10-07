@@ -8,10 +8,11 @@ import { createCanvas } from '@napi-rs/canvas';
 import { AiSettingsService } from '../settings/ai-settings.service';
 import { mapTestError } from '../settings/ai-test.service';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
-import { isDesktop } from './app-mode';
 import { readOcrConfig } from './ocr-config';
-import { OcrLocalRunner } from './ocr-local-runner.service';
-import type { LocalServiceStatus } from './ocr-local-runner.service';
+
+export type LocalServiceStatus =
+  | { estado: 'listo'; fallbackReason: string | null }
+  | { estado: 'detenido'; mensaje: string };
 
 export interface OcrProbeResult {
   ok: boolean;
@@ -34,7 +35,6 @@ export class OcrProbeService {
     private readonly config: ConfigService,
     private readonly settings: OcrSettingsService,
     private readonly ai: AiSettingsService,
-    private readonly runner: OcrLocalRunner,
   ) {}
 
   /** Imagen diminuta de prueba (blanca, con un texto) generada en memoria. */
@@ -131,21 +131,7 @@ export class OcrProbeService {
   private async probeLocal(
     done: (ok: boolean, m: string) => OcrProbeResult,
   ): Promise<OcrProbeResult> {
-    const desktop = isDesktop(this.config);
-    let url: string | null;
-    if (desktop) {
-      url = this.runner.getUrl();
-      if (!url) {
-        return done(
-          false,
-          this.runner.getStatus().estado === 'iniciando'
-            ? 'El OCR de tu computador se está iniciando. Prueba de nuevo en un momento.'
-            : 'El OCR de tu computador no está en marcha. Prepáralo primero.',
-        );
-      }
-    } else {
-      url = readOcrConfig(this.config).localUrl;
-    }
+    const url = readOcrConfig(this.config).localUrl;
     try {
       const h = await this.checkHealth(url);
       if (h.ok === false)
@@ -154,16 +140,12 @@ export class OcrProbeService {
         true,
         h.fallback_reason
           ? 'El OCR responde, pero usa Tesseract como respaldo (menos preciso con manuscrito).'
-          : desktop
-            ? 'El OCR de tu computador responde bien.'
-            : 'El servicio de OCR responde bien.',
+          : 'El servicio de OCR responde bien.',
       );
     } catch {
       return done(
         false,
-        desktop
-          ? 'No se pudo conectar con el OCR de tu computador.'
-          : 'No se pudo conectar con el servicio de OCR. Revisa que el contenedor ocr-local esté en marcha.',
+        'No se pudo conectar con el servicio de OCR. Revisa que el contenedor ocr-local esté en marcha.',
       );
     }
   }

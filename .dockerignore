@@ -3,7 +3,6 @@
 .git
 .env
 docs
-deploy/dokku
 .github
 services/ocr-local
 services/*/tests
