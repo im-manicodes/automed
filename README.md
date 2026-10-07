@@ -197,6 +197,8 @@ Genera un Excel con el censo de pacientes hospitalizados (novedades del día, al
 `apps/desktop` empaqueta auto-med como programa para un solo usuario, sin servidor: Electron con PostgreSQL embebido, PDFs en disco y la API como proceso interno. Los datos quedan en la carpeta de datos de la app (en Linux `~/.config/...`, en Windows `%APPDATA%\...`; ver la guía).
 
 ```bash
+./scripts/build-desktop.sh         # construye el instalable de TU sistema (instala las dependencias solo; necesita Node 22)
+./scripts/build-desktop.sh all     # Linux + Windows en GitHub Actions (necesita `gh`); Windows no se puede construir desde Linux
 pnpm desktop:dist:linux   # AppImage + deb en apps/desktop/release/
 pnpm desktop:dist:win     # instalador NSIS x64 (.exe)
 pnpm desktop:smoke        # prueba de humo del binario desempaquetado (carpeta de datos temporal)

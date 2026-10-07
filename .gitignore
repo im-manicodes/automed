@@ -16,3 +16,4 @@ __pycache__/
 # apps/desktop
 apps/desktop/build-resources/
 apps/desktop/release/
+release-desktop/

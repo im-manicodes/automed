@@ -21,6 +21,7 @@
     "db:validate": "pnpm --filter api db:validate",
     "db:format": "pnpm --filter api db:format",
     "desktop:build": "pnpm --filter desktop prepare:resources && pnpm --filter desktop build",
+    "desktop:dist": "node apps/desktop/scripts/dist.mjs",
     "desktop:dist:linux": "pnpm --filter desktop dist:linux",
     "desktop:dist:win": "pnpm --filter desktop dist:win",
     "desktop:smoke": "pnpm --filter desktop smoke"

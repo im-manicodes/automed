@@ -139,8 +139,23 @@ Faltan también (fuera de esta entrega): iconos propios, firma y notarización, 
 
 ## Para quien construye el instalable
 
+### Un solo comando: `scripts/build-desktop.sh`
+
+```bash
+./scripts/build-desktop.sh            # construye el instalable del sistema donde lo ejecutas (Linux o Windows)
+./scripts/build-desktop.sh --smoke    # además comprueba que el paquete arranca (Postgres, migraciones, API)
+./scripts/build-desktop.sh all        # construye LINUX Y WINDOWS en GitHub Actions y descarga los dos a ./release-desktop/
+./scripts/build-desktop.sh --dry-run  # muestra lo que haría, sin ejecutar nada
+```
+
+- **No hace falta haber instalado `node_modules`**: en modo local el script activa pnpm (con corepack) e instala las dependencias solo. Lo único que necesita es **Node 22 o superior**. En Windows se ejecuta desde **Git Bash**.
+- **Cada instalable se construye en su sistema.** El paquete lleva módulos nativos y binarios de Postgres de cada sistema (`@napi-rs/canvas`, `@node-rs/argon2`, `embedded-postgres`); un `.exe` hecho en Linux llevaría binarios de Linux y no funcionaría. Por eso `./scripts/build-desktop.sh win` en Linux se niega y te sugiere `all`.
+- **`all` (nube)**: lanza el workflow `release-desktop` en GitHub Actions (que construye en `ubuntu-latest` y `windows-latest`, pasa la prueba de humo en ambos y sube los archivos), espera a que termine y descarga los instaladores. Necesita [GitHub CLI](https://cli.github.com) con sesión (`gh auth login`), y construye **lo que esté subido** a la rama (avisa si tienes cambios sin commit o sin push). Una ejecución manual no crea borrador de release; para eso se usa un tag `v*` o la opción `publish` del workflow.
+- Opciones: `--ref <rama>` y `--out <carpeta>` (solo `all`), `--clean` (borra `apps/desktop/release` antes).
+
+### Otros comandos
 - Comandos desde la raíz: `pnpm desktop:build`, `pnpm desktop:dist:linux` (AppImage + deb), `pnpm desktop:dist:win` (NSIS x64; el workflow lo construye en `windows-latest`), `pnpm desktop:smoke` (prueba de humo del binario desempaquetado con una carpeta de datos temporal).
-- La salida queda en `apps/desktop/release/`.
+- La salida local queda en `apps/desktop/release/`.
 - El workflow `.github/workflows/release-desktop.yml` (tag `v*` o ejecución manual) construye en Linux y Windows, ejecuta la prueba de humo y crea una release **en borrador** con los archivos. No usa más secretos que `GITHUB_TOKEN`.
 - Antes de repartir el instalable, registra la app en Entra y pon el `client id` en `apps/desktop/build-config.json` (`msClientId`).
 - Modo de prueba: la variable `AUTOMED_DATA_DIR` redirige la carpeta de datos; úsala siempre para pruebas, nunca contra tus datos reales.
