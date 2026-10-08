@@ -4,7 +4,6 @@
 .env
 docs
 .github
-services/ocr-local
 services/*/tests
 **/__pycache__
 **/*.md

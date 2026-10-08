@@ -313,3 +313,8 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 - Hecho: el OAuth de Microsoft se configura desde Ajustes (`Setting` `microsoft.config`: id de aplicación, inquilino, secreto cifrado opcional, URI de redirección; `GET/PUT /api/settings/microsoft`; precedencia panel > `MS_*` de `.env`; URI sugerida `<WEB_ORIGIN>/api/auth/callback`).
 - Hecho: docs reescritas (CLAUDE.md, AGENTS.md, README, `docs/despliegue.md`, `docs/entra-id-registro.md` para app web con secreto de cliente, `docs/benchmark-ocr.md`). Los hitos anteriores sobre escritorio/relay/pdf-extract/Ollama en compose quedan como histórico.
 - Falta: construir y probar las imágenes (`api`, `web`, `ocr-local`); probar el OAuth real de Microsoft con la config desde Ajustes; Textract/Bedrock sin cambios (sin re-probar).
+
+## Imagen única y almacenamiento configurable (2026-10-08)
+- Hecho: `Dockerfile` raíz + `deploy/entrypoint.sh` (web servida por la API + api + OCR local; sin RustFS); `docker-compose.yml` queda SOLO para desarrollo (hot reload, Vite :5173).
+- Hecho: almacenamiento elegible desde la web (RustFS o AWS S3): `storage.config`, `StorageSettingsService`, `DynamicStorageService`, `/api/settings/storage` (+ `test`), Ajustes -> Almacenamiento y paso en `/bienvenida`.
+- Falta: probar la imagen única de punta a punta con un RustFS/S3 real; validar que PaddleOCR carga en la imagen (en la prueba cayó a Tesseract: `paddlex[ocr]` sin dependencias extra; revisar si el `ocr-local` del compose se comporta igual).

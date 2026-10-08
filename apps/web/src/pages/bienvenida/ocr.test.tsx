@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from '../../context/toasts'
 import type { AjustesOcr } from '../../lib/api'
 import { ajustesIa, hardwareIa } from '../../test/ajustesIa'
+import { ajustesAlmacenamiento } from '../../test/ajustesAlmacenamiento'
 import { ajustesOcr } from '../../test/ajustesOcr'
 import { mockFetch, type MockHandler } from '../../test/mockFetch'
 import Bienvenida from './page'
@@ -17,6 +18,7 @@ function rutas(ocr: MockHandler, extra: Record<string, MockHandler> = {}) {
   return {
     'GET /api/settings/ia': { body: ajustesIa() },
     'GET /api/settings/ia/hardware': { body: hardwareIa() },
+    'GET /api/settings/storage': { body: ajustesAlmacenamiento() },
     'GET /api/settings/ocr': ocr,
     'PUT /api/settings/ocr': (req: { body: unknown }) => ({ body: ajustesOcr({ motor: (req.body as { motor: AjustesOcr['motor'] }).motor }) }),
     'PUT /api/settings/ia': { body: ajustesIa({ claves: { openai: false, anthropic: false, aws: true } }) },
@@ -80,6 +82,8 @@ describe('Asistente: lectura de PDFs escaneados', () => {
     expect(siguiente()).toBeEnabled()
 
     await user.click(siguiente())
+    await screen.findByText('¿Dónde guardamos tus archivos?')
+    await user.click(siguiente())
     await screen.findByText('Todo listo')
     expect(putsA(f, '/api/settings/ocr').every((b) => b.motor === 'textract')).toBe(true)
     expect(putsA(f, '/api/settings/ia')).toHaveLength(1) // no se vuelven a enviar
@@ -97,6 +101,8 @@ describe('Asistente: lectura de PDFs escaneados', () => {
     const f = mockFetch(rutas({ body: ajustesOcr() }))
     const user = await irAlPasoOcr()
     expect(screen.getByRole('radio', { name: /Configurar después/ })).toHaveAttribute('aria-checked', 'true')
+    await user.click(siguiente())
+    await screen.findByText('¿Dónde guardamos tus archivos?')
     await user.click(siguiente())
     await screen.findByText('Todo listo')
     expect(putsA(f, '/api/settings/ocr')).toEqual([])

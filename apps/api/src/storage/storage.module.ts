@@ -1,20 +1,26 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SettingsModule } from '../settings/settings.module';
+import { DynamicStorageService } from './dynamic-storage.service';
 import { FsStorageService } from './fs-storage.service';
-import { S3StorageService } from './s3-storage.service';
 import { StorageService } from './storage.service';
 
 @Global()
 @Module({
+  imports: [SettingsModule],
   providers: [
+    DynamicStorageService,
     {
       provide: StorageService,
-      inject: [ConfigService],
-      // STORAGE_DRIVER=fs (escritorio) | s3 (por defecto: RustFS/S3).
-      useFactory: (config: ConfigService): StorageService =>
+      inject: [ConfigService, DynamicStorageService],
+      // STORAGE_DRIVER=fs (escritorio) | por defecto: S3 dinámico (RustFS/AWS S3 elegido en Ajustes o .env).
+      useFactory: (
+        config: ConfigService,
+        dynamic: DynamicStorageService,
+      ): StorageService =>
         config.get<string>('STORAGE_DRIVER') === 'fs'
           ? new FsStorageService(config)
-          : new S3StorageService(config),
+          : dynamic,
     },
   ],
   exports: [StorageService],

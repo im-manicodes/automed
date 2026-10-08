@@ -450,12 +450,14 @@ export interface DescargaOllama {
 // --- Primer usuario ---
 export interface SetupStatus {
   needsSetup: boolean
+  requiresToken?: boolean
 }
 
 export interface NuevoPrimerUsuario {
   email: string
   nombre: string
   password: string
+  setupToken?: string
 }
 
 // --- Lectura de PDFs escaneados (/settings/ocr) ---
@@ -477,5 +479,27 @@ export interface CambiosAjustesOcr {
 export interface PruebaOcrResultado {
   ok: boolean
   ms: number
+  mensaje: string
+}
+
+// --- Almacenamiento de archivos (/settings/storage) ---
+export type ProveedorAlmacenamiento = 'rustfs' | 's3'
+
+export interface AjustesAlmacenamiento {
+  configurado: boolean
+  origen: 'panel' | 'env' | 'ninguno'
+  proveedor: ProveedorAlmacenamiento | null
+  rustfs: { endpoint: string; bucket: string; accessKey: string; tieneSecreto: boolean }
+  s3: { region: string; bucket: string; accessKeyId: string; endpoint: string; tieneSecreto: boolean }
+}
+
+export interface CambiosAlmacenamiento {
+  proveedor: ProveedorAlmacenamiento
+  rustfs?: { endpoint: string; bucket: string; accessKey: string; secretKey?: string }
+  s3?: { region: string; bucket: string; accessKeyId?: string; secretAccessKey?: string; endpoint?: string }
+}
+
+export interface PruebaAlmacenamientoResultado {
+  ok: boolean
   mensaje: string
 }

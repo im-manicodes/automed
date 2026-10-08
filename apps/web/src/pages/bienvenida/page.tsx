@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LuArrowLeft, LuArrowRight, LuCheck, LuShieldCheck } from 'react-icons/lu'
+import ConfigAlmacenamiento from '../../components/almacenamiento/ConfigAlmacenamiento'
 import ConfigOcr from '../../components/ia/ConfigOcr'
 import CredencialesProveedor from '../../components/ia/CredencialesProveedor'
 import ModeloPorTarea from '../../components/ia/ModeloPorTarea'
@@ -10,14 +11,17 @@ import Spinner from '../../components/Spinner'
 import { useBienvenidaCtx } from '../../components/guarda-bienvenida-context'
 import { useToast } from '../../context/toasts-context'
 import { useAjustesIa, useGuardarAjustesIa, useHardware } from '../../hooks/useAjustesIa'
+import { useAjustesAlmacenamiento, useGuardarAlmacenamiento } from '../../hooks/useAjustesAlmacenamiento'
 import { useAjustesOcr, useAplicarOcr } from '../../hooks/useAjustesOcr'
 import type { AjustesIa, MotorOcr } from '../../lib/api'
 import { errorMessage } from '../../lib/format'
+import { borradorAlmacenamientoDesde, cuerpoAlmacenamiento, nombreAlmacenamiento, type BorradorAlmacenamiento } from '../../lib/almacenamiento'
 import { faltaParaOcr, nombreMotorOcr } from '../../lib/ocr'
 import { borradorDesde, cambiosDesde, conProveedor, faltaClave, nombreProveedor, TAREAS, type BorradorIa } from '../../lib/ia'
 
-const TOTAL = 6
+const TOTAL = 7
 const PASO_OCR = 5
+const PASO_ALM = 6
 
 function Asistente({ inicial }: { inicial: AjustesIa }) {
   const navigate = useNavigate()
@@ -37,6 +41,13 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
   const [usarServidor, setUsarServidor] = useState(false)
   const [eligio, setEligio] = useState(false)
   const [ollamaListo, setOllamaListo] = useState(false)
+  const alm = useAjustesAlmacenamiento({ enabled: paso >= PASO_ALM })
+  const guardarAlm = useGuardarAlmacenamiento()
+  const [almBorrador, setAlmBorrador] = useState<BorradorAlmacenamiento | null>(null)
+  const [almTocado, setAlmTocado] = useState(false)
+  const [almProbado, setAlmProbado] = useState(false)
+  const almActual = almBorrador ?? (alm.data ? borradorAlmacenamientoDesde(alm.data) : null)
+  const almListo = !!alm.data && ((alm.data.configurado && !almTocado) || almProbado)
 
   const terminar = async (destino: string, conConfig: boolean) => {
     try {
@@ -68,11 +79,22 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
         return
       }
     }
+    if (paso === PASO_ALM && almTocado && almActual) {
+      try {
+        const nuevo = await guardarAlm.mutate({ body_params: cuerpoAlmacenamiento(almActual) })
+        setAlmBorrador(borradorAlmacenamientoDesde(nuevo))
+        setAlmTocado(false)
+        void alm.refetch()
+      } catch (e) {
+        toast(errorMessage(e), 'error')
+        return
+      }
+    }
     setPaso((p) => (p === 2 && usarServidor ? PASO_OCR : p + 1))
   }
   const atras = () => setPaso((p) => (p === PASO_OCR && usarServidor ? 2 : p - 1))
   const esperaOllama = borrador.proveedor === 'ollama' && !usarServidor && !ollamaListo
-  const bloqueado = (paso === 2 && !usarServidor && !eligio) || (paso === 3 && (faltaClave(borrador, ajustes) || esperaOllama)) || (paso === PASO_OCR && (faltaOcr !== null || guardandoOcr))
+  const bloqueado = (paso === 2 && !usarServidor && !eligio) || (paso === 3 && (faltaClave(borrador, ajustes) || esperaOllama)) || (paso === PASO_OCR && (faltaOcr !== null || guardandoOcr)) || (paso === PASO_ALM && (!almListo || guardarAlm.loading))
   const conConfig = !usarServidor
 
   return (
@@ -166,7 +188,30 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
           </>
         )}
 
-        {paso === 6 && (
+        {paso === PASO_ALM && (
+          <>
+            <h1 className="text-2xl font-bold">¿Dónde guardamos tus archivos?</h1>
+            <p className="text-slate-700">Aquí van tus PDFs, las imágenes de sus páginas y los reportes.</p>
+            {alm.error && !alm.data && <ErrorBox message={alm.error} onRetry={() => void alm.refetch()} />}
+            {!alm.data && !alm.error && <Spinner text="Cargando…" />}
+            {alm.data && almActual && (
+              <>
+                <ConfigAlmacenamiento
+                  ajustes={alm.data}
+                  borrador={almActual}
+                  onChange={(b) => {
+                    setAlmBorrador(b)
+                    setAlmTocado(true)
+                  }}
+                  onProbado={setAlmProbado}
+                />
+                {!almListo && <p role="status" className="text-sm text-amber-900">Prueba la conexión para continuar.</p>}
+              </>
+            )}
+          </>
+        )}
+
+        {paso === TOTAL && (
           <>
             <h1 className="text-2xl font-bold"><LuCheck className="mr-1.5 -mt-1 inline size-6 text-green-700" aria-hidden />Todo listo</h1>
             {usarServidor ? (
@@ -178,6 +223,7 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
               </ul>
             )}
             <p className="rounded-xl border border-slate-200 bg-white p-4">PDFs escaneados: <strong>{nombreMotorOcr(motor)}</strong></p>
+            <p className="rounded-xl border border-slate-200 bg-white p-4">Archivos en: <strong>{nombreAlmacenamiento(almActual?.proveedor ?? alm.data?.proveedor ?? null)}</strong></p>
             <p className="text-slate-700">El último paso es conectar tu Outlook para traer tus correos.</p>
             <button type="button" className="btn w-full text-lg" disabled={guardar.loading} onClick={() => void terminar('/ajustes', conConfig)}>Conectar Outlook</button>
             <button type="button" className="btn btn-secondary w-full" disabled={guardar.loading} onClick={() => void terminar('/tickets', conConfig)}>Ir a mis tickets</button>

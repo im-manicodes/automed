@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Spinner from './components/Spinner'
 import Ajustes from './pages/ajustes/page'
+import Almacenamiento from './pages/almacenamiento/page'
 import Bienvenida from './pages/bienvenida/page'
 import ConfiguracionIa from './pages/configuracion-ia/page'
 import Plantilla from './pages/plantilla/page'
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/plantilla" element={<Plantilla />} />
           <Route path="/ajustes" element={<Ajustes />} />
+          <Route path="/ajustes/almacenamiento" element={<Almacenamiento />} />
           <Route path="/ajustes/ia" element={<ConfiguracionIa />} />
           <Route path="*" element={<Navigate to="/tickets" replace />} />
         </Route>

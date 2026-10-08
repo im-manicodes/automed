@@ -11,10 +11,11 @@ apps/web   Vite + React + Tailwind (mobile-first, español)
 docs/      estado-del-proyecto.md, despliegue.md, benchmark-ocr.md, entra-id-registro.md
 services/ocr-local  OCR local en CPU (PaddleOCR/Tesseract; siempre activo en compose)
 scripts/docker-clean.sh  poda caché de build e imágenes sin etiqueta (nunca toca volúmenes)
-docker-compose.yml  web, api, ocr-local y rustfs (Postgres externo vía DATABASE_URL_DOCKER en .env)
-docker-compose.dev.yml  hot reload en Docker (solo desarrollo, se activa con COMPOSE_FILE en .env)
+Dockerfile  imagen única de producción: web + api + OCR local (Postgres y S3 externos)
+deploy/entrypoint.sh  arranque de la imagen única
+docker-compose.yml  SOLO desarrollo (hot reload): web (Vite :5173), api, ocr-local y rustfs
 ```
-El producto es solo la versión web en Docker.
+El producto es la versión web, empaquetada en un único contenedor.
 
 ## Arranque rápido (desarrollo)
 ```bash
@@ -25,25 +26,19 @@ pnpm --filter api prisma:deploy
 pnpm dev                                  # api :3000, web :5173
 ```
 
-## Todo con Docker
+## Desarrollo con Docker (docker-compose.yml)
+El compose es SOLO para desarrollo, con hot reload:
 ```bash
-docker compose up -d --build   # web http://localhost:8080; api healthy en /api/health
+docker compose up --build   # web http://localhost:5173 (Vite); api :3000 con nest --watch
 ```
-Servicios: `web`, `api`, `ocr-local` (OCR local en CPU, siempre activo) y `rustfs` (almacenamiento S3; persiste en el volumen `rustfsdata`). Ollama NO va en el compose: lo instalas tú donde quieras y pones su URL en la web (Ajustes -> Inteligencia artificial; p. ej. `http://host.docker.internal:11434/v1`, con `OLLAMA_HOST=0.0.0.0` y `OLLAMA_CONTEXT_LENGTH=8192` en ese servidor; ver `docs/despliegue.md`). El proveedor de IA (Ollama, OpenAI, Anthropic, Bedrock), el motor OCR y la conexión con Microsoft se configuran en la web.
+Servicios: `web`, `api`, `ocr-local`, `rustfs`. Ollama NO va en contenedor: corre en tu equipo y pones su URL en la web (Ajustes -> Inteligencia artificial; p. ej. `http://host.docker.internal:11434/v1`, con `OLLAMA_HOST=0.0.0.0` y `OLLAMA_CONTEXT_LENGTH=8192`). Reconstruye con `--build` solo si cambian dependencias; con `CHOKIDAR_USEPOLLING=true` en `.env` si el hot reload no detecta cambios. Espacio: la imagen de `ocr-local` es pesada; usa `./scripts/docker-clean.sh` tras cada build.
 
-**Espacio en disco:** la imagen de `ocr-local` (PaddlePaddle) es pesada (~2 GB). Tras cada `--build` ejecuta `./scripts/docker-clean.sh` (poda caché de build e imágenes sin etiqueta; no toca volúmenes) y vigila `df -h /`; con poco espacio construye de a un servicio (`docker compose build ocr-local`).
-
-### Desarrollo con Docker y hot reload
-Añade a tu `.env` local (gitignored) esta línea (en `.env.example` está comentada; no la pongas en producción):
+## Producción (imagen única)
 ```bash
-COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
+docker build -t automed .
+docker run -d --name automed -p 3000:3000 -v automed-models:/models --env-file .env automed
 ```
-Después `docker compose up` (sin `--build` en cada cambio) usa `docker-compose.dev.yml`: la api corre `nest start --watch` con `src/` y `prisma/` montados, y la web corre el servidor de Vite. En dev entra por **http://localhost:5173** (no :8080); la api sigue en :3000 y `WEB_ORIGIN` se fija a `http://localhost:5173`. Reconstruye con `docker compose up --build` solo si cambian dependencias (`package.json`/lockfile). Si el hot reload no detecta cambios, añade `CHOKIDAR_USEPOLLING=true` al `.env`. El cliente Prisma se regenera en cada arranque de la api. Para volver al modo producción local, comenta la línea `COMPOSE_FILE` o usa `docker compose -f docker-compose.yml up -d --build`.
-
-Guía completa (variables, Entra ID, Textract/Bedrock, backups, problemas): `docs/despliegue.md`. Medir el OCR con tus PDFs: `docs/benchmark-ocr.md`.
-
-## Producción
-Se despliega con `docker compose up -d --build` en el servidor (solo `docker-compose.yml`; no definas `COMPOSE_FILE` allí) detrás de un proxy con HTTPS. Pon `WEB_ORIGIN` con tu URL pública, `COOKIE_SECURE=true` y cambia las claves S3 por defecto. Guía completa (variables, Postgres del host, Textract/Bedrock, backups, problemas): `docs/despliegue.md`.
+Un solo contenedor con web + api + OCR local (PaddleOCR); solo expone :3000 (ponlo detrás de un proxy con HTTPS). `/models` guarda los modelos del OCR. PostgreSQL es externo (`DATABASE_URL`). El almacenamiento de archivos es externo y se elige en la web (Ajustes -> Almacenamiento o el asistente de bienvenida): una instancia RustFS o un bucket de AWS S3. Pon `WEB_ORIGIN` con tu URL pública, `COOKIE_SECURE=true` y Detalle en `docs/despliegue.md`.
 
 ## Comandos
 `pnpm build` · `pnpm lint` · `pnpm test` · `pnpm --filter api test:e2e-flow` (flujo completo con mocks, esquema temporal) · `pnpm --filter web test` (vitest) · `pnpm --filter api prisma:migrate`

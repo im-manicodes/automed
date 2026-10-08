@@ -20,7 +20,7 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | Variable | Qué es |
 |---|---|
 | `PORT` | Puerto de la API (3000). |
-| `WEB_ORIGIN` | Origen del front (CORS y redirección tras el login). Dev: `http://localhost:5173`; con compose se fija a `http://localhost:8080`. |
+| `WEB_ORIGIN` | Origen del front (CORS y redirección tras el login). Dev: `http://localhost:5173`; con compose se fija a `http://localhost:5173 (dev) o :3000 (imagen única)`. |
 | `DATABASE_URL` | Conexión a PostgreSQL **desde tu máquina** (desarrollo, migraciones, benchmark, tests). Usa `localhost`. |
 | `DATABASE_URL_DOCKER` | La misma BD **vista desde el contenedor de la api**: normalmente `host.docker.internal` en lugar de `localhost` (compose añade `extra_hosts: host.docker.internal:host-gateway`). Es obligatoria para `docker compose up`. |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE` | RustFS (S3 compatible). Con compose el endpoint se fuerza a `http://rustfs:9000`. **Cambia las claves por defecto** (`rustfsadmin`) fuera de tu máquina. El bucket se crea solo al arrancar. |
@@ -39,14 +39,14 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `VITE_API_URL` | Solo desarrollo del front (`pnpm dev`). |
 
 ## 3. Levantar con Docker Compose
-> Producción usa **solo** `docker-compose.yml` (imágenes de build; web en nginx :8080). `docker-compose.dev.yml` (hot reload, web en Vite :5173) es solo para desarrollo y únicamente se carga si defines `COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml` en el `.env`; **no pongas esa variable en el `.env` del servidor** (si existe, usa `docker compose -f docker-compose.yml ...` explícito).
+> `docker-compose.yml` es SOLO de desarrollo (hot reload, web en Vite :5173). Producción es la imagen única del `Dockerfile` raíz (web + api + OCR local en un contenedor, sin RustFS; solo expone :3000; volumen `/models`; el almacenamiento S3 —RustFS o AWS— se configura en la web; `docker run --env-file .env`).
 
 ```bash
 docker compose up -d --build
 docker compose ps          # api debe quedar "healthy"
 curl localhost:3000/api/health    # {"status":"ok","db":true,"storage":true}
 ```
-- Web: http://localhost:8080 (nginx sirve la app y proxea `/api` a la api). API directa: :3000. Consola RustFS: :9001.
+- Desarrollo (compose): web http://localhost:5173 (Vite); API directa :3000; consola RustFS :9001. Producción (imagen única): todo en http://localhost:3000.
 - La api ejecuta `prisma migrate deploy` en cada arranque (aplica solo migraciones pendientes) y crea el bucket si no existe.
 - `GET /api/health` es público y siempre responde 200; mira el cuerpo: `status: "degraded"` indica BD o RustFS inaccesibles. El `healthcheck` de compose solo comprueba que la api responde.
 - Para verificar sin efectos externos: `JOBS_ENABLED=false docker compose up -d --build` (no sincroniza ni procesa).
@@ -119,7 +119,7 @@ Con un perfil de inferencia entre regiones, el permiso debe cubrir el perfil **y
 ## 6. Registro en Entra ID y config de Microsoft desde Ajustes
 Sigue `docs/entra-id-registro.md` (registro de app web con secreto de cliente, permisos delegados `Mail.Read`, `offline_access` y `User.Read`, URI de redirección). Registra la app como "Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft".
 
-Los datos NO hace falta ponerlos en `.env`: se pegan en **Ajustes -> Microsoft** (id de aplicación, inquilino `common`, secreto de cliente y URI de redirección; el secreto se guarda cifrado y no se vuelve a mostrar). La web sugiere la URI de redirección `<WEB_ORIGIN>/api/auth/callback` (con compose, `http://localhost:8080/api/auth/callback`; en producción tu URL HTTPS pública), que debe coincidir exactamente con la registrada en Entra. Precedencia: panel > `MS_*` de `.env` (siguen valiendo como valores por defecto). El consentimiento es por cuenta conectada. Si el tenant de esa cuenta exige aprobación de administrador, el documento incluye el texto para pedirla.
+Los datos NO hace falta ponerlos en `.env`: se pegan en **Ajustes -> Microsoft** (id de aplicación, inquilino `common`, secreto de cliente y URI de redirección; el secreto se guarda cifrado y no se vuelve a mostrar). La web sugiere la URI de redirección `<WEB_ORIGIN>/api/auth/callback` (con compose, `http://localhost:5173 (dev) o :3000 (imagen única)/api/auth/callback`; en producción tu URL HTTPS pública), que debe coincidir exactamente con la registrada en Entra. Precedencia: panel > `MS_*` de `.env` (siguen valiendo como valores por defecto). El consentimiento es por cuenta conectada. Si el tenant de esa cuenta exige aprobación de administrador, el documento incluye el texto para pedirla.
 
 ## 7. Primer arranque
 1. `docker compose up -d --build` (la API aplica las migraciones al arrancar; requiere `JWT_SECRET` en `.env`).
@@ -129,7 +129,7 @@ Los datos NO hace falta ponerlos en `.env`: se pegan en **Ajustes -> Microsoft**
    # sin Docker (desde la raíz): pnpm --filter api user:create -- --email tu@correo.com --nombre "Tu nombre"
    ```
    Si ya existía una cuenta de Outlook de antes de la fase 8, queda asignada a este primer usuario (con sus tickets). Para restablecer una contraseña: `docker compose exec api node dist/cli/user.js reset-password --email tu@correo.com` (cierra todas sus sesiones).
-3. Abre http://localhost:8080, **inicia sesión** con ese correo y contraseña, rellena **Ajustes -> Microsoft** (ver sección 6), ve a **Ajustes -> Conectar Outlook** y acepta los permisos de Microsoft. Volverás a Ajustes con "Outlook conectado".
+3. Abre http://localhost:5173 (dev) o :3000 (imagen única), **inicia sesión** con ese correo y contraseña, rellena **Ajustes -> Microsoft** (ver sección 6), ve a **Ajustes -> Conectar Outlook** y acepta los permisos de Microsoft. Volverás a Ajustes con "Outlook conectado".
 4. **Sincronizar** (botón en Tickets, o espera `SYNC_INTERVAL_MIN`). Los hilos aparecen como *Sin analizar*; no se ha enviado nada a OCR ni al LLM.
 5. Abre **un hilo de prueba** (de preferencia sin datos sensibles) y pulsa **Analizar**. Espera a *Listo* o *Necesita tu ayuda*.
 6. Si hay dudas, abre la revisión, corrige y verifica que la síntesis se actualiza (solo con lo nuevo).
