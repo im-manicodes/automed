@@ -191,8 +191,6 @@ export class GeneratorService {
           data: {},
           actualizadoEn: syn.createdAt,
         };
-      } else if (ex.estado === 'otro') {
-        row = null;
       } else if (ex.estado === 'alta' && prev?.estado === 'alta') {
         row = null; // el alta ya salió una vez
       } else {

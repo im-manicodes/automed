@@ -205,7 +205,7 @@ describe('GeneratorService', () => {
       status: 'listo',
       totalHospitalizados: 2, // t1 y t5
       totalAltas: 1,
-      totalConNovedad: 3,
+      totalConNovedad: 4, // t3 (otro) ahora también sale
       total: 4,
       procesados: 4,
       templateVersion: 3,
@@ -214,7 +214,7 @@ describe('GeneratorService', () => {
     expect(h.files.has('reportes/2026-10-06/reporte_0700.xlsx')).toBe(true);
     const wb = await readXlsx(h.files.get(rep.storageKey)!);
     const pac = wb.getWorksheet('Pacientes')!;
-    expect(pac.rowCount).toBe(4); // encabezado + t1 + t2 + t5
+    expect(pac.rowCount).toBe(5); // encabezado + t1 + t2 + t3 (otro) + t5
     // sin hoja de pendientes: t4 (sin síntesis) no entra ni se lista
     expect(wb.worksheets.map((w) => w.name)).toEqual([
       'Resumen del día',
@@ -226,7 +226,7 @@ describe('GeneratorService', () => {
     ).not.toContain('t4');
     const colEstatus = (pac.getRow(1).values as unknown[]).indexOf('Estatus');
     expect(colEstatus).toBeGreaterThan(0);
-    const t5 = [2, 3, 4]
+    const t5 = [2, 3, 4, 5]
       .map((i) => JSON.stringify(pac.getRow(i).getCell(colEstatus).value))
       .find((v) => v.includes('desactualizado'));
     expect(t5).toContain('Resumen desactualizado: hay mensajes sin analizar');

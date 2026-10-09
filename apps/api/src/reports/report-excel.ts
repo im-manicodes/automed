@@ -151,7 +151,9 @@ export function estatusTexto(r: ExcelRow): string {
     ? 'Extracción incompleta (revisar el ticket)'
     : r.estado === 'alta'
       ? 'Alta'
-      : 'Hospitalizado';
+      : r.estado === 'otro'
+        ? 'Sin clasificar (revisar el ticket)'
+        : 'Hospitalizado';
   return r.desactualizado
     ? `${base} · Resumen desactualizado: hay mensajes sin analizar`
     : base;
