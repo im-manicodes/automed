@@ -101,7 +101,7 @@ export interface AiSettingsInput {
 const SUGGESTED: Record<LlmProviderName, AiSuggestedModels> = {
   openai: {
     texto: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4.1-mini'],
-    vision: ['gpt-5', 'gpt-4.1', 'gpt-4o'],
+    vision: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o'],
   },
   anthropic: {
     texto: ['claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-sonnet-4-5'],
@@ -127,7 +127,7 @@ const SUGGESTED: Record<LlmProviderName, AiSuggestedModels> = {
   // Nombres de deployment genéricos (el real lo define el usuario en su recurso).
   foundry: {
     texto: ['gpt-5', 'gpt-5-mini', 'gpt-4.1'],
-    vision: ['gpt-5', 'gpt-4.1', 'gpt-4o'],
+    vision: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o'],
   },
 };
 

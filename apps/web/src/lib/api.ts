@@ -470,7 +470,7 @@ export interface NuevoPrimerUsuario {
 }
 
 // --- Lectura de PDFs escaneados (/settings/ocr) ---
-export type MotorOcr = 'local' | 'textract' | 'ninguno'
+export type MotorOcr = 'local' | 'textract' | 'azure' | 'ninguno'
 
 export interface AjustesOcr {
   motor: MotorOcr
@@ -482,6 +482,10 @@ export interface AjustesOcr {
   visionMaxRegions: number
   /** Calidad de lectura al rasterizar (150..400). */
   renderDpi: number
+  /** Dirección del recurso de Azure Document Intelligence ('' si no hay). */
+  azureEndpoint: string
+  /** ¿Hay una clave de Azure guardada? (nunca se devuelve la clave). */
+  claveAzure: boolean
   entorno: { servidor: boolean }
   servicioLocal: { estado: 'detenido' | 'iniciando' | 'listo' | 'error'; fallbackReason?: string | null; mensaje?: string }
 }
@@ -510,6 +514,9 @@ export interface CambiosAjustesOcr {
   visionRetry?: boolean
   visionMaxRegions?: number
   renderDpi?: number
+  azureEndpoint?: string
+  /** Clave nueva, o null para quitarla. */
+  claveAzure?: string | null
 }
 
 export interface PruebaOcrResultado {

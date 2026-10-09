@@ -7,6 +7,10 @@ function make(env: Record<string, string> = {}) {
   const svc = new OcrSettingsService(
     db as never,
     { get: (k: string) => env[k] } as never,
+    {
+      encrypt: (v: string) => `enc:${v}`,
+      decrypt: (v: string) => v.slice(4),
+    } as never,
   );
   return { db, svc };
 }
@@ -109,5 +113,36 @@ describe('OcrSettingsService', () => {
     ]) {
       await expect(svc.save(bad)).rejects.toBeInstanceOf(BadRequestException);
     }
+  });
+
+  it('azure: guarda el endpoint y la clave cifrada, sin exponerla', async () => {
+    const { svc, db } = make();
+    await svc.save({
+      motor: 'azure',
+      azureEndpoint: 'https://x.cognitiveservices.azure.com/',
+      claveAzure: ' k-1 ',
+    });
+    expect(await svc.getEffective()).toMatchObject({ motor: 'azure' });
+    expect(await svc.getAzurePublic()).toEqual({
+      azureEndpoint: 'https://x.cognitiveservices.azure.com',
+      claveAzure: true,
+    });
+    expect(await svc.getAzureCredentials()).toEqual({
+      endpoint: 'https://x.cognitiveservices.azure.com',
+      key: 'k-1',
+    });
+    expect(JSON.stringify(db)).not.toContain('"k-1"');
+    await svc.save({ claveAzure: null });
+    expect(await svc.getAzureCredentials()).toBeNull();
+  });
+
+  it('azure: valida endpoint y clave', async () => {
+    const { svc } = make();
+    await expect(svc.save({ azureEndpoint: 'no-url' })).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(svc.save({ claveAzure: '  ' })).rejects.toThrow(
+      BadRequestException,
+    );
   });
 });

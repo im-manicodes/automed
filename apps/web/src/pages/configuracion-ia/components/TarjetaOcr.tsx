@@ -7,7 +7,7 @@ import { useToast } from '../../../context/toasts-context'
 import { useAjustesOcr, useAplicarOcr } from '../../../hooks/useAjustesOcr'
 import type { AjustesIa, MotorOcr } from '../../../lib/api'
 import { errorMessage } from '../../../lib/format'
-import { avanzadoDesde, avanzadoValido, faltaParaOcr, type AvanzadoOcr, type ClavesAws } from '../../../lib/ocr'
+import { avanzadoDesde, avanzadoValido, faltaParaOcr, type AvanzadoOcr, type ClavesAws, type ClavesAzure } from '../../../lib/ocr'
 
 interface Props {
   ajustesIa: AjustesIa
@@ -23,18 +23,20 @@ export default function TarjetaOcr({ ajustesIa, claves, onClaves, onGuardadoIa }
   const ocr = useAjustesOcr()
   const { aplicar, loading } = useAplicarOcr()
   const [elegido, setElegido] = useState<MotorOcr | null>(null)
+  const [azure, setAzure] = useState<ClavesAzure>({})
   const [avanzadoEditado, setAvanzadoEditado] = useState<AvanzadoOcr | null>(null)
 
   const motor = elegido ?? ocr.data?.motor ?? 'ninguno'
   const avanzado = avanzadoEditado ?? (ocr.data ? avanzadoDesde(ocr.data) : undefined)
-  const falta = ocr.data ? faltaParaOcr(motor, ocr.data, ajustesIa, claves) : null
+  const falta = ocr.data ? faltaParaOcr(motor, ocr.data, ajustesIa, claves, azure) : null
 
   const guardar = async () => {
     if (!ocr.data) return
-    const r = await aplicar({ motor, actual: ocr.data, claves, forzar: true, avanzado })
+    const r = await aplicar({ motor, actual: ocr.data, claves, azure, forzar: true, avanzado })
     if (r.ia) onGuardadoIa(r.ia)
     await ocr.refetch()
     setElegido(null)
+    setAzure({})
     setAvanzadoEditado(null)
   }
 
@@ -61,6 +63,8 @@ export default function TarjetaOcr({ ajustesIa, claves, onClaves, onGuardadoIa }
             awsGuardada={ajustesIa.claves.aws}
             claves={claves}
             onClaves={onClaves}
+            azure={azure}
+            onAzure={setAzure}
             onRecheck={() => ocr.refetch()}
             antesDeProbar={guardar}
             avanzado={avanzado}

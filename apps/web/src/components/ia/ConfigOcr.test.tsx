@@ -20,4 +20,18 @@ describe('ConfigOcr', () => {
     expect(screen.getByText('Opciones avanzadas de lectura')).toBeInTheDocument()
     expect(screen.getByLabelText('Modo')).toBeInTheDocument()
   })
+  it('con Azure pide dirección y clave y permite probar', () => {
+    mockFetch({})
+    render(<ConfigOcr {...props} motor="azure" ajustes={ajustesOcr({ motor: 'azure' })} onAzure={() => {}} />)
+    expect(screen.getByLabelText('Dirección del recurso de Azure')).toBeInTheDocument()
+    expect(screen.getByLabelText('Clave de Azure')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Probar Azure' })).toBeInTheDocument()
+  })
+
+  it('con clave de Azure guardada no la muestra', () => {
+    mockFetch({})
+    render(<ConfigOcr {...props} motor="azure" ajustes={ajustesOcr({ motor: 'azure', azureEndpoint: 'https://x.azure.com', claveAzure: true })} onAzure={() => {}} />)
+    expect(screen.getByText('Ya hay una clave guardada')).toBeInTheDocument()
+    expect(screen.getByLabelText('Dirección del recurso de Azure')).toHaveValue('https://x.azure.com')
+  })
 })

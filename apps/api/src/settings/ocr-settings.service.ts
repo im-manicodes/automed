@@ -1,14 +1,20 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '../generated/prisma/client';
+import { TokenCryptoService } from '../auth/token-crypto.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export const OCR_CONFIG_KEY = 'ocr.config';
 
-export type OcrMotor = 'local' | 'textract' | 'ninguno';
+export type OcrMotor = 'local' | 'textract' | 'azure' | 'ninguno';
 export type TextractMode = 'detect' | 'analyze';
 
-export const OCR_MOTORS: readonly OcrMotor[] = ['local', 'textract', 'ninguno'];
+export const OCR_MOTORS: readonly OcrMotor[] = [
+  'local',
+  'textract',
+  'azure',
+  'ninguno',
+];
 export const TEXTRACT_MODES: readonly TextractMode[] = ['detect', 'analyze'];
 
 /** Lo que el panel fijó (Setting `ocr.config`). */
@@ -18,6 +24,15 @@ export interface OcrStoredConfig {
   visionRetry?: boolean;
   visionMaxRegions?: number;
   renderDpi?: number;
+  azureEndpoint?: string;
+  /** Clave de Azure AI Document Intelligence, cifrada AES-GCM (jamás se devuelve). */
+  azureKeyEnc?: string;
+}
+
+/** Credenciales de Azure en claro (solo para construir llamadas; nunca se exponen ni se registran). */
+export interface AzureOcrCredentials {
+  endpoint: string;
+  key: string;
 }
 
 export const MIN_VISION_MAX_REGIONS = 1;
@@ -45,6 +60,9 @@ export interface OcrSettingsInput {
   visionRetry?: boolean;
   visionMaxRegions?: number;
   renderDpi?: number;
+  azureEndpoint?: string;
+  /** string = clave nueva; null = quitarla. */
+  claveAzure?: string | null;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -58,6 +76,7 @@ export class OcrSettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly crypto: TokenCryptoService,
   ) {}
 
   private merge(stored: OcrStoredConfig | null): OcrEffectiveConfig {
@@ -104,6 +123,48 @@ export class OcrSettingsService {
     };
   }
 
+  private async stored(): Promise<OcrStoredConfig | null> {
+    const row = await this.prisma.setting.findUnique({
+      where: { key: OCR_CONFIG_KEY },
+    });
+    return isObj(row?.value) ? (row.value as OcrStoredConfig) : null;
+  }
+
+  /** Endpoint y clave de Azure (panel > AZURE_OCR_ENDPOINT / AZURE_OCR_KEY); null si falta algo. */
+  async getAzureCredentials(): Promise<AzureOcrCredentials | null> {
+    const stored = await this.stored();
+    const endpoint =
+      stored?.azureEndpoint ||
+      this.config.get<string>('AZURE_OCR_ENDPOINT') ||
+      '';
+    let key: string | undefined;
+    if (stored?.azureKeyEnc) {
+      try {
+        key = this.crypto.decrypt(stored.azureKeyEnc);
+      } catch {
+        key = undefined; // TOKEN_ENC_KEY cambió o dato dañado
+      }
+    }
+    key ??= this.config.get<string>('AZURE_OCR_KEY') || undefined;
+    return endpoint && key ? { endpoint, key } : null;
+  }
+
+  /** Vista segura para la web: endpoint y si hay clave, nunca la clave. */
+  async getAzurePublic(): Promise<{
+    azureEndpoint: string;
+    claveAzure: boolean;
+  }> {
+    const stored = await this.stored();
+    const creds = await this.getAzureCredentials();
+    return {
+      azureEndpoint:
+        stored?.azureEndpoint ||
+        this.config.get<string>('AZURE_OCR_ENDPOINT') ||
+        '',
+      claveAzure: !!creds,
+    };
+  }
+
   /** Configuración vigente, con caché hasta el próximo `save`. */
   async getEffective(): Promise<OcrEffectiveConfig> {
     if (this.cache) return this.cache;
@@ -126,10 +187,35 @@ export class OcrSettingsService {
       visionRetry: raw.visionRetry,
       visionMaxRegions: raw.visionMaxRegions,
       renderDpi: raw.renderDpi,
+      azureEndpoint: raw.azureEndpoint,
+      claveAzure: raw.claveAzure,
     };
+    if (input.azureEndpoint !== undefined) {
+      let ok = false;
+      try {
+        const u = new URL(String(input.azureEndpoint).trim());
+        ok = u.protocol === 'https:' || u.protocol === 'http:';
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        throw new BadRequestException(
+          'La dirección de Azure debe empezar con https:// (por ejemplo https://mi-recurso.cognitiveservices.azure.com)',
+        );
+      }
+    }
+    if (input.claveAzure !== undefined && input.claveAzure !== null) {
+      const t =
+        typeof input.claveAzure === 'string' ? input.claveAzure.trim() : '';
+      if (!t || t.length > 500) {
+        throw new BadRequestException(
+          'La clave de Azure no es válida (para borrarla envía null)',
+        );
+      }
+    }
     if (input.motor !== undefined && !OCR_MOTORS.includes(input.motor)) {
       throw new BadRequestException(
-        'Motor de OCR no válido (local, textract o ninguno)',
+        'Motor de OCR no válido (local, textract, azure o ninguno)',
       );
     }
     if (
@@ -173,12 +259,11 @@ export class OcrSettingsService {
       input.textractMode !== undefined ||
       input.visionRetry !== undefined ||
       input.visionMaxRegions !== undefined ||
-      input.renderDpi !== undefined
+      input.renderDpi !== undefined ||
+      input.azureEndpoint !== undefined ||
+      input.claveAzure !== undefined
     ) {
-      const row = await this.prisma.setting.findUnique({
-        where: { key: OCR_CONFIG_KEY },
-      });
-      const prev = isObj(row?.value) ? (row.value as OcrStoredConfig) : {};
+      const prev = (await this.stored()) ?? {};
       const next: OcrStoredConfig = { ...prev };
       if (input.motor !== undefined) next.motor = input.motor;
       if (input.textractMode !== undefined)
@@ -187,6 +272,13 @@ export class OcrSettingsService {
       if (input.visionMaxRegions !== undefined)
         next.visionMaxRegions = input.visionMaxRegions;
       if (input.renderDpi !== undefined) next.renderDpi = input.renderDpi;
+      if (input.azureEndpoint !== undefined)
+        next.azureEndpoint = String(input.azureEndpoint)
+          .trim()
+          .replace(/\/+$/, '');
+      if (input.claveAzure === null) delete next.azureKeyEnc;
+      else if (typeof input.claveAzure === 'string')
+        next.azureKeyEnc = this.crypto.encrypt(input.claveAzure.trim());
       const value = JSON.parse(JSON.stringify(next)) as Prisma.InputJsonObject;
       await this.prisma.setting.upsert({
         where: { key: OCR_CONFIG_KEY },

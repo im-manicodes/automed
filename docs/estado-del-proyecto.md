@@ -355,3 +355,7 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 ## Auto-despliegue en Dokploy
 - Hecho: job `deploy` en `.github/workflows/docker-image.yml` (solo push a `main`, tras `build`): `POST` al webhook de Dokploy con el secreto de repositorio `DOKPLOY_WEBHOOK_URL`.
 - Falta (manual): crear el secreto en GitHub (Settings -> Secrets and variables -> Actions); la app de Dokploy debe usar la imagen `ghcr.io/flotuz/automed:latest`.
+
+## Motor OCR Azure Document Intelligence (2026-10-09)
+- Hecho: tercer motor `azure` (modelo `prebuilt-read`, impreso y manuscrito; API REST `2024-11-30` con `fetch`, sin SDK) como alternativa a Textract: `AzureOcrEngineService` + `azure-mapper.ts` (`apps/api/src/ocr`), `DynamicOcrEngine` lo elige en caliente, `OcrProbeService` lo prueba. Dirección del recurso y clave en `Setting` `ocr.config` (clave cifrada AES-GCM, jamás devuelta; `GET /api/settings/ocr` solo da `azureEndpoint` y `claveAzure: boolean`; `PUT` acepta `azureEndpoint` y `claveAzure` string|null). `AZURE_OCR_ENDPOINT`/`AZURE_OCR_KEY` solo como valores por defecto. Web: opción «Azure Document Intelligence» en Ajustes -> OCR y en `/bienvenida` (`CamposAzure`, `cambiosAzure`, `faltaParaOcr`). `OcrPage.engine` guarda `azure`.
+- Falta: probar con un recurso real de Azure y manuscrito real; la confianza por línea es el promedio de sus palabras (Azure no la da por línea).

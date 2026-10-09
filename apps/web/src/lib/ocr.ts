@@ -1,4 +1,4 @@
-import type { AjustesIa, AjustesOcr, CambiosAjustesIa, MotorOcr } from './api'
+import type { AjustesIa, AjustesOcr, CambiosAjustesIa, CambiosAjustesOcr, MotorOcr } from './api'
 
 /** Claves de AWS que el usuario va editando. undefined = sin cambios, string = nuevas, null = quitar. */
 export interface ClavesAws {
@@ -6,9 +6,16 @@ export interface ClavesAws {
   secreto?: string | null
 }
 
+/** Datos de Azure que el usuario va editando. undefined = sin cambios; clave null = quitarla. */
+export interface ClavesAzure {
+  endpoint?: string
+  clave?: string | null
+}
+
 export const OPCIONES_OCR: { id: MotorOcr; nombre: string; descripcion: string }[] = [
   { id: 'local', nombre: 'En mi computador', descripcion: 'Gratis y privado: la app lo instala en tu propio servidor (una vez, con internet) y el contenido no sale de ahí.' },
   { id: 'textract', nombre: 'Amazon Textract', descripcion: 'Servicio de AWS, muy preciso con letra manuscrita. Necesita credenciales de AWS.' },
+  { id: 'azure', nombre: 'Azure Document Intelligence', descripcion: 'Servicio de Microsoft Azure, también muy preciso con letra manuscrita. Necesita la dirección y una clave de tu recurso de Azure.' },
   { id: 'ninguno', nombre: 'Configurar después', descripcion: 'Los PDF normales se leen igual; una página escaneada pedirá configurar esto.' },
 ]
 
@@ -31,8 +38,18 @@ export function awsIncompleta(c: ClavesAws): boolean {
   return !a || !s
 }
 
+/** Cambios de PUT /settings/ocr para Azure (solo lo que difiere de lo guardado), o null si no hay. */
+export function cambiosAzure(c: ClavesAzure, actual: Pick<AjustesOcr, 'azureEndpoint'>): Pick<CambiosAjustesOcr, 'azureEndpoint' | 'claveAzure'> | null {
+  const out: Pick<CambiosAjustesOcr, 'azureEndpoint' | 'claveAzure'> = {}
+  const endpoint = c.endpoint?.trim()
+  if (endpoint && endpoint !== actual.azureEndpoint) out.azureEndpoint = endpoint
+  if (c.clave === null) out.claveAzure = null
+  else if (typeof c.clave === 'string' && c.clave.trim()) out.claveAzure = c.clave.trim()
+  return Object.keys(out).length ? out : null
+}
+
 /** ¿Falta algo para poder usar el motor elegido? Devuelve el motivo o null. */
-export function faltaParaOcr(motor: MotorOcr, a: AjustesOcr, ia: Pick<AjustesIa, 'claves'>, claves: ClavesAws): string | null {
+export function faltaParaOcr(motor: MotorOcr, a: AjustesOcr, ia: Pick<AjustesIa, 'claves'>, claves: ClavesAws, azure: ClavesAzure = {}): string | null {
   if (motor === 'local') {
     // Mientras se instala o arranca se puede seguir: la instalación continúa en segundo plano.
     const { estado } = a.servicioLocal
@@ -46,6 +63,12 @@ export function faltaParaOcr(motor: MotorOcr, a: AjustesOcr, ia: Pick<AjustesIa,
     if (nuevas?.claveAwsAccessKeyId) return null
     if (claves.accessKeyId === null) return 'Escribe las claves de AWS o elige otra opción.'
     return ia.claves.aws ? null : 'Escribe las claves de AWS o elige otra opción.'
+  }
+  if (motor === 'azure') {
+    if (!(azure.endpoint ?? a.azureEndpoint).trim()) return 'Escribe la dirección de tu recurso de Azure.'
+    if (azure.clave === null) return 'Escribe la clave de Azure o elige otra opción.'
+    if (typeof azure.clave === 'string' && !azure.clave.trim()) return 'Escribe la clave de Azure o elige otra opción.'
+    return azure.clave === undefined && !a.claveAzure ? 'Escribe la clave de Azure o elige otra opción.' : null
   }
   return null
 }

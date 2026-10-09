@@ -20,7 +20,7 @@ export interface OcrPageResult {
   lines?: OcrWord[];
 }
 
-/** Motor OCR intercambiable (OCR_ENGINE=local|textract). */
+/** Motor OCR intercambiable (local|textract|azure). */
 export interface OcrEngine {
   readonly name: string;
   recognize(image: Uint8Array, pageNumber: number): Promise<OcrPageResult>;

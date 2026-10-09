@@ -33,6 +33,7 @@ export class OcrSettingsController {
       visionRetry: eff.visionRetry,
       visionMaxRegions: eff.visionMaxRegions,
       renderDpi: eff.renderDpi,
+      ...(await this.settings.getAzurePublic()),
       entorno: { servidor: true },
       servicioLocal: await this.probeService.serverLocalStatus(),
     };

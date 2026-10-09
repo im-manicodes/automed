@@ -10,16 +10,19 @@ function make(env: Record<string, string> = {}) {
   const settings = { getEffective: jest.fn(() => Promise.resolve(eff)) };
   const local = { recognize: jest.fn().mockResolvedValue(page) };
   const textract = { recognize: jest.fn().mockResolvedValue(page) };
+  const azure = { recognize: jest.fn().mockResolvedValue(page) };
   const engine = new DynamicOcrEngine(
     { get: (k: string) => env[k] } as never,
     settings as never,
     local as never,
     textract as never,
+    azure as never,
   );
   return {
     engine,
     local,
     textract,
+    azure,
     set: (e: any) => (eff = { ...eff, ...e }),
   };
 }
@@ -58,5 +61,14 @@ describe('DynamicOcrEngine', () => {
     );
     expect(local.recognize).not.toHaveBeenCalled();
     expect(textract.recognize).not.toHaveBeenCalled();
+  });
+
+  it('azure: delega en Azure y lo registra como motor', async () => {
+    const { engine, azure, local, set } = make();
+    set({ motor: 'azure' });
+    await engine.recognize(img, 3);
+    expect(azure.recognize).toHaveBeenCalledWith(img, 3);
+    expect(local.recognize).not.toHaveBeenCalled();
+    expect(engine.name).toBe('azure');
   });
 });

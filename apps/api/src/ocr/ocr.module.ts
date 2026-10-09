@@ -16,6 +16,7 @@ import { DynamicOcrEngine } from './dynamic-ocr-engine.service';
 import { OcrProbeService } from './ocr-probe.service';
 import { OcrInstallerService } from './ocr-installer.service';
 import { OcrSupervisorService } from './ocr-supervisor.service';
+import { AzureOcrEngineService } from './azure-ocr-engine.service';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { OcrSupervisorService } from './ocr-supervisor.service';
     OcrProbeService,
     OcrInstallerService,
     OcrSupervisorService,
+    AzureOcrEngineService,
   ],
   exports: [ATTACHMENT_PROCESSOR, OCR_ENGINE, PdfRasterizerService],
 })

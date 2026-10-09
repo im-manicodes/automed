@@ -11,7 +11,7 @@ import type {
   OcrLocal,
   PruebaOcrResultado,
 } from '../lib/api'
-import { cambiosAws, type AvanzadoOcr, type ClavesAws } from '../lib/ocr'
+import { cambiosAws, cambiosAzure, type AvanzadoOcr, type ClavesAws, type ClavesAzure } from '../lib/ocr'
 
 type Callbacks<T> = { onSuccess?: (data: T) => void; onError?: (message: string) => void }
 
@@ -60,7 +60,8 @@ export function useDesinstalarOcrLocal(cb: Callbacks<OcrLocal> = {}) {
 
 /**
  * Aplica la lectura de PDFs: primero las claves de AWS nuevas (PUT /settings/ia, solo con Textract)
- * y luego el motor (PUT /settings/ocr; omitido si no cambió, salvo `forzar`).
+ * y luego el motor, con la dirección y clave de Azure si cambiaron (PUT /settings/ocr; omitido si
+ * no cambió, salvo `forzar`).
  */
 export function useAplicarOcr() {
   const ocr = useGuardarAjustesOcr()
@@ -68,15 +69,16 @@ export function useAplicarOcr() {
   const { mutate: guardarOcr } = ocr
   const { mutate: guardarIa } = ia
   const aplicar = useCallback(
-    async (o: { motor: MotorOcr; actual: AjustesOcr; claves: ClavesAws; forzar?: boolean; avanzado?: AvanzadoOcr }) => {
+    async (o: { motor: MotorOcr; actual: AjustesOcr; claves: ClavesAws; azure?: ClavesAzure; forzar?: boolean; avanzado?: AvanzadoOcr }) => {
       let nuevoIa: AjustesIa | null = null
       let nuevoOcr: AjustesOcr | null = null
       const cambios = o.motor === 'textract' ? cambiosAws(o.claves) : null
       if (cambios) nuevoIa = await guardarIa({ body_params: cambios })
       const avanzado = o.avanzado
       const avanzadoCambio = !!avanzado && (Object.keys(avanzado) as (keyof AvanzadoOcr)[]).some((k) => avanzado[k] !== o.actual[k])
-      if (o.forzar || avanzadoCambio || o.motor !== o.actual.motor) {
-        nuevoOcr = await guardarOcr({ body_params: { motor: o.motor, ...(avanzado ?? {}) } })
+      const azure = o.motor === 'azure' ? cambiosAzure(o.azure ?? {}, o.actual) : null
+      if (o.forzar || avanzadoCambio || azure || o.motor !== o.actual.motor) {
+        nuevoOcr = await guardarOcr({ body_params: { motor: o.motor, ...(avanzado ?? {}), ...(azure ?? {}) } })
       }
       return { ocr: nuevoOcr, ia: nuevoIa }
     },

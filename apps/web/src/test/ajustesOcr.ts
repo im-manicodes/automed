@@ -8,6 +8,8 @@ export const ajustesOcr = (o: Partial<AjustesOcr> = {}): AjustesOcr => ({
   visionRetry: true,
   visionMaxRegions: 40,
   renderDpi: 200,
+  azureEndpoint: '',
+  claveAzure: false,
   entorno: { servidor: true },
   servicioLocal: { estado: 'detenido' },
   ...o,

@@ -1,9 +1,10 @@
 import { LuInfo } from 'react-icons/lu'
 import type { AjustesOcr, MotorOcr } from '../../lib/api'
-import type { AvanzadoOcr as ValorAvanzado, ClavesAws } from '../../lib/ocr'
+import type { AvanzadoOcr as ValorAvanzado, ClavesAws, ClavesAzure } from '../../lib/ocr'
 import AvanzadoOcr from './AvanzadoOcr'
 import BotonProbarOcr from './BotonProbarOcr'
 import CamposAws from './CamposAws'
+import CamposAzure from './CamposAzure'
 import PanelServicioOcr from './PanelServicioOcr'
 import SelectorOcr from './SelectorOcr'
 
@@ -16,7 +17,10 @@ interface Props {
   claves: ClavesAws
   onClaves: (c: ClavesAws) => void
   onRecheck: () => Promise<unknown> | void
-  /** Guarda las claves escritas antes de probar Textract. */
+  /** Dirección y clave de Azure que el usuario va escribiendo. */
+  azure?: ClavesAzure
+  onAzure?: (c: ClavesAzure) => void
+  /** Guarda las claves escritas antes de probar Textract o Azure. */
   antesDeProbar?: () => Promise<unknown>
   /** Ajustes avanzados (releer con IA, calidad); si falta, no se muestran. */
   avanzado?: ValorAvanzado
@@ -24,7 +28,7 @@ interface Props {
 }
 
 /** Selector de lectura de PDFs escaneados con el detalle de la opción elegida. */
-export default function ConfigOcr({ ajustes, motor, onMotor, awsGuardada, claves, onClaves, onRecheck, antesDeProbar, avanzado, onAvanzado }: Props) {
+export default function ConfigOcr({ ajustes, motor, onMotor, awsGuardada, claves, onClaves, azure = {}, onAzure, onRecheck, antesDeProbar, avanzado, onAvanzado }: Props) {
   return (
     <div className="space-y-4">
       <SelectorOcr value={motor} onChange={onMotor} entorno={ajustes.entorno} />
@@ -33,6 +37,12 @@ export default function ConfigOcr({ ajustes, motor, onMotor, awsGuardada, claves
         <div className="space-y-4">
           <CamposAws guardada={awsGuardada} value={claves} onChange={onClaves} />
           <BotonProbarOcr antes={antesDeProbar} />
+        </div>
+      )}
+      {motor === 'azure' && onAzure && (
+        <div className="space-y-4">
+          <CamposAzure endpointGuardado={ajustes.azureEndpoint} claveGuardada={ajustes.claveAzure} value={azure} onChange={onAzure} />
+          <BotonProbarOcr antes={antesDeProbar} etiqueta="Probar Azure" />
         </div>
       )}
       {motor !== 'ninguno' && avanzado && onAvanzado && <AvanzadoOcr motor={motor} valor={avanzado} onChange={onAvanzado} />}

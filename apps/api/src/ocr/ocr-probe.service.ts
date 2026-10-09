@@ -9,6 +9,7 @@ import { AiSettingsService } from '../settings/ai-settings.service';
 import { mapTestError } from '../settings/ai-test.service';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
 import { readOcrConfig } from './ocr-config';
+import { AzureOcrEngineService } from './azure-ocr-engine.service';
 import { OcrInstallerService } from './ocr-installer.service';
 import { OcrSupervisorService } from './ocr-supervisor.service';
 
@@ -47,6 +48,7 @@ export class OcrProbeService {
     private readonly ai: AiSettingsService,
     @Optional() private readonly installer?: OcrInstallerService,
     @Optional() private readonly supervisor?: OcrSupervisorService,
+    @Optional() private readonly azure?: AzureOcrEngineService,
   ) {}
 
   /** ¿La API instala y arranca el OCR local (no hay un servicio externo en OCR_LOCAL_URL)? */
@@ -149,6 +151,7 @@ export class OcrProbeService {
       );
     }
     if (motor === 'textract') return this.probeTextract(done);
+    if (motor === 'azure') return this.probeAzure(done);
     return this.probeLocal(done);
   }
 
@@ -171,6 +174,20 @@ export class OcrProbeService {
       if (DOC_ERRORS.test(name)) {
         return done(true, 'Amazon Textract respondió: las claves funcionan.');
       }
+      return done(false, mapTestError(e));
+    }
+  }
+
+  private async probeAzure(
+    done: (ok: boolean, m: string) => OcrProbeResult,
+  ): Promise<OcrProbeResult> {
+    try {
+      if (!this.azure) throw new Error('azure');
+      await this.azure.recognize(this.testImage(), 1);
+      return done(true, 'Azure Document Intelligence respondió bien.');
+    } catch (e) {
+      const m = String((e as { message?: string })?.message ?? '');
+      if (/^Falta la dirección/.test(m)) return done(false, m);
       return done(false, mapTestError(e));
     }
   }

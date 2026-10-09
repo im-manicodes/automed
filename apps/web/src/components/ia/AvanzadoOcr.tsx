@@ -30,7 +30,7 @@ export default function AvanzadoOcr({ motor, valor, onChange }: Props) {
             Releer con IA las partes dudosas (letra a mano)
           </label>
           <p className="text-sm text-slate-700">
-            <LuInfo className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Usa un modelo con visión (Ajustes → IA) y hace una llamada por parte dudosa; con AWS el contenido va a AWS.
+            <LuInfo className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Usa un modelo con visión (Ajustes → IA) y hace una llamada por parte dudosa; con AWS o Azure el contenido va a ese servicio.
           </p>
         </div>
 

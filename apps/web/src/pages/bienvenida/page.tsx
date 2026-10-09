@@ -16,7 +16,7 @@ import { useAjustesOcr, useAplicarOcr } from '../../hooks/useAjustesOcr'
 import type { AjustesIa, MotorOcr } from '../../lib/api'
 import { errorMessage } from '../../lib/format'
 import { borradorAlmacenamientoDesde, cuerpoAlmacenamiento, nombreAlmacenamiento, type BorradorAlmacenamiento } from '../../lib/almacenamiento'
-import { avanzadoDesde, avanzadoValido, faltaParaOcr, nombreMotorOcr, type AvanzadoOcr } from '../../lib/ocr'
+import { avanzadoDesde, avanzadoValido, faltaParaOcr, nombreMotorOcr, type AvanzadoOcr, type ClavesAzure } from '../../lib/ocr'
 import { borradorDesde, cambiosDesde, conProveedor, faltaClave, nombreProveedor, TAREAS, type BorradorIa } from '../../lib/ia'
 
 const TOTAL = 7
@@ -36,10 +36,11 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
   const ocr = useAjustesOcr({ enabled: paso >= PASO_OCR })
   const { aplicar, loading: guardandoOcr } = useAplicarOcr()
   const [avanzadoEditado, setAvanzadoEditado] = useState<AvanzadoOcr | null>(null)
+  const [azure, setAzure] = useState<ClavesAzure>({})
   const motor = motorElegido ?? ocr.data?.motor ?? 'ninguno'
   const claves = borrador.aws ?? {}
   const avanzado = avanzadoEditado ?? (ocr.data ? avanzadoDesde(ocr.data) : undefined)
-  const faltaOcr = ocr.data ? faltaParaOcr(motor, ocr.data, ajustes, claves) : null
+  const faltaOcr = ocr.data ? faltaParaOcr(motor, ocr.data, ajustes, claves, azure) : null
   const [usarServidor, setUsarServidor] = useState(false)
   const [eligio, setEligio] = useState(false)
   const [ollamaListo, setOllamaListo] = useState(false)
@@ -64,12 +65,15 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
   // Guarda la lectura de PDFs elegida (y las claves de AWS nuevas, solo con Textract).
   const guardarOcr = async () => {
     if (!ocr.data) return
-    const r = await aplicar({ motor, actual: ocr.data, claves, avanzado })
+    const r = await aplicar({ motor, actual: ocr.data, claves, azure, avanzado })
     if (r.ia) {
       setAjustes(r.ia)
       setBorrador((b) => ({ ...b, aws: undefined }))
     }
-    if (r.ocr) void ocr.refetch()
+    if (r.ocr) {
+      setAzure({})
+      void ocr.refetch()
+    }
   }
 
   const siguiente = async () => {
@@ -181,6 +185,8 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
                   awsGuardada={ajustes.claves.aws}
                   claves={claves}
                   onClaves={(aws) => setBorrador((b) => ({ ...b, aws }))}
+                  azure={azure}
+                  onAzure={setAzure}
                   onRecheck={() => ocr.refetch()}
                   antesDeProbar={guardarOcr}
                   avanzado={avanzado}
