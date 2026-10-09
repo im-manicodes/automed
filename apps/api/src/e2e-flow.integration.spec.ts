@@ -17,6 +17,7 @@ import {
 import { OcrService } from './ocr/ocr.service';
 import { PdfExtractClientService } from './ocr/pdf-extract-client.service';
 import { PdfRasterizerService } from './ocr/pdf-rasterizer.service';
+import { OcrSettingsService } from './settings/ocr-settings.service';
 import { VisionRetryService } from './ocr/vision-retry.service';
 import { OCR_ENGINE } from './ocr/ocr-engine.interface';
 import type { OcrEngine } from './ocr/ocr-engine.interface';
@@ -172,6 +173,17 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
           useValue: { get: (k: string, def?: unknown) => cfg[k] ?? def },
         },
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: OcrSettingsService,
+          useValue: {
+            getEffective: () =>
+              Promise.resolve({
+                visionRetry: false,
+                visionMaxRegions: 30,
+                renderDpi: 250,
+              }),
+          },
+        },
         { provide: StorageService, useValue: storage },
         { provide: GraphService, useValue: graph },
         SchedulerRegistry,

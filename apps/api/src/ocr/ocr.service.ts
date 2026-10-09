@@ -148,8 +148,8 @@ export class OcrService implements AttachmentProcessor {
     png: Uint8Array,
     regions: StoredRegion[],
   ): Promise<StoredRegion[]> {
-    if (!this.vision.enabled) return regions;
-    let budget = this.vision.maxRegions;
+    if (!(await this.vision.isEnabled())) return regions;
+    let budget = await this.vision.getMaxRegions();
     const out: StoredRegion[] = [];
     for (const r of regions) {
       if (r.status !== 'dudoso' || budget <= 0) {

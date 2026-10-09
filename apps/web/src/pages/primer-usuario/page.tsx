@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { LuTriangleAlert, LuUserPlus } from 'react-icons/lu'
 import { useSession } from '../../context/session-context'
-import { useCrearPrimerUsuario } from '../../hooks/useSetupStatus'
+import { useCrearPrimerUsuario, useSetupStatus } from '../../hooks/useSetupStatus'
 import { ApiError } from '../../lib/api'
 import { MIN_PASSWORD } from '../../lib/password'
 
 function mensajeError(e: unknown): string {
   if (e instanceof ApiError) {
+    if (e.status === 403) return 'El código de instalación no es correcto.'
     if (e.status === 409) return 'Ya hay un usuario creado. Entra con tu correo y tu contraseña.'
     if (e.status === 429) return 'Hubo demasiados intentos. Espera un minuto y vuelve a intentar.'
     if (e.status === 0) return e.message
@@ -19,6 +20,9 @@ function mensajeError(e: unknown): string {
 export default function PrimerUsuario() {
   const { aceptarSesion } = useSession()
   const { mutate } = useCrearPrimerUsuario()
+  const { data: estado } = useSetupStatus()
+  const pideCodigo = estado?.requiresToken === true
+  const [codigo, setCodigo] = useState('')
   const [email, setEmail] = useState('')
   const [nombre, setNombre] = useState('')
   const [password, setPassword] = useState('')
@@ -37,10 +41,14 @@ export default function PrimerUsuario() {
       setMsg(`La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.`)
       return
     }
+    if (pideCodigo && !codigo.trim()) {
+      setMsg('Escribe el código de instalación.')
+      return
+    }
     setBusy(true)
     setMsg(null)
     try {
-      const r = await mutate({ body_params: { email: email.trim(), nombre: nombre.trim(), password } })
+      const r = await mutate({ body_params: { email: email.trim(), nombre: nombre.trim(), password, ...(pideCodigo ? { setupToken: codigo.trim() } : {}) } })
       aceptarSesion(r.user)
     } catch (err) {
       setMsg(mensajeError(err))
@@ -85,6 +93,14 @@ export default function PrimerUsuario() {
           </div>
           <p id="nuevo-password-ayuda" className="text-sm text-slate-700">Mínimo {MIN_PASSWORD} caracteres.</p>
         </div>
+        {pideCodigo && (
+          <div className="space-y-1">
+            <label htmlFor="nuevo-codigo" className="block font-semibold">Código de instalación</label>
+            <input id="nuevo-codigo" name="setupToken" type="password" autoComplete="off" required aria-describedby="nuevo-codigo-ayuda"
+              className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-lg" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+            <p id="nuevo-codigo-ayuda" className="text-sm text-slate-700">Es el valor de SETUP_TOKEN de tu archivo .env.</p>
+          </div>
+        )}
         <button type="submit" className="btn w-full text-lg" disabled={busy}>{busy ? 'Creando…' : 'Crear usuario y entrar'}</button>
       </form>
     </main>

@@ -61,7 +61,7 @@ export function readLlmConfig(config: {
     timeoutMs: num(get('LLM_TIMEOUT_MS'), 120000),
     maxRetries: num(get('LLM_MAX_RETRIES'), 3),
     retryBaseMs: num(get('LLM_RETRY_BASE_MS'), 1000),
-    defaultMaxTokens: num(get('LLM_MAX_OUTPUT_TOKENS'), 8000),
+    defaultMaxTokens: num(get('LLM_MAX_OUTPUT_TOKENS'), 16000),
     temperature: num(get('LLM_TEMPERATURE'), 0.2),
   };
 }

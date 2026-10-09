@@ -7,7 +7,7 @@ import { useToast } from '../../../context/toasts-context'
 import { useAjustesOcr, useAplicarOcr } from '../../../hooks/useAjustesOcr'
 import type { AjustesIa, MotorOcr } from '../../../lib/api'
 import { errorMessage } from '../../../lib/format'
-import { faltaParaOcr, type ClavesAws } from '../../../lib/ocr'
+import { avanzadoDesde, avanzadoValido, faltaParaOcr, type AvanzadoOcr, type ClavesAws } from '../../../lib/ocr'
 
 interface Props {
   ajustesIa: AjustesIa
@@ -23,16 +23,19 @@ export default function TarjetaOcr({ ajustesIa, claves, onClaves, onGuardadoIa }
   const ocr = useAjustesOcr()
   const { aplicar, loading } = useAplicarOcr()
   const [elegido, setElegido] = useState<MotorOcr | null>(null)
+  const [avanzadoEditado, setAvanzadoEditado] = useState<AvanzadoOcr | null>(null)
 
   const motor = elegido ?? ocr.data?.motor ?? 'ninguno'
+  const avanzado = avanzadoEditado ?? (ocr.data ? avanzadoDesde(ocr.data) : undefined)
   const falta = ocr.data ? faltaParaOcr(motor, ocr.data, ajustesIa, claves) : null
 
   const guardar = async () => {
     if (!ocr.data) return
-    const r = await aplicar({ motor, actual: ocr.data, claves, forzar: true })
+    const r = await aplicar({ motor, actual: ocr.data, claves, forzar: true, avanzado })
     if (r.ia) onGuardadoIa(r.ia)
     await ocr.refetch()
     setElegido(null)
+    setAvanzadoEditado(null)
   }
 
   const guardarYAvisar = async () => {
@@ -60,9 +63,11 @@ export default function TarjetaOcr({ ajustesIa, claves, onClaves, onGuardadoIa }
             onClaves={onClaves}
             onRecheck={() => ocr.refetch()}
             antesDeProbar={guardar}
+            avanzado={avanzado}
+            onAvanzado={setAvanzadoEditado}
           />
           {falta && <p role="status" className="text-sm text-amber-900">{falta}</p>}
-          <button type="button" className="btn w-full" disabled={loading || falta !== null} onClick={() => void guardarYAvisar()}>
+          <button type="button" className="btn w-full" disabled={loading || falta !== null || (!!avanzado && !avanzadoValido(avanzado))} onClick={() => void guardarYAvisar()}>
             <LuSave className="size-5" aria-hidden />{loading ? 'Guardando…' : 'Guardar lectura de PDFs'}
           </button>
         </>

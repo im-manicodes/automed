@@ -9,11 +9,11 @@ afterEach(() => vi.unstubAllGlobals())
 
 const yo = { id: '1', email: 'ana@clinica.mx', nombre: 'Ana' }
 
-function renderApp(setup: MockHandler) {
+function renderApp(setup: MockHandler, requiresToken = false) {
   const f = mockFetch({
     'GET /api/auth/me': { body: { authenticated: false } },
     'POST /api/auth/refresh': { status: 401, body: {} },
-    'GET /api/auth/setup-status': { body: { needsSetup: true } },
+    'GET /api/auth/setup-status': { body: { needsSetup: true, requiresToken } },
     'POST /api/auth/setup': setup,
   })
   render(
@@ -45,6 +45,17 @@ describe('Primer usuario', () => {
     await waitFor(() => expect(screen.getByText('Dentro de la app')).toBeInTheDocument())
     const post = f.mock.calls.find(([u]) => String(u) === '/api/auth/setup')
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ email: 'ana@clinica.mx', nombre: 'Ana', password: 'una-clave-larga-1' })
+  })
+
+  it('pide el código de instalación cuando el servidor lo exige y lo envía', async () => {
+    const f = renderApp({ body: { user: yo } }, true)
+    const user = userEvent.setup()
+    await llenar(user)
+    await user.type(await screen.findByLabelText('Código de instalación'), 'abc123')
+    await user.click(screen.getByRole('button', { name: 'Crear usuario y entrar' }))
+    await waitFor(() => expect(screen.getByText('Dentro de la app')).toBeInTheDocument())
+    const post = f.mock.calls.find(([u]) => String(u) === '/api/auth/setup')
+    expect(JSON.parse(String(post?.[1]?.body)).setupToken).toBe('abc123')
   })
 
   it('exige 10 caracteres y no llama al servidor', async () => {

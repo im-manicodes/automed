@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { ToastProvider } from '../../context/toasts'
 import { ajustesIa, hardwareIa, hardwareSinModelo, hardwareSinOllama } from '../../test/ajustesIa'
+import { ajustesAlmacenamiento } from '../../test/ajustesAlmacenamiento'
 import { ajustesOcr } from '../../test/ajustesOcr'
 import { callsOf, mockFetch, type MockHandler } from '../../test/mockFetch'
 import Bienvenida from './page'
@@ -31,6 +32,7 @@ const puts = (f: ReturnType<typeof mockFetch>) =>
 
 function rutas(hw: MockHandler = { body: hardwareIa() }, ocr: MockHandler = { body: ajustesOcr() }) {
   return {
+    'GET /api/settings/storage': { body: ajustesAlmacenamiento() },
     'GET /api/settings/ocr': ocr,
     'PUT /api/settings/ocr': (req: { body: unknown }) => ({ body: ajustesOcr({ motor: (req.body as { motor: 'local' | 'textract' | 'ninguno' }).motor }) }),
     'GET /api/settings/ia': { body: ajustesIa() },
@@ -63,6 +65,10 @@ describe('Asistente de bienvenida', () => {
 
     // Paso de lectura de PDFs escaneados: se deja para después.
     expect(await screen.findByText('¿Cómo leemos tus PDFs escaneados?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+
+    // Paso de almacenamiento: ya configurado, se puede continuar.
+    expect(await screen.findByText('¿Dónde guardamos tus archivos?')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
 
     expect(screen.getByText('Todo listo')).toBeInTheDocument()
@@ -103,6 +109,8 @@ describe('Asistente de bienvenida', () => {
     await user.click(screen.getByRole('radio', { name: /configuración actual del servidor/ }))
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
     await screen.findByText('¿Cómo leemos tus PDFs escaneados?')
+    await user.click(await screen.findByRole('button', { name: /Siguiente/ }))
+    await screen.findByText('¿Dónde guardamos tus archivos?')
     await user.click(await screen.findByRole('button', { name: /Siguiente/ }))
     await user.click(await screen.findByRole('button', { name: 'Ir a mis tickets' }))
     await waitFor(() => expect(screen.getByTestId('ubicacion')).toHaveTextContent('/tickets'))

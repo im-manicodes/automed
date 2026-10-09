@@ -20,6 +20,9 @@ export const AI_PROVIDERS: readonly LlmProviderName[] = [
 
 export const MIN_MAX_INPUT_TOKENS = 2000;
 const DEFAULT_MAX_INPUT_TOKENS = 60000;
+export const MIN_MAX_OUTPUT_TOKENS = 1000;
+export const MAX_MAX_OUTPUT_TOKENS = 64000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
 
 /** Lo que se guarda en `Setting` `ia.config` (solo lo que el panel fijó; claves cifradas). */
 export interface AiStoredConfig {
@@ -28,6 +31,7 @@ export interface AiStoredConfig {
   ollamaUrl?: string;
   awsRegion?: string;
   maxInputTokens?: number;
+  maxOutputTokens?: number;
   openaiKeyEnc?: string;
   anthropicKeyEnc?: string;
   awsAccessKeyIdEnc?: string;
@@ -41,6 +45,7 @@ export interface AiEffectiveConfig {
   ollamaUrl: string;
   awsRegion: string;
   maxInputTokens: number;
+  maxOutputTokens: number;
   origen: 'panel' | 'servidor';
   /** Config lista para los adaptadores (incluye claves en claro). */
   llm: LlmConfig;
@@ -60,6 +65,7 @@ export interface AiPublicSettings {
   ollamaUrl: string;
   awsRegion: string;
   maxInputTokens: number;
+  maxOutputTokens: number;
   claves: { openai: boolean; anthropic: boolean; aws: boolean };
   sugeridos: Record<LlmProviderName, AiSuggestedModels>;
 }
@@ -71,6 +77,7 @@ export interface AiSettingsInput {
   ollamaUrl?: string;
   awsRegion?: string;
   maxInputTokens?: number;
+  maxOutputTokens?: number;
   claveOpenai?: string | null;
   claveAnthropic?: string | null;
   /** Las dos claves de AWS van juntas: ambas con valor, o ambas null para borrarlas. */
@@ -190,6 +197,17 @@ export class AiSettingsService {
         : Number.isFinite(envTokens) && envTokens >= MIN_MAX_INPUT_TOKENS
           ? envTokens
           : DEFAULT_MAX_INPUT_TOKENS;
+    const okOut = (n: unknown): n is number =>
+      typeof n === 'number' &&
+      Number.isInteger(n) &&
+      n >= MIN_MAX_OUTPUT_TOKENS &&
+      n <= MAX_MAX_OUTPUT_TOKENS;
+    const envOut = Number(this.config.get<string>('LLM_MAX_OUTPUT_TOKENS'));
+    const maxOutputTokens = okOut(stored?.maxOutputTokens)
+      ? stored.maxOutputTokens
+      : okOut(envOut)
+        ? envOut
+        : DEFAULT_MAX_OUTPUT_TOKENS;
     const openaiApiKey =
       this.decryptKey(stored?.openaiKeyEnc) ?? env.openaiApiKey;
     const anthropicApiKey =
@@ -201,6 +219,7 @@ export class AiSettingsService {
       ollamaUrl,
       awsRegion,
       maxInputTokens,
+      maxOutputTokens,
       origen: stored ? 'panel' : 'servidor',
       llm: {
         ...env,
@@ -211,6 +230,7 @@ export class AiSettingsService {
         anthropicApiKey,
         ollamaBaseUrl: ollamaUrl,
         awsRegion,
+        defaultMaxTokens: maxOutputTokens,
         ...(awsCredentials ? { awsCredentials } : {}),
       },
     };
@@ -262,6 +282,7 @@ export class AiSettingsService {
       ollamaUrl: e.ollamaUrl,
       awsRegion: e.awsRegion,
       maxInputTokens: e.maxInputTokens,
+      maxOutputTokens: e.maxOutputTokens,
       claves: {
         openai: !!e.llm.openaiApiKey,
         anthropic: !!e.llm.anthropicApiKey,
@@ -350,6 +371,20 @@ export class AiSettingsService {
         );
       }
       next.maxInputTokens = n;
+      touchesConfig = true;
+    }
+    if (input.maxOutputTokens !== undefined) {
+      const n = input.maxOutputTokens;
+      if (
+        !Number.isInteger(n) ||
+        n < MIN_MAX_OUTPUT_TOKENS ||
+        n > MAX_MAX_OUTPUT_TOKENS
+      ) {
+        throw new BadRequestException(
+          `La longitud máxima de cada resumen debe ser un número entero entre ${MIN_MAX_OUTPUT_TOKENS} y ${MAX_MAX_OUTPUT_TOKENS} tokens`,
+        );
+      }
+      next.maxOutputTokens = n;
       touchesConfig = true;
     }
     for (const [field, enc, label] of [

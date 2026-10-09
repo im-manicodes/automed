@@ -1,6 +1,10 @@
 import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { SynthesisService } from './synthesis.service';
-import { sanearParaWhatsApp } from './whatsapp-format';
+import { sanearParaWhatsApp, WHATSAPP_MAX_CHARS } from './whatsapp-format';
+import {
+  DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN,
+  validateWhatsappTemplate,
+} from '../templates/template-kinds';
 
 function setup(messages: any[], pages: any[] = []) {
   const prisma: any = {
@@ -88,6 +92,8 @@ describe('SynthesisService.whatsappLast', () => {
     // las reglas de seguridad no editables siguen en el system prompt
     expect(system).toContain('NO inventes nada');
     expect(system).toContain('adjunto sin leer');
+    expect(system).toContain('_Falta: ...');
+    expect(s.llm.text.mock.calls[0][2]).toMatchObject({ maxTokens: 2000 });
   });
 
   it('preview whatsapp usa el formato propuesto y el correo de ejemplo', async () => {
@@ -98,6 +104,7 @@ describe('SynthesisService.whatsappLast', () => {
     expect(user).toContain('FORMATO_PROPUESTO');
     expect(user).toContain('Cotización de mantenimiento');
     expect(r.markdown).toBeTruthy();
+    expect(s.llm.text.mock.calls[0][2]).toMatchObject({ maxTokens: 2000 });
     expect(s.templates.getActive).not.toHaveBeenCalled();
   });
 
@@ -126,9 +133,58 @@ describe('sanearParaWhatsApp', () => {
       ),
     ).toBe('*Título*\n*a* y b (http://x)\n• uno\n• A | B\n• 1 | 2');
   });
-  it('recorta a 1200 caracteres', () => {
-    const t = sanearParaWhatsApp('palabra '.repeat(400));
-    expect(t.length).toBeLessThanOrEqual(1202);
-    expect(t.endsWith('…')).toBe(true);
+  it('conserva `código` en línea sin tocar su contenido', () => {
+    expect(sanearParaWhatsApp('TA `120/70` y `a**b**c` __ok__')).toBe(
+      'TA `120/70` y `a**b**c` _ok_',
+    );
+  });
+  it('conserva bloques ``` tal cual', () => {
+    const t = sanearParaWhatsApp('Datos:\n```\n# no titulo\n- x\n```\nFin');
+    expect(t).toBe('Datos:\n```\n# no titulo\n- x\n```\nFin');
+  });
+  it('el límite por defecto es 3500 y corta en párrafo, no a media línea', () => {
+    expect(WHATSAPP_MAX_CHARS).toBe(3500);
+    const parr = 'linea completa de prueba. '.repeat(10).trim();
+    const t = sanearParaWhatsApp(Array(30).fill(parr).join('\n\n'));
+    expect(t.length).toBeLessThanOrEqual(WHATSAPP_MAX_CHARS + 2);
+    expect(t.endsWith('\n…')).toBe(true);
+    for (const l of t.replace(/\n…$/, '').split('\n').filter(Boolean))
+      expect(l).toBe(parr);
+  });
+  it('no deja un bloque ``` abierto al cortar', () => {
+    const t = sanearParaWhatsApp(
+      'intro\n\n```\n' + 'x\n'.repeat(100) + '```',
+      60,
+    );
+    expect((t.match(/```/g) ?? []).length % 2).toBe(0);
+  });
+  it('un texto corto no se recorta', () => {
+    expect(sanearParaWhatsApp('palabra '.repeat(300))).not.toContain('…');
+  });
+});
+
+describe('DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN', () => {
+  it('no contiene valores de ejemplo reales y valida', () => {
+    for (const bad of [
+      '312',
+      'apendicectom',
+      '120/70',
+      '117',
+      '11.2',
+      'Hab. 3',
+    ])
+      expect(DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN.toLowerCase()).not.toContain(
+        bad.toLowerCase(),
+      );
+    expect(
+      validateWhatsappTemplate(DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN),
+    ).toBeNull();
+    expect(DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN).toContain('{');
+    // ninguna cifra fuera de marcadores {…}, comentarios y fechas dd/mm
+    const sinMarcas = DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN.replace(
+      /<!--[\s\S]*?-->/g,
+      '',
+    ).replace(/\{[^}]*\}/g, '');
+    expect(sinMarcas.replace(/SatO2/g, '')).not.toMatch(/\d/);
   });
 });

@@ -18,25 +18,37 @@ describe('parseReportColumns', () => {
     ]);
   });
 
-  it('la plantilla por defecto es válida y trae las 14 columnas del plan', () => {
+  it('la plantilla por defecto es válida y trae las 21 columnas del censo A-U', () => {
     const r = parseReportColumns(DEFAULT_REPORT_TEMPLATE_MARKDOWN);
     expect(r.error).toBeNull();
+    expect(r.columnas).toHaveLength(21);
     expect(r.columnas.map((c) => c.nombre)).toEqual([
-      'Paciente',
-      'Hospital',
-      'Aseguradora/póliza',
-      'Folio/siniestro',
-      'Diagnóstico',
-      'Fecha de ingreso',
-      'Días de estancia',
-      'Estatus clínico',
-      'Autorización/carta de garantía',
-      'Monto/presupuesto',
-      'Pendientes con aseguradora',
-      'Pendientes con hospital',
-      'Próxima acción y responsable',
-      'Última novedad (fecha y texto)',
+      'REGION',
+      'LOCALIDAD',
+      'PRESTADOR DE SERVICIO',
+      'NUMERO DE CONTRATO',
+      'FECHA DE INGRESO (AAAA-MM-DD)',
+      'TIPO DE INGRESO',
+      'DIAS DE ESTANCIA HOSPITALARIA',
+      'ESTATUS DE LA HOSPITALIZACION (ACTIVA/ALTA)',
+      'FECHA DE REPORTE DE LA GESTIÓN OPERATIVA Y/O EGRESO',
+      'NOMBRE DEL PACIENTE HOSPITALIZADO (APELLIDOS NOMBRE)',
+      'FICHA',
+      'CODIFICACION',
+      'EDAD (AÑOS)',
+      'GENERO (MASCULINO/FEMENINO)',
+      'DIAGNOSTICO',
+      'CIE-10',
+      'ESPECIALIDAD',
+      'TIPO DE MANEJO (MEDICO/QUIRURGICO)',
+      'EVOLUCION INICIAL (DÍA 1)',
+      'PLAN DE MANEJO INTRAHOSPITALARIO',
+      'EVOLUCION',
     ]);
+    for (const c of r.columnas) {
+      expect(c.nombre.length).toBeLessThanOrEqual(60);
+      expect(c.instruccion.length).toBeLessThanOrEqual(400);
+    }
     expect(
       TEMPLATE_KINDS.reporte.validate(DEFAULT_REPORT_TEMPLATE_MARKDOWN),
     ).toBeNull();

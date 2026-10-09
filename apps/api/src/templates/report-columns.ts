@@ -92,19 +92,26 @@ export function validateReportTemplate(markdown: unknown): string | null {
 
 export const DEFAULT_REPORT_TEMPLATE_NAME = 'Columnas del reporte estándar';
 
-export const DEFAULT_REPORT_TEMPLATE_MARKDOWN = `<!-- Una columna por viñeta: "- Nombre de la columna: instrucción para la IA". Si un dato no aparece en el resumen, la celda queda vacía. -->
-- Paciente: Nombre completo del paciente.
-- Hospital: Hospital o clínica donde está hospitalizado.
-- Aseguradora/póliza: Aseguradora y número de póliza, si aparecen.
-- Folio/siniestro: Número de folio, siniestro o reclamo.
-- Diagnóstico: Diagnóstico o motivo de la hospitalización, en una frase.
-- Fecha de ingreso: Fecha de ingreso al hospital (AAAA-MM-DD).
-- Días de estancia: Días de estancia hasta hoy según el resumen, solo el número.
-- Estatus clínico: Estado clínico actual en una frase corta (p. ej. estable, en terapia intensiva, en recuperación).
-- Autorización/carta de garantía: Estado de la autorización o carta de garantía (autorizada, pendiente, rechazada) y fecha.
-- Monto/presupuesto: Monto o presupuesto mencionado, con moneda.
-- Pendientes con aseguradora: Lo que falta que responda o entregue la aseguradora.
-- Pendientes con hospital: Lo que falta que responda o entregue el hospital.
-- Próxima acción y responsable: Siguiente paso concreto y quién lo hace.
-- Última novedad (fecha y texto): Fecha y descripción breve de lo más reciente que ocurrió.
+export const DEFAULT_REPORT_TEMPLATE_MARKDOWN = `<!-- Una columna por viñeta: "- NOMBRE: instrucción para la IA". Censo de pacientes hospitalizados. Todo en MAYÚSCULAS; si un dato no aparece en el resumen, deja la celda vacía y no inventes. -->
+- REGION: Región o zona del convenio solo si el hilo la menciona; si no, vacío. En MAYÚSCULAS.
+- LOCALIDAD: Ciudad o localidad del hospital solo si aparece; si no, vacío. En MAYÚSCULAS.
+- PRESTADOR DE SERVICIO: Nombre del hospital o clínica donde está internado el paciente. En MAYÚSCULAS.
+- NUMERO DE CONTRATO: Número de contrato o convenio solo si aparece; si no, vacío.
+- FECHA DE INGRESO (AAAA-MM-DD): Fecha de ingreso al hospital en formato AAAA-MM-DD; vacío si no aparece.
+- TIPO DE INGRESO: Tipo de ingreso (URGENCIAS, PROGRAMADO, TRASLADO u otro que indique el hilo). En MAYÚSCULAS.
+- DIAS DE ESTANCIA HOSPITALARIA: Días de estancia desde el ingreso, solo el número; vacío si no hay fecha de ingreso.
+- ESTATUS DE LA HOSPITALIZACION (ACTIVA/ALTA): Escribe ACTIVA si el paciente sigue internado o ALTA si ya egresó.
+- FECHA DE REPORTE DE LA GESTIÓN OPERATIVA Y/O EGRESO: Fecha del último reporte o, si hubo alta, del egreso, en formato AAAA-MM-DD.
+- NOMBRE DEL PACIENTE HOSPITALIZADO (APELLIDOS NOMBRE): Nombre del paciente en orden APELLIDOS NOMBRE y en MAYÚSCULAS.
+- FICHA: Ficha, expediente o número de afiliación del paciente solo si aparece; si no, vacío.
+- CODIFICACION: Código o clave de codificación del caso solo si aparece; si no, vacío.
+- EDAD (AÑOS): Edad en años, solo el número.
+- GENERO (MASCULINO/FEMENINO): MASCULINO o FEMENINO; vacío si no se puede saber.
+- DIAGNOSTICO: Diagnóstico principal o motivo de la hospitalización, en una frase y en MAYÚSCULAS.
+- CIE-10: Código CIE-10 del diagnóstico solo si aparece; no lo deduzcas. Vacío si falta.
+- ESPECIALIDAD: Especialidad médica que lleva el caso (p. ej. CIRUGIA GENERAL, MEDICINA INTERNA). En MAYÚSCULAS.
+- TIPO DE MANEJO (MEDICO/QUIRURGICO): MEDICO si solo hay tratamiento médico; QUIRURGICO si hubo o se programó cirugía.
+- EVOLUCION INICIAL (DÍA 1): Evolución clínica del primer día: cuadro de ingreso, signos vitales y hallazgos principales, en pocas líneas y en MAYÚSCULAS.
+- PLAN DE MANEJO INTRAHOSPITALARIO: Plan de manejo vigente: dieta, soluciones, medicamentos, antibióticos y cuidados, en MAYÚSCULAS.
+- EVOLUCION: Una línea por día con formato "dd/mm/aa hh:mm H: evolución", separadas por salto de línea; de la más antigua a la más reciente.
 `;

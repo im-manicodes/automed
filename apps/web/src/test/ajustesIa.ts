@@ -8,6 +8,7 @@ export const ajustesIa = (o: Partial<AjustesIa> = {}): AjustesIa => ({
   ollamaUrl: 'http://localhost:11434/v1',
   awsRegion: 'us-east-1',
   maxInputTokens: 24000,
+  maxOutputTokens: 8000,
   claves: { openai: false, anthropic: false, aws: false },
   sugeridos: {
     ollama: { texto: ['qwen3-vl:4b-instruct'], vision: ['qwen3-vl:4b-instruct'] },

@@ -1,9 +1,11 @@
+# SOLO desarrollo (hot reload): web con Vite en http://localhost:5173, api con nest --watch.
+# El empaquetado de producción es otro (un único contenedor), no este compose.
 services:
   rustfs:
     image: rustfs/rustfs:latest
     environment:
-      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
-      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
     volumes:
       - rustfsdata:/data
     ports:
@@ -11,22 +13,35 @@ services:
       - "127.0.0.1:9001:9001"
 
   api:
+    image: auto-med-api-dev
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: apps/api/Dockerfile.dev
+    command: ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && pnpm --filter api dev"]
     env_file:
       - path: .env
         required: false
     environment:
       DATABASE_URL: ${DATABASE_URL_DOCKER:?Define DATABASE_URL_DOCKER en .env (ver .env.example)}
-      S3_ENDPOINT: http://rustfs:9000
+      PDF_TEXT_MODE: node
+      NODE_ENV: development
+      WEB_ORIGIN: http://localhost:5173
+      COOKIE_SECURE: ""
+      OCR_LOCAL_URL: http://ocr-local:8000
+      # Solo dev: apunta al RustFS del compose. Lo guardado en Ajustes -> Almacenamiento tiene prioridad.
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://rustfs:9000}
       S3_BUCKET: ${S3_BUCKET:-automed}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
-      S3_FORCE_PATH_STYLE: "true"
-      PDF_TEXT_MODE: node
-      WEB_ORIGIN: http://localhost:8080
-      OCR_LOCAL_URL: http://ocr-local:8000
+    volumes:
+      - ./apps/api/src:/repo/apps/api/src
+      - ./apps/api/prisma:/repo/apps/api/prisma
+      - ./apps/api/tsconfig.json:/repo/apps/api/tsconfig.json:ro
+      - ./apps/api/tsconfig.build.json:/repo/apps/api/tsconfig.build.json:ro
+      - ./apps/api/nest-cli.json:/repo/apps/api/nest-cli.json:ro
+      - ./apps/api/prisma.config.ts:/repo/apps/api/prisma.config.ts:ro
+      # Cliente Prisma generado (ignorado en git): vive en un volumen para que el bind mount de src no lo oculte.
+      - api-prisma-client:/repo/apps/api/src/generated
     # Ollama es el del host: su URL se configura en la web (Ajustes -> IA); host.docker.internal llega al host.
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -39,19 +54,33 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 40s
+      start_period: 120s   # prisma generate + migrate + primera compilación
     ports:
       - "127.0.0.1:3000:3000"
 
   web:
+    image: auto-med-web-dev
     build:
       context: .
-      dockerfile: apps/web/Dockerfile
+      dockerfile: apps/web/Dockerfile.dev
     depends_on:
       api:
         condition: service_healthy
     ports:
-      - "8080:80"
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://api:3000
+      # Pon CHOKIDAR_USEPOLLING=true en tu .env solo si el hot reload no detecta cambios.
+      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-}
+    volumes:
+      - ./apps/web/src:/repo/apps/web/src
+      - ./apps/web/public:/repo/apps/web/public
+      - ./apps/web/index.html:/repo/apps/web/index.html:ro
+      - ./apps/web/vite.config.ts:/repo/apps/web/vite.config.ts:ro
+      - ./apps/web/vitest.config.ts:/repo/apps/web/vitest.config.ts:ro
+      - ./apps/web/tsconfig.json:/repo/apps/web/tsconfig.json:ro
+      - ./apps/web/tsconfig.app.json:/repo/apps/web/tsconfig.app.json:ro
+      - ./apps/web/tsconfig.node.json:/repo/apps/web/tsconfig.node.json:ro
 
   # OCR local en CPU (PaddleOCR). Sin perfil: siempre activo en la versión web, para que
   # Ajustes -> OCR lo detecte (la API lo consulta en OCR_LOCAL_URL=http://ocr-local:8000). Imagen pesada por
@@ -68,5 +97,6 @@ services:
       - "127.0.0.1:8000:8000"
 
 volumes:
+  api-prisma-client:
   rustfsdata:
   ocrmodels:

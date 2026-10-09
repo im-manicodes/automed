@@ -5,6 +5,7 @@ import { OpenAiLlmProvider } from './openai-llm.provider';
 import { createLlmProvider } from './llm-provider.factory';
 import { modelAcceptsTemperature, readLlmConfig } from './llm-config';
 import { isRetryable, withRetry } from './llm-retry';
+import { LlmTruncatedError } from './llm-provider.interface';
 import type { LlmConfig } from './llm-config';
 
 const cfg = (over: Partial<LlmConfig> = {}): LlmConfig => ({
@@ -289,5 +290,74 @@ describe('Ollama (config y adaptador)', () => {
       type: 'image_url',
       image_url: { url: 'data:image/png;base64,AQID' },
     });
+  });
+});
+
+describe('LlmTruncatedError (parada por límite de tokens)', () => {
+  it('withRetry/isRetryable no reintentan LlmTruncatedError', async () => {
+    expect(isRetryable(new LlmTruncatedError())).toBe(false);
+    const fn = jest.fn().mockRejectedValue(new LlmTruncatedError());
+    await expect(
+      withRetry(fn, { retries: 3, baseMs: 1, sleep: noSleep }),
+    ).rejects.toBeInstanceOf(LlmTruncatedError);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('anthropic: max_tokens lanza solo con failOnTruncate, sin él devuelve el texto', async () => {
+    const create = jest.fn().mockResolvedValue({
+      stop_reason: 'max_tokens',
+      content: [{ type: 'text', text: ' parcial ' }],
+    });
+    const p = new AnthropicLlmProvider(
+      cfg(),
+      { messages: { create } } as never,
+      noSleep,
+    );
+    await expect(
+      p.text('s', 'u', { failOnTruncate: true }),
+    ).rejects.toBeInstanceOf(LlmTruncatedError);
+    expect(create).toHaveBeenCalledTimes(1);
+    await expect(p.text('s', 'u')).resolves.toBe('parcial');
+  });
+
+  it.each([
+    ['openai', OpenAiLlmProvider],
+    ['ollama', OllamaLlmProvider],
+  ] as const)(
+    '%s: finish_reason=length lanza solo con failOnTruncate',
+    async (name, Cls) => {
+      const create = jest.fn().mockResolvedValue({
+        choices: [
+          { finish_reason: 'length', message: { content: ' parcial ' } },
+        ],
+      });
+      const p = new Cls(
+        cfg({ provider: name }),
+        { chat: { completions: { create } } } as never,
+        noSleep,
+      );
+      await expect(
+        p.text('s', 'u', { failOnTruncate: true }),
+      ).rejects.toBeInstanceOf(LlmTruncatedError);
+      expect(create).toHaveBeenCalledTimes(1);
+      await expect(p.text('s', 'u')).resolves.toBe('parcial');
+    },
+  );
+
+  it('bedrock: stopReason=max_tokens lanza solo con failOnTruncate', async () => {
+    const send = jest.fn().mockResolvedValue({
+      stopReason: 'max_tokens',
+      output: { message: { content: [{ text: ' parcial ' }] } },
+    });
+    const p = new BedrockLlmProvider(
+      cfg({ provider: 'bedrock' }),
+      { send },
+      noSleep,
+    );
+    await expect(
+      p.text('s', 'u', { failOnTruncate: true }),
+    ).rejects.toBeInstanceOf(LlmTruncatedError);
+    expect(send).toHaveBeenCalledTimes(1);
+    await expect(p.text('s', 'u')).resolves.toBe('parcial');
   });
 });

@@ -51,7 +51,9 @@ async function main() {
   const cfg = readOcrConfig(config);
   const maxPages = flags['max-pages'] ? Number(flags['max-pages']) : Infinity;
 
-  const rasterizer = new PdfRasterizerService(config);
+  const rasterizer = new PdfRasterizerService({
+    getEffective: () => Promise.resolve({ renderDpi: cfg.dpi }),
+  } as never);
   const engine =
     cfg.engine === 'textract'
       ? new TextractOcrEngineService(config, {

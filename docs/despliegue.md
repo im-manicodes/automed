@@ -20,33 +20,33 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | Variable | Qué es |
 |---|---|
 | `PORT` | Puerto de la API (3000). |
-| `WEB_ORIGIN` | Origen del front (CORS y redirección tras el login). Dev: `http://localhost:5173`; con compose se fija a `http://localhost:8080`. |
+| `WEB_ORIGIN` | Origen del front (CORS y redirección tras el login). Dev: `http://localhost:5173`; con compose se fija a `http://localhost:5173 (dev) o :3000 (imagen única)`. |
 | `DATABASE_URL` | Conexión a PostgreSQL **desde tu máquina** (desarrollo, migraciones, benchmark, tests). Usa `localhost`. |
 | `DATABASE_URL_DOCKER` | La misma BD **vista desde el contenedor de la api**: normalmente `host.docker.internal` en lugar de `localhost` (compose añade `extra_hosts: host.docker.internal:host-gateway`). Es obligatoria para `docker compose up`. |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE` | RustFS (S3 compatible). Con compose el endpoint se fuerza a `http://rustfs:9000`. **Cambia las claves por defecto** (`rustfsadmin`) fuera de tu máquina. El bucket se crea solo al arrancar. |
+| *(almacenamiento)* | Ya no va en `.env`: se configura en la web (Ajustes -> Almacenamiento y asistente de bienvenida). En dev, el RustFS del compose usa `rustfsadmin` / `rustfsadmin` en `http://rustfs:9000`. **Cambia esas claves** fuera de tu máquina. |
 | `TOKEN_ENC_KEY` | Clave AES-GCM (32 bytes en base64) para cifrar el refresh token de Microsoft. Si la cambias, hay que volver a conectar Outlook (Ajustes). |
 | `JWT_SECRET` | **Obligatorio**, mínimo 32 caracteres (`openssl rand -base64 48`). Firma el JWT de sesión; sin él la API no arranca. Si lo cambias, todas las sesiones se cierran. |
 | `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL` | Duración del JWT de acceso (`15m`) y del refresh token (`30d`, rotativo). |
-| `COOKIE_SECURE` | (opcional) `true`/`false` fuerza el atributo `Secure` de las cookies de sesión; vacío = se deduce de `MS_REDIRECT_URI` (https => Secure). En producción tras HTTPS: `true`. |
-| `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` | (opcionales) Valores por defecto del OAuth de Microsoft; lo normal es pegarlos en **Ajustes -> Microsoft** (el panel manda sobre `.env`). Ver sección 6. |
+| `COOKIE_SECURE` | (opcional) `true`/`false` fuerza el atributo `Secure` de las cookies de sesión; vacío = se deduce de la URL de redirección de Microsoft configurada en Ajustes (https => Secure). En producción tras HTTPS: `true`. |
+| `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` | (opcionales, ya no están en `.env.example`) Valores por defecto del OAuth de Microsoft; lo normal es pegarlos en **Ajustes -> Microsoft** (el panel manda sobre `.env`). Ver sección 6. |
 | `SYNC_INTERVAL_MIN` | Cada cuántos minutos se sincroniza el correo (solo descarga/guarda; nunca analiza). `0` lo desactiva. |
 | `JOBS_ENABLED`, `JOBS_CONCURRENCY`, `JOBS_POLL_MS`, `JOBS_MAX_ATTEMPTS`, `JOBS_BACKOFF_*`, `JOBS_LOCK_TIMEOUT_SEC` | Cola de trabajos en PostgreSQL. `JOBS_ENABLED=false` apaga el worker **y** el polling del sync (útil para verificar el despliegue sin tocar nada externo). |
 | `PDF_TEXT_MODE`, `PDF_TEXT_MIN_CHARS` | (opcionales) Extractor de PDF digital en Node, dentro del proceso de la API (`node` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. No hay servicio Python aparte. |
-| `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*`, `OCR_LOCAL_TIMEOUT_MS`, `TEXTRACT_MODE` | (opcionales, comentados en `.env.example`) Ajustes finos de OCR; ver `docs/benchmark-ocr.md`. |
+| `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*`, `OCR_LOCAL_TIMEOUT_MS`, `TEXTRACT_MODE` | (opcionales, ya no están en `.env.example`) Valores por defecto de OCR; casi todo se cambia en Ajustes -> OCR. Ver `docs/benchmark-ocr.md`. |
 | `LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `SYNTH_MAX_INPUT_TOKENS` | (opcionales) Límites y costo del LLM. |
 | (no van en `.env`) | **Proveedor LLM, modelos, claves (Anthropic/OpenAI), URL de Ollama, región AWS y motor OCR (`local`/`textract`) se eligen en la web** (asistente de bienvenida en el primer inicio de sesión, Ajustes -> Inteligencia artificial y Ajustes -> OCR) y se guardan en la base de datos (claves cifradas). Las variables `LLM_*`, `*_API_KEY`, `OLLAMA_BASE_URL`, `AWS_REGION`, `OCR_ENGINE` aún se leen como valores por defecto, pero ya no se documentan. Las credenciales de Bedrock/Textract siguen siendo las estándar de AWS (rol o variables), no se piden en la web. |
 | `AWS_REGION` (+ credenciales AWS estándar) | Región para Bedrock y Textract. |
 | `VITE_API_URL` | Solo desarrollo del front (`pnpm dev`). |
 
 ## 3. Levantar con Docker Compose
-> Producción usa **solo** `docker-compose.yml` (imágenes de build; web en nginx :8080). `docker-compose.dev.yml` (hot reload, web en Vite :5173) es solo para desarrollo y únicamente se carga si defines `COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml` en el `.env`; **no pongas esa variable en el `.env` del servidor** (si existe, usa `docker compose -f docker-compose.yml ...` explícito).
+> `docker-compose.yml` es SOLO de desarrollo (hot reload, web en Vite :5173). Producción es la imagen única del `Dockerfile` raíz (web + api + OCR local en un contenedor, sin RustFS; solo expone :3000; volumen `/models`; el almacenamiento S3 —RustFS o AWS— se configura en la web; `docker run --env-file .env`).
 
 ```bash
 docker compose up -d --build
 docker compose ps          # api debe quedar "healthy"
 curl localhost:3000/api/health    # {"status":"ok","db":true,"storage":true}
 ```
-- Web: http://localhost:8080 (nginx sirve la app y proxea `/api` a la api). API directa: :3000. Consola RustFS: :9001.
+- Desarrollo (compose): web http://localhost:5173 (Vite); API directa :3000; consola RustFS :9001. Producción (imagen única): todo en http://localhost:3000.
 - La api ejecuta `prisma migrate deploy` en cada arranque (aplica solo migraciones pendientes) y crea el bucket si no existe.
 - `GET /api/health` es público y siempre responde 200; mira el cuerpo: `status: "degraded"` indica BD o RustFS inaccesibles. El `healthcheck` de compose solo comprueba que la api responde.
 - Para verificar sin efectos externos: `JOBS_ENABLED=false docker compose up -d --build` (no sincroniza ni procesa).
@@ -119,7 +119,7 @@ Con un perfil de inferencia entre regiones, el permiso debe cubrir el perfil **y
 ## 6. Registro en Entra ID y config de Microsoft desde Ajustes
 Sigue `docs/entra-id-registro.md` (registro de app web con secreto de cliente, permisos delegados `Mail.Read`, `offline_access` y `User.Read`, URI de redirección). Registra la app como "Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft".
 
-Los datos NO hace falta ponerlos en `.env`: se pegan en **Ajustes -> Microsoft** (id de aplicación, inquilino `common`, secreto de cliente y URI de redirección; el secreto se guarda cifrado y no se vuelve a mostrar). La web sugiere la URI de redirección `<WEB_ORIGIN>/api/auth/callback` (con compose, `http://localhost:8080/api/auth/callback`; en producción tu URL HTTPS pública), que debe coincidir exactamente con la registrada en Entra. Precedencia: panel > `MS_*` de `.env` (siguen valiendo como valores por defecto). El consentimiento es por cuenta conectada. Si el tenant de esa cuenta exige aprobación de administrador, el documento incluye el texto para pedirla.
+Los datos NO hace falta ponerlos en `.env`: se pegan en **Ajustes -> Microsoft** (id de aplicación, inquilino `common`, secreto de cliente y URI de redirección; el secreto se guarda cifrado y no se vuelve a mostrar). La web sugiere la URI de redirección `<WEB_ORIGIN>/api/auth/callback` (con compose, `http://localhost:5173 (dev) o :3000 (imagen única)/api/auth/callback`; en producción tu URL HTTPS pública), que debe coincidir exactamente con la registrada en Entra. Precedencia: panel > `MS_*` de `.env` (siguen valiendo como valores por defecto). El consentimiento es por cuenta conectada. Si el tenant de esa cuenta exige aprobación de administrador, el documento incluye el texto para pedirla.
 
 ## 7. Primer arranque
 1. `docker compose up -d --build` (la API aplica las migraciones al arrancar; requiere `JWT_SECRET` en `.env`).
@@ -129,7 +129,7 @@ Los datos NO hace falta ponerlos en `.env`: se pegan en **Ajustes -> Microsoft**
    # sin Docker (desde la raíz): pnpm --filter api user:create -- --email tu@correo.com --nombre "Tu nombre"
    ```
    Si ya existía una cuenta de Outlook de antes de la fase 8, queda asignada a este primer usuario (con sus tickets). Para restablecer una contraseña: `docker compose exec api node dist/cli/user.js reset-password --email tu@correo.com` (cierra todas sus sesiones).
-3. Abre http://localhost:8080, **inicia sesión** con ese correo y contraseña, rellena **Ajustes -> Microsoft** (ver sección 6), ve a **Ajustes -> Conectar Outlook** y acepta los permisos de Microsoft. Volverás a Ajustes con "Outlook conectado".
+3. Abre http://localhost:5173 (dev) o :3000 (imagen única), **inicia sesión** con ese correo y contraseña, rellena **Ajustes -> Microsoft** (ver sección 6), ve a **Ajustes -> Conectar Outlook** y acepta los permisos de Microsoft. Volverás a Ajustes con "Outlook conectado".
 4. **Sincronizar** (botón en Tickets, o espera `SYNC_INTERVAL_MIN`). Los hilos aparecen como *Sin analizar*; no se ha enviado nada a OCR ni al LLM.
 5. Abre **un hilo de prueba** (de preferencia sin datos sensibles) y pulsa **Analizar**. Espera a *Listo* o *Necesita tu ayuda*.
 6. Si hay dudas, abre la revisión, corrige y verifica que la síntesis se actualiza (solo con lo nuevo).
@@ -170,6 +170,9 @@ En producción usa solo `db:deploy` (y `db:seed` si quieres la plantilla/ajustes
 ## 8b. Reporte diario en Excel (datos sensibles de salud)
 El reporte (`/api/reports`) contiene nombres, diagnósticos, montos y pendientes de pacientes hospitalizados. Los `.xlsx` se guardan en RustFS bajo `reportes/AAAA-MM-DD/` (incluye esas rutas en tus políticas de acceso y backups) y solo se descargan con sesión. En producción el LLM debe ser Bedrock (elegido en la web); con Ollama/API keys son solo pruebas. La API nueva depende de `exceljs`: tras actualizar usa `docker compose up -d --build api` (en dev con hot reload también hay que reconstruir la imagen para instalar la dependencia). La bitácora de eventos (tabla `HospitalEvent`, migración `20261012100000_eventos_hospitalizacion`) también contiene datos de pacientes: inclúyela en los respaldos de la base; la migración se aplica con `prisma:deploy` o reiniciando la api (`docker compose restart api`). La programación diaria usa `Setting` `reporte.programado|hora|zona` (zona por defecto `America/Mexico_City`) y se evalúa en el worker de la API, por lo que la API debe estar encendida a esa hora (si estaba apagada, se genera al volver a arrancar el mismo día).
 
+## 8c. Imagen en GHCR (GitHub Actions)
+`.github/workflows/docker-image.yml` publica la imagen única en `ghcr.io/flotuz/automed` al hacer push a `main` (tag `latest` y `sha-<corto>`), al crear un tag `v*` (semver) o a mano (`workflow_dispatch`). Pasos: job `test` (`pnpm lint` y `pnpm test`), construcción con buildx y caché `gha`, prueba de humo (la imagen contiene `dist/main.js`, `/app/frontend/index.html`, el CLI `prisma`, `tsx` y `prisma/`) y publicación con `GITHUB_TOKEN` (permiso `packages: write`). La imagen ya no trae Python ni OCR: el entrypoint solo ejecuta `prisma migrate deploy` y arranca la API; `/models` sigue siendo un volumen persistente.
+
 ## 9. Actualizar
 ```bash
 git pull
@@ -178,6 +181,16 @@ docker compose ps && curl localhost:3000/api/health
 ```
 Haz backup de la BD antes de actualizar si hay migraciones nuevas (`apps/api/prisma/migrations`). Las migraciones son hacia adelante (`migrate deploy`).
 
+## 9b. Notas manuscritas y resúmenes largos
+Todo se configura desde la web, sin reiniciar (el `.env` solo da valores por defecto):
+1. En producción elige el motor **Textract** en Ajustes -> OCR y, en «Opciones avanzadas de lectura», el modo «Formularios y tablas (mejor con letra a mano)».
+2. Activa «Releer con IA las partes dudosas (letra a mano)» en las mismas opciones, y elige un modelo con visión para la tarea «vision» en Ajustes -> IA.
+3. Si una nota tiene muchas partes dudosas, sube «Máximo de partes a releer» (defecto 30; 80 para una nota completa). «Calidad de lectura» a 300 DPI ayuda con letra pequeña (más lento).
+4. Cuidado con el coste y la privacidad: cada parte dudosa hace una llamada de visión. Son datos de salud; en producción usa Bedrock.
+5. Sigue corrigiendo las zonas con recuadro rojo desde el celular: lo que corriges tiene prioridad y solo se regenera el documento afectado.
+6. Si el resumen falla por longitud, sube «Longitud máxima de cada resumen» en Ajustes -> IA (defecto 16000; algunos modelos aceptan menos).
+7. Leer páginas completas como imagen (visión por página completa) queda como siguiente fase; no está hecho.
+
 ## 10. Solución de problemas
 | Síntoma | Causa probable / qué hacer |
 |---|---|
@@ -185,7 +198,7 @@ Haz backup de la BD antes de actualizar si hay migraciones nuevas (`apps/api/pri
 | api no queda `healthy`; logs: "Can't reach database server" | Postgres del host no acepta conexiones desde Docker: ver "PostgreSQL del host"; revisa usuario/clave y `host.docker.internal`. |
 | `/api/health` responde `db:false` | Igual que arriba, o la BD cambió de contraseña. |
 | `storage:false` | RustFS no arrancó o las claves S3 no coinciden con las del volumen existente (RustFS conserva las claves con las que se creó). |
-| Conectar Outlook: `redirect_uri` no coincide | `MS_REDIRECT_URI` debe ser idéntica a la registrada en Entra. |
+| Conectar Outlook: `redirect_uri` no coincide | La URL de redirección en Ajustes -> Microsoft debe ser idéntica a la registrada en Entra. |
 | Tras iniciar sesión vuelve a la pantalla de entrada | Cookie no enviada: con HTTPS pon `COOKIE_SECURE=true` y usa el mismo host; revisa `WEB_ORIGIN`. |
 | "La conexión con Outlook caducó" | Ajustes -> Conectar Outlook de nuevo (token revocado, o cambiaste `TOKEN_ENC_KEY`). |
 | La API no arranca: "JWT_SECRET falta o es demasiado corto" | Define `JWT_SECRET` (>= 32 caracteres) en `.env`. |

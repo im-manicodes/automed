@@ -1,6 +1,6 @@
-import { useMutation } from '../../../hooks/useMutation'
-import { useQuery } from '../../../hooks/useQuery'
-import type { AjustesMicrosoft, CambiosAjustesMicrosoft } from '../../../lib/api'
+import { useMutation } from './useMutation'
+import { useQuery } from './useQuery'
+import type { AjustesMicrosoft, CambiosAjustesMicrosoft } from '../lib/api'
 
 /** Configuración de la app de Microsoft (GET /settings/microsoft). El secreto nunca llega. */
 export function useConfigMicrosoft() {

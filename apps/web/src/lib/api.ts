@@ -395,6 +395,8 @@ export interface AjustesIa {
   ollamaUrl: string
   awsRegion: string
   maxInputTokens: number
+  /** Longitud máxima de cada respuesta del modelo (1000..64000). */
+  maxOutputTokens: number
   /** Solo si hay clave guardada; la clave en sí nunca llega al navegador. */
   claves: { openai: boolean; anthropic: boolean; aws: boolean }
   sugeridos: Record<ProveedorIa, { texto: string[]; vision: string[] }>
@@ -406,6 +408,7 @@ export interface CambiosAjustesIa {
   ollamaUrl?: string
   awsRegion?: string
   maxInputTokens?: number
+  maxOutputTokens?: number
   /** string = nueva clave, null = quitar, ausente = no cambiar. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
@@ -450,12 +453,14 @@ export interface DescargaOllama {
 // --- Primer usuario ---
 export interface SetupStatus {
   needsSetup: boolean
+  requiresToken?: boolean
 }
 
 export interface NuevoPrimerUsuario {
   email: string
   nombre: string
   password: string
+  setupToken?: string
 }
 
 // --- Lectura de PDFs escaneados (/settings/ocr) ---
@@ -465,17 +470,84 @@ export interface AjustesOcr {
   motor: MotorOcr
   origen: 'panel' | 'servidor'
   textractMode: 'detect' | 'analyze'
+  /** Releer con IA (visión) las partes dudosas. */
+  visionRetry: boolean
+  /** Máximo de partes a releer (1..200). */
+  visionMaxRegions: number
+  /** Calidad de lectura al rasterizar (150..400). */
+  renderDpi: number
   entorno: { servidor: boolean }
   servicioLocal: { estado: 'detenido' | 'iniciando' | 'listo' | 'error'; fallbackReason?: string | null; mensaje?: string }
+}
+
+/** OCR local que instala y arranca la propia app (/settings/ocr/local). */
+export type EstadoInstalacionOcr = 'no-instalado' | 'instalando' | 'descargando-modelos' | 'listo' | 'error'
+
+export interface OcrLocal {
+  /** false: el OCR lo da un servicio externo (OCR_LOCAL_URL) y no se gestiona desde la app. */
+  gestionado: boolean
+  estado: EstadoInstalacionOcr
+  paso: string
+  /** Avance aproximado 0..100. */
+  progreso: number
+  error: string | null
+  /** Hay una versión nueva del OCR: conviene reinstalar. */
+  desactualizado: boolean
+  proceso: 'detenido' | 'iniciando' | 'en-marcha' | 'error'
+  lineas: { id: number; ts: string; nivel: NivelRegistro; mensaje: string }[]
+  requisitos: { espacioGb: number; internet: boolean }
 }
 
 export interface CambiosAjustesOcr {
   motor?: MotorOcr
   textractMode?: 'detect' | 'analyze'
+  visionRetry?: boolean
+  visionMaxRegions?: number
+  renderDpi?: number
 }
 
 export interface PruebaOcrResultado {
   ok: boolean
   ms: number
   mensaje: string
+}
+
+// --- Almacenamiento de archivos (/settings/storage) ---
+export type ProveedorAlmacenamiento = 'rustfs' | 's3'
+
+export interface AjustesAlmacenamiento {
+  configurado: boolean
+  origen: 'panel' | 'env' | 'ninguno'
+  proveedor: ProveedorAlmacenamiento | null
+  rustfs: { endpoint: string; bucket: string; accessKey: string; tieneSecreto: boolean }
+  s3: { region: string; bucket: string; accessKeyId: string; endpoint: string; tieneSecreto: boolean }
+}
+
+export interface CambiosAlmacenamiento {
+  proveedor: ProveedorAlmacenamiento
+  rustfs?: { endpoint: string; bucket: string; accessKey: string; secretKey?: string }
+  s3?: { region: string; bucket: string; accessKeyId?: string; secretAccessKey?: string; endpoint?: string }
+}
+
+export interface PruebaAlmacenamientoResultado {
+  ok: boolean
+  mensaje: string
+}
+
+// --- Registro de la API (/settings/logs) ---
+export type NivelRegistro = 'error' | 'warn' | 'log' | 'debug' | 'verbose'
+
+export interface EntradaRegistro {
+  id: number
+  /** ISO 8601. */
+  ts: string
+  nivel: NivelRegistro
+  contexto: string
+  mensaje: string
+}
+
+export interface RespuestaRegistro {
+  entries: EntradaRegistro[]
+  /** Último id emitido por el servidor (aunque no pase el filtro); se usa como `desde`. */
+  ultimoId: number
 }

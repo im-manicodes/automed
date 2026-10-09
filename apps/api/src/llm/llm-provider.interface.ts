@@ -21,12 +21,26 @@ export interface LlmRequest {
   task?: LlmTask;
   /** Modelo explícito para esta petición (tiene prioridad sobre el defecto texto/visión). */
   model?: string;
+  /** Lanza LlmTruncatedError si el modelo se detiene por límite de tokens de salida. */
+  failOnTruncate?: boolean;
 }
 
 export interface LlmCallOptions {
   maxTokens?: number;
   temperature?: number;
   task?: LlmTask;
+  /** Lanza LlmTruncatedError si la salida se corta por límite de tokens. */
+  failOnTruncate?: boolean;
+}
+
+/** La salida del modelo se cortó por el límite de tokens de salida. */
+export class LlmTruncatedError extends Error {
+  constructor(
+    message = 'La salida del modelo se cortó por el límite de tokens',
+  ) {
+    super(message);
+    this.name = 'LlmTruncatedError';
+  }
 }
 
 /** Proveedor LLM intercambiable (ollama | openai | anthropic | bedrock). */

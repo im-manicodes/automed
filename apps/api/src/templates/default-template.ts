@@ -4,29 +4,87 @@
  */
 export const DEFAULT_TEMPLATE_NAME = 'Plantilla estándar';
 
-export const DEFAULT_TEMPLATE_MARKDOWN = `# Asunto
-<!-- Asunto del hilo en una línea. -->
+export const DEFAULT_TEMPLATE_MARKDOWN = `<!-- Reglas generales (no se copian a la salida): no inventes datos; si un dato falta escribe "No indicado". No copies ruido del OCR o del manuscrito como si fuera un dato: si no se entiende escribe [ilegible] (o conserva la marca [ilegible #n · documento · p.k] tal cual). Usa abreviaturas médicas habituales (APP, PO, SV, TA, FC, FR, SatO2) y fechas dd/mm/aa. -->
 
-## Participantes
-<!-- Lista: nombre o correo y su rol aparente. Indica quién soy yo (mensajes propios). -->
+# Paciente
+<!-- Tabla de dos columnas. Filas: Nombre (APELLIDOS NOMBRE), Edad, Sexo, Ficha / expediente, Codificación, Hospital / prestador, Región / localidad, Contrato / póliza, Aseguradora, Ubicación (UCI / Hab. / cama). "No indicado" si falta. -->
+| Campo | Valor |
+| --- | --- |
+| Nombre (APELLIDOS NOMBRE) | |
+| Edad | |
+| Sexo | |
+| Ficha / expediente | |
+| Codificación | |
+| Hospital / prestador | |
+| Región / localidad | |
+| Contrato / póliza | |
+| Aseguradora | |
+| Ubicación (UCI / Hab. / cama) | |
 
-## Resumen ejecutivo
-<!-- 3 a 6 líneas: de qué trata, estado actual y qué sigue. -->
+## Correos del hilo
+<!-- Una viñeta por correo, en orden cronológico: fecha (dd/mm/aa hh:mm), quién escribe y qué pide o informa. Resume; no copies el correo completo. -->
 
-## Línea de tiempo
-<!-- Una viñeta por hecho relevante, en orden cronológico: **fecha** — quién — qué pasó. -->
+## Ingreso y diagnóstico
+<!-- Tabla | Campo | Valor | con: Fecha y hora de ingreso, Tipo de ingreso, Días de estancia, Estatus (activa / alta), Diagnósticos (con PO y su fecha si hubo cirugía), CIE-10, Especialidad, Tipo de manejo (médico o quirúrgico). -->
+| Campo | Valor |
+| --- | --- |
+| Fecha y hora de ingreso | |
+| Tipo de ingreso | |
+| Días de estancia | |
+| Estatus (activa / alta) | |
+| Diagnósticos (PO y fecha) | |
+| CIE-10 | |
+| Especialidad | |
+| Tipo de manejo (médico / quirúrgico) | |
 
-## Decisiones
-<!-- Decisiones tomadas y quién las tomó. Si no hay, escribe "Sin decisiones registradas". -->
+## Evolución inicial (día 1)
+<!-- Tabla | Campo | Valor | con: APP, Alergias, Padecimiento actual, SV de ingreso (TA, FC, FR, T, SatO2), Peso y talla, Exploración física, Estudios y laboratorios de ingreso. -->
+| Campo | Valor |
+| --- | --- |
+| APP | |
+| Alergias | |
+| Padecimiento actual | |
+| SV de ingreso | |
+| Peso / talla | |
+| Exploración | |
+| Estudios y labs de ingreso | |
 
-## Acciones pendientes
-<!-- Tabla markdown con columnas: Acción | Responsable | Fecha límite. Escribe "No indicado" si falta un dato. -->
+## Plan de manejo vigente
+<!-- Lo vigente hoy. Subtítulos o viñetas: Dieta; Soluciones; Medicamentos IV (excepto antibióticos); Antibióticos (con fecha de inicio); Cuidados. -->
 
-## Fechas y montos relevantes
-<!-- Lista de fechas, plazos, importes y cifras mencionadas, con su contexto y fuente (correo o documento). -->
+## Evolución por día
+<!-- Una viñeta por fecha y hora (dd/mm/aa hh:mm), en orden cronológico: quién valora, SV (TA, FC, FR, T, SatO2), exploración, resultados, drenajes, sondas y gastos, procedimientos con su fecha y cambios de ubicación. -->
+
+## Estudios y resultados
+<!-- Laboratorios, imagen y otros estudios con cifras y fecha. -->
+
+## Pendientes y en espera
+<!-- Estudios, interconsultas, trámites o respuestas que faltan ("En espera de ..."). -->
+
+## Alta o egreso
+<!-- Fecha, motivo y tratamiento al egreso. Escribe "No aplica" si sigue internado. -->
+
+## Gestión con aseguradora
+<!-- Autorización o carta de garantía, montos y pendientes administrativos. -->
 
 ## Contenido de adjuntos
-<!-- Un subapartado "### {nombre del documento}" por cada adjunto, con lo esencial de su contenido. Si hay marcas [ilegible #n · documento · p.k], consérvalas tal cual. -->
+<!-- Esta sección es REPETIBLE: un bloque como el siguiente por cada página de cada adjunto, en orden. Cada bloque lleva sus cuatro apartados. -->
+
+### {nombre del documento} · página {n}
+
+#### Qué trata la página
+<!-- 2 a 3 líneas: tipo de documento, fecha y quién lo emite. -->
+
+#### Datos relevantes
+<!-- Tabla | Sección | Campo | Valor |. En "Sección" indica la parte del formulario donde está cada dato (encabezado, datos del paciente, nota pre/post operatoria, indicaciones...). Solo datos que se entiendan; lo ilegible va como [ilegible]. -->
+| Sección | Campo | Valor |
+| --- | --- | --- |
+
+#### Datos faltantes
+<!-- Lista de campos vacíos, ilegibles o no indicados en la página. "Ninguno" si no hay. -->
+
+#### Recreación de la página
+<!-- Recrea la página con tablas markdown que respeten las mismas filas, columnas y orden del formulario original, usando la posición del texto (yNN% | xNN%) para ubicar encabezado, datos del paciente, nota pre/post operatoria, indicaciones, etc. Casillas como [x] / [ ]. Texto largo dentro de la celda. Conserva las marcas [ilegible #n · documento · p.k]. No adivines ni completes lo que no se lee. Si la página es digital y ya viene en markdown, cópiala y ordénala sin inventar nada. -->
 
 ## Dudas por aclarar
 <!-- Preguntas abiertas, datos contradictorios o partes ilegibles que requieren confirmación. -->

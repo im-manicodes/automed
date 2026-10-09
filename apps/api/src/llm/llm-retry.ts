@@ -1,3 +1,5 @@
+import { LlmTruncatedError } from './llm-provider.interface';
+
 export interface RetryOptions {
   retries: number;
   baseMs: number;
@@ -20,6 +22,8 @@ const RETRY_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED']);
 /** 429, 5xx, timeouts y errores de red son reintentables; 4xx restantes no. */
 export function isRetryable(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
+  // Reintentar daría el mismo corte.
+  if (err instanceof LlmTruncatedError) return false;
   const e = err as {
     status?: number;
     name?: string;

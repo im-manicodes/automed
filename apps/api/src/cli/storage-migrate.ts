@@ -33,7 +33,7 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('Falta DATABASE_URL (.env raíz)');
   const prisma = new PrismaClient({ adapter: createPgAdapter(url) });
-  const storage = new S3StorageService(new ConfigService());
+  const storage = S3StorageService.fromEnv(new ConfigService());
   console.log(
     args.apply
       ? 'Migrando el almacenamiento al layout por hilo...'

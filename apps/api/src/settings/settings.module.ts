@@ -9,6 +9,8 @@ import { OllamaService } from './ollama.service';
 import { AiTestService } from './ai-test.service';
 import { OcrSettingsService } from './ocr-settings.service';
 import { MicrosoftSettingsController } from './microsoft-settings.controller';
+import { StorageSettingsService } from './storage-settings.service';
+import { StorageSettingsController } from './storage-settings.controller';
 
 @Module({
   imports: [AuthModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])],
@@ -19,8 +21,13 @@ import { MicrosoftSettingsController } from './microsoft-settings.controller';
     OllamaService,
     AiTestService,
     OcrSettingsService,
+    StorageSettingsService,
   ],
-  controllers: [SettingsController, MicrosoftSettingsController],
-  exports: [AiSettingsService, OcrSettingsService],
+  controllers: [
+    SettingsController,
+    MicrosoftSettingsController,
+    StorageSettingsController,
+  ],
+  exports: [AiSettingsService, OcrSettingsService, StorageSettingsService],
 })
 export class SettingsModule {}

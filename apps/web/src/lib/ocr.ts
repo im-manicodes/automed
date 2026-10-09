@@ -7,7 +7,7 @@ export interface ClavesAws {
 }
 
 export const OPCIONES_OCR: { id: MotorOcr; nombre: string; descripcion: string }[] = [
-  { id: 'local', nombre: 'En mi computador', descripcion: 'Gratis y privado: se ejecuta en tu propio servidor; el contenido no sale de ahí.' },
+  { id: 'local', nombre: 'En mi computador', descripcion: 'Gratis y privado: la app lo instala en tu propio servidor (una vez, con internet) y el contenido no sale de ahí.' },
   { id: 'textract', nombre: 'Amazon Textract', descripcion: 'Servicio de AWS, muy preciso con letra manuscrita. Necesita credenciales de AWS.' },
   { id: 'ninguno', nombre: 'Configurar después', descripcion: 'Los PDF normales se leen igual; una página escaneada pedirá configurar esto.' },
 ]
@@ -34,7 +34,11 @@ export function awsIncompleta(c: ClavesAws): boolean {
 /** ¿Falta algo para poder usar el motor elegido? Devuelve el motivo o null. */
 export function faltaParaOcr(motor: MotorOcr, a: AjustesOcr, ia: Pick<AjustesIa, 'claves'>, claves: ClavesAws): string | null {
   if (motor === 'local') {
-    return a.servicioLocal.estado === 'listo' ? null : 'Primero levanta el servicio de OCR del servidor, o elige «Configurar después».'
+    // Mientras se instala o arranca se puede seguir: la instalación continúa en segundo plano.
+    const { estado } = a.servicioLocal
+    return estado === 'listo' || estado === 'iniciando'
+      ? null
+      : 'Primero instala e inicia el OCR local (botón «Instalar OCR local»), o elige «Configurar después».'
   }
   if (motor === 'textract') {
     if (awsIncompleta(claves)) return 'Escribe las dos claves de AWS.'
@@ -45,3 +49,16 @@ export function faltaParaOcr(motor: MotorOcr, a: AjustesOcr, ia: Pick<AjustesIa,
   }
   return null
 }
+
+/** Ajustes avanzados de lectura que el usuario edita antes de guardar. */
+export type AvanzadoOcr = Pick<AjustesOcr, 'visionRetry' | 'visionMaxRegions' | 'renderDpi' | 'textractMode'>
+
+export const avanzadoDesde = (a: AjustesOcr): AvanzadoOcr => ({
+  visionRetry: a.visionRetry,
+  visionMaxRegions: a.visionMaxRegions,
+  renderDpi: a.renderDpi,
+  textractMode: a.textractMode,
+})
+
+export const avanzadoValido = (v: AvanzadoOcr): boolean =>
+  Number.isInteger(v.visionMaxRegions) && v.visionMaxRegions >= 1 && v.visionMaxRegions <= 200

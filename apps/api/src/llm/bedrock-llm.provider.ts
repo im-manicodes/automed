@@ -8,6 +8,7 @@ import type {
 } from '@aws-sdk/client-bedrock-runtime';
 import { BaseLlmProvider } from './base-llm.provider';
 import type { LlmConfig } from './llm-config';
+import { LlmTruncatedError } from './llm-provider.interface';
 import type { LlmRequest } from './llm-provider.interface';
 
 const FORMATS: Record<string, ImageFormat> = {
@@ -65,6 +66,9 @@ export class BedrockLlmProvider extends BaseLlmProvider {
       }),
       { abortSignal: AbortSignal.timeout(this.cfg.timeoutMs) },
     );
+    if (req.failOnTruncate && res.stopReason === 'max_tokens') {
+      throw new LlmTruncatedError();
+    }
     return (res.output?.message?.content ?? [])
       .map((b) => b.text ?? '')
       .join('')

@@ -19,6 +19,8 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { OcrSettingsController } from '../src/settings/ocr-settings.controller';
 import { OcrSettingsService } from '../src/settings/ocr-settings.service';
 import { OcrProbeService } from '../src/ocr/ocr-probe.service';
+import { OcrInstallerService } from '../src/ocr/ocr-installer.service';
+import { ConflictException } from '@nestjs/common';
 import { fakePrisma } from './helpers/fake-prisma';
 
 const SECRET = 's'.repeat(48);
@@ -37,6 +39,28 @@ describe('Ajustes de OCR (e2e, sin BD ni red)', () => {
   let db: ReturnType<typeof fakePrisma>;
   let cookie: string;
   const probe = { probe: jest.fn(), serverLocalStatus: jest.fn() };
+  const vista = (o: Record<string, unknown> = {}) => ({
+    estado: 'no-instalado',
+    paso: 'Sin instalar',
+    progreso: 0,
+    requirementsSha: null,
+    pythonVersion: null,
+    error: null,
+    actualizado: new Date(0).toISOString(),
+    gestionado: true,
+    desactualizado: false,
+    proceso: 'detenido',
+    lineas: [],
+    requisitos: { espacioGb: 4, internet: true },
+    ...o,
+  });
+  const installer = {
+    view: jest.fn(),
+    install: jest.fn(),
+    startService: jest.fn(),
+    stopService: jest.fn(),
+    uninstall: jest.fn(),
+  };
 
   const http = () => request(app.getHttpServer());
   const authed = (r: request.Test) => r.set('Cookie', cookie);
@@ -46,6 +70,8 @@ describe('Ajustes de OCR (e2e, sin BD ni red)', () => {
     Object.values(probe).forEach((f) => {
       if (typeof f === 'function') f.mockReset();
     });
+    Object.values(installer).forEach((f) => f.mockReset());
+    installer.view.mockResolvedValue(vista());
     probe.probe.mockResolvedValue({ ok: false, ms: 1, mensaje: 'x' });
     probe.serverLocalStatus.mockResolvedValue({
       estado: 'detenido',
@@ -70,6 +96,7 @@ describe('Ajustes de OCR (e2e, sin BD ni red)', () => {
         LoginThrottlerGuard,
         OcrSettingsService,
         { provide: OcrProbeService, useValue: probe },
+        { provide: OcrInstallerService, useValue: installer },
         {
           provide: ConfigService,
           useValue: {
@@ -110,6 +137,16 @@ describe('Ajustes de OCR (e2e, sin BD ni red)', () => {
       await http().get('/api/settings/ocr').expect(401);
       await http().put('/api/settings/ocr').send({}).expect(401);
       await http().post('/api/settings/ocr/probar').send({}).expect(401);
+      await http().get('/api/settings/ocr/local').expect(401);
+      await http()
+        .post('/api/settings/ocr/local/instalar')
+        .send({})
+        .expect(401);
+      await http().post('/api/settings/ocr/local/iniciar').send({}).expect(401);
+      await http().post('/api/settings/ocr/local/detener').send({}).expect(401);
+      await http().delete('/api/settings/ocr/local').expect(401);
+      expect(installer.install).not.toHaveBeenCalled();
+      expect(installer.uninstall).not.toHaveBeenCalled();
     });
 
     it('GET: forma del contrato, ', async () => {
@@ -169,6 +206,84 @@ describe('Ajustes de OCR (e2e, sin BD ni red)', () => {
         http().post('/api/settings/ocr/probar').send({}),
       ).expect(200);
       expect(res.body).toEqual({ ok: true, ms: 5, mensaje: 'ok' });
+    });
+  });
+
+  describe('OCR local gestionado (instalar / iniciar / detener / desinstalar)', () => {
+    beforeEach(() => boot());
+
+    it('GET local devuelve estado, progreso y últimas líneas', async () => {
+      installer.view.mockResolvedValue(
+        vista({
+          estado: 'instalando',
+          paso: 'Instalando dependencias',
+          progreso: 40,
+          lineas: [{ id: 1, ts: 't', nivel: 'log', mensaje: 'Collecting x' }],
+        }),
+      );
+      const res = await authed(http().get('/api/settings/ocr/local')).expect(
+        200,
+      );
+      expect(res.body).toMatchObject({
+        gestionado: true,
+        estado: 'instalando',
+        progreso: 40,
+        lineas: [{ mensaje: 'Collecting x' }],
+        requisitos: { internet: true },
+      });
+    });
+
+    it('instalar responde 202 y lanza la instalación; 409 si ya hay una', async () => {
+      installer.install.mockResolvedValueOnce(undefined);
+      installer.view.mockResolvedValue(vista({ estado: 'instalando' }));
+      const ok = await authed(
+        http().post('/api/settings/ocr/local/instalar').send({}),
+      ).expect(202);
+      expect(ok.body.estado).toBe('instalando');
+      expect(installer.install).toHaveBeenCalledTimes(1);
+      installer.install.mockRejectedValueOnce(
+        new ConflictException('Ya hay una instalación en marcha.'),
+      );
+      const dup = await authed(
+        http().post('/api/settings/ocr/local/instalar').send({}),
+      ).expect(409);
+      expect(dup.body.message).toBe('Ya hay una instalación en marcha.');
+    });
+
+    it('iniciar / detener / desinstalar delegan en el instalador', async () => {
+      await authed(
+        http().post('/api/settings/ocr/local/iniciar').send({}),
+      ).expect(200);
+      expect(installer.startService).toHaveBeenCalledTimes(1);
+      await authed(
+        http().post('/api/settings/ocr/local/detener').send({}),
+      ).expect(200);
+      expect(installer.stopService).toHaveBeenCalledTimes(1);
+      const del = await authed(http().delete('/api/settings/ocr/local')).expect(
+        200,
+      );
+      expect(installer.uninstall).toHaveBeenCalledTimes(1);
+      expect(del.body.estado).toBe('no-instalado');
+    });
+
+    it('servicio externo: 409 con mensaje claro', async () => {
+      installer.startService.mockImplementation(() => {
+        throw new ConflictException('El OCR lo da un servicio externo');
+      });
+      const r = await authed(
+        http().post('/api/settings/ocr/local/iniciar').send({}),
+      ).expect(409);
+      expect(r.body.message).toMatch(/servicio externo/);
+    });
+
+    it('rechaza Origin ajeno en rutas mutantes', async () => {
+      await authed(
+        http()
+          .post('/api/settings/ocr/local/instalar')
+          .set('Origin', 'http://malo.example')
+          .send({}),
+      ).expect(403);
+      expect(installer.install).not.toHaveBeenCalled();
     });
   });
 });

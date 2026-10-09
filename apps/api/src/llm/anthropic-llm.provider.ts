@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseLlmProvider } from './base-llm.provider';
 import type { LlmConfig } from './llm-config';
+import { LlmTruncatedError } from './llm-provider.interface';
 import type { LlmRequest } from './llm-provider.interface';
 
 type ImageMedia = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
@@ -53,6 +54,9 @@ export class AnthropicLlmProvider extends BaseLlmProvider {
     );
     if (res.stop_reason === 'refusal') {
       throw new Error('El modelo rechazó la solicitud (refusal)');
+    }
+    if (req.failOnTruncate && res.stop_reason === 'max_tokens') {
+      throw new LlmTruncatedError();
     }
     return res.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')

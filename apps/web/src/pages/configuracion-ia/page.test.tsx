@@ -83,10 +83,25 @@ describe('Configuración de IA: lectura de PDFs escaneados', () => {
 
     const puts = (u: string) => f.mock.calls.filter(([x, i]) => String(x) === u && i?.method === 'PUT').map(([, i]) => JSON.parse(String(i?.body)))
     expect(puts('/api/settings/ia')).toEqual([{ claveAwsAccessKeyId: 'AKIACONFIG999', claveAwsSecreto: 'secreto-config-777' }])
-    expect(puts('/api/settings/ocr')).toEqual([{ motor: 'textract' }])
+    expect(puts('/api/settings/ocr')).toEqual([{ motor: 'textract', visionRetry: true, visionMaxRegions: 40, renderDpi: 200, textractMode: 'detect' }])
     expect(await screen.findByText('Ya hay una clave guardada')).toBeInTheDocument()
     expect(document.body.innerHTML).not.toContain('AKIACONFIG999')
     expect(document.body.innerHTML).not.toContain('secreto-config-777')
+  })
+
+  it('permite cambiar la longitud máxima del resumen y la calidad de lectura', async () => {
+    const f = montar({})
+    const user = userEvent.setup()
+    await user.click(await screen.findByText('Opciones avanzadas'))
+    const campo = await screen.findByLabelText('Longitud máxima de cada resumen')
+    expect(campo).toHaveValue(8000)
+    expect(screen.getByText(/Súbela si un resumen sale cortado/)).toBeInTheDocument()
+    await user.clear(campo)
+    await user.type(campo, '12000')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(screen.getByText('Cambios guardados.')).toBeInTheDocument())
+    const puts = f.mock.calls.filter(([x, i]) => String(x) === '/api/settings/ia' && i?.method === 'PUT').map(([, i]) => JSON.parse(String(i?.body)))
+    expect(puts[0].maxOutputTokens).toBe(12000)
   })
 
   it('Probar Textract muestra el error de AWS', async () => {

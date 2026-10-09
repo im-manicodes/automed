@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { AjustesMicrosoft } from '../../../lib/api'
-import { useGuardarConfigMicrosoft } from '../hooks/useConfigMicrosoft'
+import { useGuardarConfigMicrosoft } from '../../../hooks/useConfigMicrosoft'
 import { errorMessage } from '../../../lib/format'
 import { copiarTexto } from '../../../lib/clipboard'
 import { useToast } from '../../../context/toasts-context'
-import { LuCopy, LuCheck, LuKeyRound } from 'react-icons/lu'
+import { LuCopy, LuCheck, LuKeyRound, LuBookOpen } from 'react-icons/lu'
 
 interface Props {
   config: AjustesMicrosoft
@@ -102,9 +103,8 @@ export default function ConfigMicrosoftCard({ config, onSaved }: Props) {
             <LuCopy className="mr-1.5 size-4" aria-hidden />Copiar
           </button>
         </div>
-        <p className="text-sm text-slate-600">
-          En Microsoft Entra: Registros de aplicaciones, tu app, Autenticación, «Agregar plataforma», «Web», y pega esta dirección. En Permisos de API agrega Mail.Read y User.Read (delegados).
-        </p>
+        <p className="text-sm text-slate-600">Pégala en Microsoft al registrar la app.</p>
+        <Link to="/ajustes/guia-microsoft" className="btn btn-secondary"><LuBookOpen className="mr-1.5 size-4" aria-hidden />Ver guía rápida</Link>
       </div>
 
       {error && <p role="alert" className="text-red-900">{error}</p>}

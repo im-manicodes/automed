@@ -8,15 +8,18 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { plural } from '../../lib/format'
 import { useMailStatus } from '../../hooks/useMail'
 import { useJobsStatus } from './hooks/useAjustes'
-import { useConfigMicrosoft } from './hooks/useConfigMicrosoft'
+import { useConfigMicrosoft } from '../../hooks/useConfigMicrosoft'
 import { usePolling } from '../../hooks/usePolling'
 import { useAjustesIa } from '../../hooks/useAjustesIa'
+import { useAjustesAlmacenamiento } from '../../hooks/useAjustesAlmacenamiento'
 import { nombreProveedor } from '../../lib/ia'
-import { LuCheck, LuTriangleAlert, LuHourglass } from 'react-icons/lu'
+import { nombreAlmacenamiento } from '../../lib/almacenamiento'
+import { LuCheck, LuTriangleAlert, LuHourglass, LuScrollText } from 'react-icons/lu'
 
 export default function Ajustes() {
   const { session, logout } = useSession()
   const { data: ia } = useAjustesIa()
+  const { data: alm } = useAjustesAlmacenamiento()
   const { data: mail, error: mailError, refetch: refetchMail } = useMailStatus()
   const { data: msConfig, refetch: refetchMs } = useConfigMicrosoft()
   const { data: jobs, error: jobsError, refetch: refetchJobs } = useJobsStatus()
@@ -83,6 +86,18 @@ export default function Ajustes() {
         <h3 className="text-lg font-bold">Inteligencia artificial</h3>
         {ia && <p className="text-slate-700">Proveedor actual: <strong>{nombreProveedor(ia.proveedor)}</strong></p>}
         <Link to="/ajustes/ia" className="btn btn-secondary w-full">Configurar</Link>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-lg font-bold">Almacenamiento</h3>
+        {alm && <p className="text-slate-700">Se guardan en: <strong>{nombreAlmacenamiento(alm.proveedor)}</strong></p>}
+        <Link to="/ajustes/almacenamiento" className="btn btn-secondary w-full">Configurar</Link>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-lg font-bold">Registro de la API</h3>
+        <p className="text-slate-700">Mira lo que hace el servidor y si algo falló.</p>
+        <Link to="/ajustes/registro" className="btn btn-secondary w-full"><LuScrollText className="size-5" aria-hidden />Ver registro</Link>
       </div>
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">

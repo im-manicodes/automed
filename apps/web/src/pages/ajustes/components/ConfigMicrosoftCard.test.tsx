@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider } from '../../../context/toasts'
 import type { AjustesMicrosoft } from '../../../lib/api'
 import * as clipboard from '../../../lib/clipboard'
@@ -18,9 +19,11 @@ const base: AjustesMicrosoft = {
 
 function renderCard(config: AjustesMicrosoft = base, onSaved = vi.fn()) {
   render(
-    <ToastProvider>
-      <ConfigMicrosoftCard config={config} onSaved={onSaved} />
-    </ToastProvider>,
+    <MemoryRouter>
+      <ToastProvider>
+        <ConfigMicrosoftCard config={config} onSaved={onSaved} />
+      </ToastProvider>
+    </MemoryRouter>,
   )
   return onSaved
 }
@@ -69,5 +72,10 @@ describe('tarjeta de configuración de Microsoft', () => {
     renderCard()
     await u.click(screen.getByRole('button', { name: 'Copiar dirección de redirección' }))
     expect(copy).toHaveBeenCalledWith(base.redirectUriSugerida)
+  })
+
+  it('enlaza a la guía rápida', () => {
+    renderCard()
+    expect(screen.getByRole('link', { name: /Ver guía rápida/ })).toHaveAttribute('href', '/ajustes/guia-microsoft')
   })
 })

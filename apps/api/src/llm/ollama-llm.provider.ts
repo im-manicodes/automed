@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { BaseLlmProvider } from './base-llm.provider';
 import type { LlmConfig } from './llm-config';
+import { LlmTruncatedError } from './llm-provider.interface';
 import type { LlmRequest } from './llm-provider.interface';
 
 /**
@@ -54,6 +55,9 @@ export class OllamaLlmProvider extends BaseLlmProvider {
         { role: 'user' as const, content: userContent },
       ],
     });
+    if (req.failOnTruncate && res.choices[0]?.finish_reason === 'length') {
+      throw new LlmTruncatedError();
+    }
     return (res.choices[0]?.message?.content ?? '').trim();
   }
 }
