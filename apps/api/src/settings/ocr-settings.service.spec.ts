@@ -17,6 +17,9 @@ describe('OcrSettingsService', () => {
     expect(await svc.getEffective()).toEqual({
       motor: 'local',
       textractMode: 'detect',
+      visionRetry: false,
+      visionMaxRegions: 30,
+      renderDpi: 250,
       origen: 'servidor',
     });
   });
@@ -71,5 +74,40 @@ describe('OcrSettingsService', () => {
     expect(spy).toHaveBeenCalledTimes(1);
     await svc.save({ motor: 'ninguno' });
     expect((await svc.getEffective()).motor).toBe('ninguno');
+  });
+
+  it('relectura con IA, máximo de partes y DPI: panel > .env > defecto', async () => {
+    const { svc } = make({
+      OCR_VISION_RETRY: 'true',
+      OCR_VISION_MAX_REGIONS: '50',
+      OCR_RENDER_DPI: '300',
+    });
+    expect(await svc.getEffective()).toMatchObject({
+      visionRetry: true,
+      visionMaxRegions: 50,
+      renderDpi: 300,
+    });
+    await svc.save({ visionRetry: false, visionMaxRegions: 7, renderDpi: 200 });
+    expect(await svc.getEffective()).toMatchObject({
+      visionRetry: false,
+      visionMaxRegions: 7,
+      renderDpi: 200,
+      motor: 'local',
+      origen: 'panel',
+    });
+  });
+
+  it('rechaza valores fuera de rango con 400 en español', async () => {
+    const { svc } = make();
+    for (const bad of [
+      { visionMaxRegions: 0 },
+      { visionMaxRegions: 201 },
+      { visionMaxRegions: 2.5 },
+      { renderDpi: 149 },
+      { renderDpi: 401 },
+      { visionRetry: 'si' as never },
+    ]) {
+      await expect(svc.save(bad)).rejects.toBeInstanceOf(BadRequestException);
+    }
   });
 });

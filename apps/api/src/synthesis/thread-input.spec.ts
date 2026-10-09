@@ -4,6 +4,8 @@ import {
   cleanBody,
   InputMessage,
   InputPage,
+  InputRegion,
+  renderPage,
 } from './thread-input';
 
 const msg = (over: Partial<InputMessage>): InputMessage => ({
@@ -117,5 +119,62 @@ describe('chunkBlocks', () => {
     );
     expect(chunks.length).toBeGreaterThan(2);
     for (const c of chunks) expect(c.length).toBeLessThanOrEqual(2000);
+  });
+});
+
+describe('renderPage con geometría', () => {
+  const reg = (over: Partial<InputRegion>): InputRegion => ({
+    x: 0.05,
+    y: 0.1,
+    w: 0.2,
+    h: 0.02,
+    text: 't',
+    status: 'ok',
+    userText: null,
+    ...over,
+  });
+  const run = (regions: InputRegion[]) => {
+    let n = 0;
+    return renderPage(
+      { pageNumber: 2, text: null, regions },
+      'doc.pdf',
+      () => ++n,
+    );
+  };
+
+  it('agrupa en renglones y ordena por x con pista de posición', () => {
+    const r = run([
+      reg({ x: 0.52, y: 0.341, text: 'Fecha: 01/02' }),
+      reg({ x: 0.05, y: 0.34, text: 'Hospital: X' }),
+      reg({ x: 0.05, y: 0.5, text: 'Dx: apendicitis' }),
+    ]);
+    expect(r.text).toBe(
+      'y34% | x5% Hospital: X | x52% Fecha: 01/02\ny50% | x5% Dx: apendicitis',
+    );
+    expect(r.doubtful).toBe(0);
+  });
+
+  it('mezcla dudosa/corregida y numera #n de arriba a abajo e izquierda a derecha', () => {
+    const r = run([
+      reg({ x: 0.6, y: 0.1, status: 'dudoso' }),
+      reg({ x: 0.1, y: 0.1, status: 'dudoso' }),
+      reg({ x: 0.3, y: 0.1, status: 'dudoso', userText: ' corregido ' }),
+      reg({ x: 0.1, y: 0.3, status: 'dudoso' }),
+    ]);
+    expect(r.doubtful).toBe(3);
+    expect(r.text).toBe(
+      [
+        'y10% | x10% [ilegible #1 · doc.pdf · p.2] | x30% corregido | x60% [ilegible #2 · doc.pdf · p.2]',
+        'y30% | x10% [ilegible #3 · doc.pdf · p.2]',
+      ].join('\n'),
+    );
+  });
+
+  it('sin w/h conserva el formato anterior (una línea por región)', () => {
+    const r = run([
+      { x: 0.5, y: 0.1, text: 'B', status: 'ok', userText: null },
+      { x: 0.1, y: 0.1, text: 'A', status: 'ok', userText: null },
+    ]);
+    expect(r.text).toBe('A\nB');
   });
 });

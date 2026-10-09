@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { dirname, join } from 'node:path';
-import { readOcrConfig } from './ocr-config';
+import { OcrSettingsService } from '../settings/ocr-settings.service';
 
 export interface RasterPage {
   pageNumber: number; // 1-based
@@ -19,17 +18,13 @@ const MAX_SIDE_PX = 6000;
  */
 @Injectable()
 export class PdfRasterizerService {
-  private readonly dpi: number;
-
-  constructor(config: ConfigService) {
-    this.dpi = readOcrConfig(config).dpi;
-  }
+  constructor(private readonly ocrSettings: OcrSettingsService) {}
 
   async rasterize(
     pdf: Uint8Array,
     opts: { dpi?: number } = {},
   ): Promise<RasterPage[]> {
-    const dpi = opts.dpi ?? this.dpi;
+    const dpi = opts.dpi ?? (await this.ocrSettings.getEffective()).renderDpi;
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const root = dirname(require.resolve('pdfjs-dist/package.json'));
     const task = pdfjs.getDocument({

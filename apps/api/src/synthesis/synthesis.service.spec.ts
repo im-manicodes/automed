@@ -1,3 +1,4 @@
+import { LlmTruncatedError } from '../llm/llm-provider.interface';
 import { SynthesisService, stripFences } from './synthesis.service';
 
 interface SetupOpts {
@@ -134,6 +135,20 @@ function setup(opts: SetupOpts = {}) {
 }
 
 describe('SynthesisService', () => {
+  it('pide failOnTruncate y, si la salida se corta, falla con mensaje claro sin guardar Synthesis', async () => {
+    const s = setup();
+    s.llm.text.mockRejectedValue(new LlmTruncatedError());
+    await expect(s.svc.generate('t1')).rejects.toThrow(
+      /salió más largo de lo que permite el modelo/,
+    );
+    expect(s.llm.text.mock.calls[0][2]).toMatchObject({
+      failOnTruncate: true,
+      task: 'resumen',
+    });
+    expect(s.prisma.synthesis.create).not.toHaveBeenCalled();
+    expect(s.syntheses).toHaveLength(0);
+  });
+
   it('sin síntesis previa: modo completo con ilegibles, isFromMe y plantilla; guarda cobertura', async () => {
     const s = setup();
     const r = await s.svc.generate('t1');

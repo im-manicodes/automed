@@ -25,6 +25,7 @@ export interface BorradorIa {
   ollamaUrl: string
   awsRegion: string
   maxInputTokens: number
+  maxOutputTokens: number
   /** undefined = sin cambios, string = clave nueva, null = quitar la guardada. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
@@ -39,6 +40,7 @@ export function borradorDesde(a: AjustesIa): BorradorIa {
     ollamaUrl: a.ollamaUrl,
     awsRegion: a.awsRegion,
     maxInputTokens: a.maxInputTokens,
+    maxOutputTokens: a.maxOutputTokens,
   }
 }
 
@@ -61,6 +63,7 @@ export function cambiosDesde(b: BorradorIa): CambiosAjustesIa {
     ollamaUrl: b.ollamaUrl,
     awsRegion: b.awsRegion,
     maxInputTokens: b.maxInputTokens,
+    maxOutputTokens: b.maxOutputTokens,
   }
   if (b.claveOpenai !== undefined) c.claveOpenai = b.claveOpenai
   if (b.claveAnthropic !== undefined) c.claveAnthropic = b.claveAnthropic

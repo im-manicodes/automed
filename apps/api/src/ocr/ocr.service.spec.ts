@@ -61,9 +61,9 @@ function setup(
     ),
   };
   const vision: any = {
-    enabled: opts.visionEnabled ?? false,
+    isEnabled: jest.fn().mockResolvedValue(opts.visionEnabled ?? false),
     acceptThreshold: 0.9,
-    maxRegions: 10,
+    getMaxRegions: jest.fn().mockResolvedValue(10),
     reread: jest.fn().mockResolvedValue(opts.visionReading ?? null),
   };
   const pdfText: any = {

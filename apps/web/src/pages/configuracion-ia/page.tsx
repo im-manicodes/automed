@@ -76,6 +76,17 @@ function Formulario({ inicial }: { inicial: AjustesIa }) {
             onChange={(e) => setBorrador((b) => ({ ...b, maxInputTokens: Number(e.target.value) }))}
           />
           <p className="text-sm text-slate-700">Si un hilo no cabe, las novedades se envían por tramos. Mínimo 2000.</p>
+          <label htmlFor="max-salida" className="block font-semibold">Longitud máxima de cada resumen</label>
+          <input
+            id="max-salida"
+            type="number"
+            min={1000}
+            max={64000}
+            className="min-h-12 w-full rounded-xl border border-slate-300 px-3"
+            value={borrador.maxOutputTokens}
+            onChange={(e) => setBorrador((b) => ({ ...b, maxOutputTokens: Number(e.target.value) }))}
+          />
+          <p className="text-sm text-slate-700">Súbela si un resumen sale cortado; algunos modelos aceptan menos. Entre 1000 y 64000.</p>
           {borrador.proveedor === 'ollama' && (
             <>
               <label htmlFor="ollama-url" className="block font-semibold">Dirección de Ollama</label>

@@ -27,6 +27,9 @@ export class OcrSettingsController {
       motor: eff.motor,
       origen: eff.origen,
       textractMode: eff.textractMode,
+      visionRetry: eff.visionRetry,
+      visionMaxRegions: eff.visionMaxRegions,
+      renderDpi: eff.renderDpi,
       entorno: { servidor: true },
       servicioLocal: await this.probeService.serverLocalStatus(),
     };

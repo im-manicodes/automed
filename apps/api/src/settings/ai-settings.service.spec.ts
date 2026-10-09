@@ -224,4 +224,21 @@ describe('AiSettingsService', () => {
     b.rows.set('ia.config', a.rows.get('ia.config'));
     expect((await b.svc.getEffective()).llm.openaiApiKey).toBeUndefined();
   });
+
+  it('maxOutputTokens: panel > LLM_MAX_OUTPUT_TOKENS > 16000, valida rango y llega al adaptador', async () => {
+    const a = setup({ LLM_PROVIDER: 'openai' });
+    expect((await a.svc.getEffective()).maxOutputTokens).toBe(16000);
+    const b = setup({ LLM_PROVIDER: 'openai', LLM_MAX_OUTPUT_TOKENS: '8000' });
+    expect((await b.svc.getEffective()).maxOutputTokens).toBe(8000);
+    await b.svc.save({ maxOutputTokens: 32000 });
+    const e = await b.svc.getEffective();
+    expect(e.maxOutputTokens).toBe(32000);
+    expect(e.llm.defaultMaxTokens).toBe(32000);
+    expect((await b.svc.getPublic()).maxOutputTokens).toBe(32000);
+    for (const n of [999, 64001, 2000.5]) {
+      await expect(b.svc.save({ maxOutputTokens: n })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    }
+  });
 });

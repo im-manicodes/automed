@@ -6,8 +6,10 @@ import {
 import { TemplatesService } from './templates.service';
 import {
   DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN,
+  TEMPLATE_KINDS,
   validateWhatsappTemplate,
 } from './template-kinds';
+import { parseReportColumns } from './report-columns';
 
 /** Prisma en memoria mínimo para Template. */
 function fakePrisma() {
@@ -56,13 +58,11 @@ describe('TemplatesService', () => {
     expect(t.version).toBe(1);
     expect(t.markdown).toBe(DEFAULT_TEMPLATE_MARKDOWN);
     for (const sec of [
-      'Asunto',
-      'Participantes',
-      'Resumen ejecutivo',
-      'Línea de tiempo',
-      'Decisiones',
-      'Acciones pendientes',
-      'Fechas y montos relevantes',
+      'Paciente',
+      'Ingreso y diagnóstico',
+      'Plan de manejo vigente',
+      'Evolución por día',
+      'Pendientes y en espera',
       'Contenido de adjuntos',
       'Dudas por aclarar',
     ])
@@ -151,5 +151,18 @@ describe('TemplatesService', () => {
     await expect(s.reset('otro' as never)).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it('los defaults de resumen, whatsapp y reporte validan', () => {
+    for (const kind of ['resumen', 'whatsapp', 'reporte'] as const) {
+      const def = TEMPLATE_KINDS[kind];
+      expect(def.validate(def.defaultMarkdown)).toBeNull();
+      expect(def.defaultMarkdown.length).toBeLessThanOrEqual(def.maxChars);
+    }
+    expect(DEFAULT_TEMPLATE_MARKDOWN).toContain('## Dudas por aclarar');
+    expect(DEFAULT_TEMPLATE_MARKDOWN).toContain('## Contenido de adjuntos');
+    expect(
+      parseReportColumns(TEMPLATE_KINDS.reporte.defaultMarkdown).columnas,
+    ).toHaveLength(21);
   });
 });

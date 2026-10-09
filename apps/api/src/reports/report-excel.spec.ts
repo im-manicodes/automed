@@ -58,35 +58,43 @@ describe('buildReportWorkbook', () => {
     const p = wb.getWorksheet('Pacientes')!;
     expect(p.getRow(1).values).toEqual([
       undefined,
-      ...FIXED_HEADERS,
       'Paciente',
       'Hospital',
+      ...FIXED_HEADERS,
     ]);
-    expect(p.getRow(1).getCell(1).font?.bold).toBe(true);
-    expect(p.getRow(1).getCell(1).fill).toMatchObject({ type: 'pattern' });
+    const h1 = p.getRow(1).getCell(1);
+    expect(h1.font).toMatchObject({
+      name: 'Arial Narrow',
+      size: 10,
+      bold: true,
+    });
+    expect(JSON.stringify(h1.fill)).toContain('FF2F8A6C');
+    expect(h1.alignment?.wrapText).toBe(true);
     expect(p.views[0]).toMatchObject({ state: 'frozen', ySplit: 1 });
     expect(p.autoFilter).toBeTruthy();
     expect(p.rowCount).toBe(5);
     // Novedad resaltada solo cuando es "Sí"
-    expect(p.getRow(2).getCell(1).value).toBe('Sí');
-    expect(p.getRow(2).getCell(1).fill).toMatchObject({ type: 'pattern' });
-    expect(p.getRow(5).getCell(1).value).toBe('No');
-    expect(JSON.stringify(p.getRow(5).getCell(1).fill)).not.toContain(
+    const NOV = 3;
+    expect(p.getRow(2).getCell(NOV).value).toBe('Sí');
+    expect(p.getRow(2).getCell(NOV).fill).toMatchObject({ type: 'pattern' });
+    expect(p.getRow(5).getCell(NOV).value).toBe('No');
+    expect(JSON.stringify(p.getRow(5).getCell(NOV).fill)).not.toContain(
       'FFFFE699',
     );
-    expect(JSON.stringify(p.getRow(2).getCell(1).fill)).toContain('FFFFE699');
-    expect(p.getRow(3).getCell(3).value).toBe('Alta');
+    expect(JSON.stringify(p.getRow(2).getCell(NOV).fill)).toContain('FFFFE699');
+    expect(p.getRow(3).getCell(NOV + 2).value).toBe('Alta');
     // enlace al ticket
-    const link = p.getRow(2).getCell(5).value as ExcelJS.CellHyperlinkValue;
+    const link = p.getRow(2).getCell(7).value as ExcelJS.CellHyperlinkValue;
     expect(link.hyperlink).toBe('http://localhost:8080/tickets/t1');
     // ajuste de texto
-    expect(p.getRow(2).getCell(6).alignment?.wrapText).toBe(true);
+    expect(p.getRow(2).getCell(1).alignment?.wrapText).toBe(true);
+    expect(p.getRow(2).getCell(7).font?.underline).toBe(true);
     // extracción incompleta: estatus + asunto en la primera columna
-    expect(cell(p.getRow(4).getCell(3).value)).toContain(
+    expect(cell(p.getRow(4).getCell(5).value)).toContain(
       'Extracción incompleta',
     );
-    expect(p.getRow(4).getCell(6).value).toBe('Asunto roto');
-    expect(cell(p.getRow(5).getCell(3).value)).toContain(
+    expect(p.getRow(4).getCell(1).value).toBe('Asunto roto');
+    expect(cell(p.getRow(5).getCell(5).value)).toContain(
       'Resumen desactualizado',
     );
 
@@ -97,6 +105,68 @@ describe('buildReportWorkbook', () => {
     expect(texts.join('\n')).toContain('2026-10-06');
 
     expect(texts.join('\n')).not.toContain('sin analizar');
+  });
+
+  describe('fechas y días de estancia', () => {
+    const cols = [
+      'FECHA DE INGRESO',
+      'DIAS DE ESTANCIA HOSPITALARIA',
+      'FECHA DE REPORTE DE LA GESTIÓN OPERATIVA Y/O EGRESO',
+      'Nota',
+    ];
+    const build = async (rows: ExcelRow[]) => {
+      const buf = await buildReportWorkbook({
+        fecha: '2026-10-06',
+        generadoEn: 'x',
+        trigger: 'manual',
+        columnas: cols,
+        rows,
+        webOrigin: 'http://web',
+        totales: { hospitalizados: 0, conNovedad: 0, altas: 0 },
+      });
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf as unknown as ArrayBuffer);
+      return wb.getWorksheet('Pacientes')!;
+    };
+    it('convierte fechas válidas y escribe fórmulas con letras reales', async () => {
+      const p = await build([
+        row({
+          data: {
+            [cols[0]]: '2026-10-01',
+            [cols[1]]: '5 días',
+            [cols[2]]: 'pendiente',
+          },
+        }),
+        row({
+          estado: 'alta',
+          data: {
+            [cols[0]]: '2026-10-01',
+            [cols[1]]: '9',
+            [cols[2]]: '2026-10-04',
+          },
+        }),
+        row({
+          data: { [cols[0]]: 'sin fecha', [cols[1]]: '3 días', [cols[3]]: 'x' },
+        }),
+      ]);
+      const a = p.getRow(2);
+      expect((a.getCell(1).value as Date).toISOString()).toContain(
+        '2026-10-01',
+      );
+      expect(a.getCell(1).numFmt).toBe('yyyy-m-d');
+      expect(a.getCell(3).value).toBe('pendiente');
+      expect(a.getCell(2).value).toMatchObject({
+        formula: '(TODAY()-A2)+1',
+        result: 6,
+      });
+      expect(p.getRow(3).getCell(2).value).toMatchObject({
+        formula: '(C3-A3)+1',
+        result: 4,
+      });
+      // sin fecha de ingreso válida: queda el texto de la IA
+      expect(p.getRow(4).getCell(1).value).toBe('sin fecha');
+      expect(p.getRow(4).getCell(2).value).toBe('3 días');
+    });
   });
 
   describe('hoja Eventos', () => {

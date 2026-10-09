@@ -33,16 +33,25 @@ export interface TemplateKindDef {
 
 export const DEFAULT_WHATSAPP_TEMPLATE_NAME = 'Formato de WhatsApp estándar';
 
-export const DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN = `*Título corto del asunto*
-<!-- Una línea en negrita (*así*) con el tema del correo. -->
+export const DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN = `*{NOMBRE APELLIDOS}* · {N} años · _{UCI o Hab.}_ · Ingreso {dd/mm}
 
-<!-- Quién escribe y cuándo: una línea. -->
+*Diagnóstico:* {diagnóstico o PO con su fecha}
 
-<!-- Qué pide, informa o decide: 1 a 3 viñetas con "•". -->
+*Evolución {dd/mm}:*
+{evolución más reciente en texto corrido}
+\`TA {…}\` \`FC {…}\` \`FR {…}\` \`T {…}\` \`SatO2 {…}\`
 
-<!-- Acciones, fechas y montos importantes: una viñeta por dato (solo si existen). -->
+*Estudios:* \`{estudio: cifra}\` \`{estudio: cifra}\`
 
-<!-- Estilo: español sencillo y directo; máximo 1200 caracteres en total. -->
+*Pendientes:*
+• {pendiente}
+• {pendiente}
+
+<!-- Todo lo que está entre llaves {…} es un MARCADOR: reemplázalo con datos del correo o sus adjuntos. PROHIBIDO copiar los marcadores {…} literalmente y PROHIBIDO inventar valores: usa solo lo que aparezca en el correo. -->
+<!-- Si no hay dato para una línea o sección completa (diagnóstico, signos vitales, estudios, pendientes...), OMÍTELA. No escribas "No indicado" ni listes los campos que faltan. Si falta un dato clave, a lo sumo UNA línea final: _Falta: ..._ -->
+<!-- Formato WhatsApp: *negrita* para nombres y títulos, _cursiva_ para ubicación o aclaraciones, \`código\` para cifras (signos vitales, laboratorios, dosis, estudios), "• " para viñetas. Separa las secciones con una línea en blanco. -->
+<!-- Si el paciente fue dado de alta, usa un bloque corto: "*{NOMBRE APELLIDOS}* — _Alta por mejoría_" y debajo el tratamiento indicado. -->
+<!-- Si hay varios pacientes, un bloque por paciente separado por una línea en blanco. Español sencillo y directo. -->
 `;
 
 export const MAX_WHATSAPP_TEMPLATE_CHARS = 3000;
@@ -75,7 +84,7 @@ export const TEMPLATE_KINDS: Record<TemplateKind, TemplateKindDef> = {
     defaultMarkdown: DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN,
     minChars: MIN_TEMPLATE_CHARS,
     maxChars: MAX_WHATSAPP_TEMPLATE_CHARS,
-    help: 'Formato del mensaje de WhatsApp del último correo. Escribe cómo quieres que se vea y tus instrucciones dentro de <!-- comentarios -->.',
+    help: 'Formato del mensaje de WhatsApp del último correo (un bloque por paciente). Usa marcas de WhatsApp: *negrita*, _cursiva_, `código` (para cifras) y • viñetas. Pon {marcadores} donde va cada dato (nunca valores de ejemplo reales) y tus instrucciones dentro de <!-- comentarios -->.',
     validate: validateWhatsappTemplate,
   },
   reporte: {

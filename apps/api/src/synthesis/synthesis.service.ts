@@ -10,7 +10,7 @@ import { createHash } from 'crypto';
 import type { ThreadSynthesizer } from '../jobs/pipeline-hooks.interface';
 import { parseReportColumns } from '../templates/report-columns';
 import { AiSettingsService } from '../settings/ai-settings.service';
-import { LLM_PROVIDER } from '../llm/llm-provider.interface';
+import { LLM_PROVIDER, LlmTruncatedError } from '../llm/llm-provider.interface';
 import type { LlmProvider } from '../llm/llm-provider.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { sanearParaWhatsApp } from './whatsapp-format';
@@ -71,6 +71,8 @@ interface ThreadData {
 }
 
 const MAP_MAX_TOKENS = 4000;
+const TRUNCATED_MESSAGE =
+  'El resumen salió más largo de lo que permite el modelo. Pide a quien administra que suba la longitud máxima de salida o vuelve a intentarlo.';
 const MAX_REDUCE_LEVELS = 4;
 /** Reserva para instrucciones de los prompts de map/reduce. */
 const PROMPT_OVERHEAD_TOKENS = 1500;
@@ -300,7 +302,7 @@ export class SynthesisService implements ThreadSynthesizer {
       const out = await this.llm.text(
         WHATSAPP_SYSTEM_PROMPT,
         buildWhatsappPrompt(tpl, SAMPLE_WHATSAPP_EMAIL_TEXT),
-        { maxTokens: 800, task: 'whatsapp' },
+        { maxTokens: 2000, task: 'whatsapp' },
       );
       return { markdown: sanearParaWhatsApp(stripFences(out)) };
     }
@@ -355,7 +357,7 @@ export class SynthesisService implements ThreadSynthesizer {
       out = await this.llm.text(
         WHATSAPP_SYSTEM_PROMPT,
         buildWhatsappPrompt(tpl.markdown, body),
-        { maxTokens: 800, task: 'whatsapp' },
+        { maxTokens: 2000, task: 'whatsapp' },
       );
     } catch {
       this.logger.warn(
@@ -456,6 +458,8 @@ export class SynthesisService implements ThreadSynthesizer {
         regions: p.regions.map((r) => ({
           x: r.x,
           y: r.y,
+          w: r.w,
+          h: r.h,
           text: r.text,
           status: r.status,
           userText: r.userText,
@@ -490,7 +494,16 @@ export class SynthesisService implements ThreadSynthesizer {
     opts?: { maxTokens?: number },
   ) {
     meter.tokens += estimateTokens(system) + estimateTokens(user);
-    return this.llm.text(system, user, { ...opts, task: 'resumen' });
+    // failOnTruncate: una síntesis cortada nunca se guarda como si estuviera completa.
+    return this.llm
+      .text(system, user, { ...opts, task: 'resumen', failOnTruncate: true })
+      .catch((e: unknown) => {
+        if (e instanceof LlmTruncatedError) {
+          // Sin contenido en logs; el mensaje llega a Job.lastError y el hilo pasa a 'error'.
+          throw new LlmTruncatedError(TRUNCATED_MESSAGE);
+        }
+        throw e;
+      });
   }
 
   /**

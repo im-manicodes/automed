@@ -9,7 +9,7 @@ import type {
   MotorOcr,
   PruebaOcrResultado,
 } from '../lib/api'
-import { cambiosAws, type ClavesAws } from '../lib/ocr'
+import { cambiosAws, type AvanzadoOcr, type ClavesAws } from '../lib/ocr'
 
 type Callbacks<T> = { onSuccess?: (data: T) => void; onError?: (message: string) => void }
 
@@ -35,12 +35,16 @@ export function useAplicarOcr() {
   const { mutate: guardarOcr } = ocr
   const { mutate: guardarIa } = ia
   const aplicar = useCallback(
-    async (o: { motor: MotorOcr; actual: AjustesOcr; claves: ClavesAws; forzar?: boolean }) => {
+    async (o: { motor: MotorOcr; actual: AjustesOcr; claves: ClavesAws; forzar?: boolean; avanzado?: AvanzadoOcr }) => {
       let nuevoIa: AjustesIa | null = null
       let nuevoOcr: AjustesOcr | null = null
       const cambios = o.motor === 'textract' ? cambiosAws(o.claves) : null
       if (cambios) nuevoIa = await guardarIa({ body_params: cambios })
-      if (o.forzar || o.motor !== o.actual.motor) nuevoOcr = await guardarOcr({ body_params: { motor: o.motor } })
+      const avanzado = o.avanzado
+      const avanzadoCambio = !!avanzado && (Object.keys(avanzado) as (keyof AvanzadoOcr)[]).some((k) => avanzado[k] !== o.actual[k])
+      if (o.forzar || avanzadoCambio || o.motor !== o.actual.motor) {
+        nuevoOcr = await guardarOcr({ body_params: { motor: o.motor, ...(avanzado ?? {}) } })
+      }
       return { ocr: nuevoOcr, ia: nuevoIa }
     },
     [guardarIa, guardarOcr],

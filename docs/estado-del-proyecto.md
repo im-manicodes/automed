@@ -318,3 +318,24 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 - Hecho: `Dockerfile` raíz + `deploy/entrypoint.sh` (web servida por la API + api + OCR local; sin RustFS); `docker-compose.yml` queda SOLO para desarrollo (hot reload, Vite :5173).
 - Hecho: almacenamiento elegible desde la web (RustFS o AWS S3): `storage.config`, `StorageSettingsService`, `DynamicStorageService`, `/api/settings/storage` (+ `test`), Ajustes -> Almacenamiento y paso en `/bienvenida`.
 - Falta: probar la imagen única de punta a punta con un RustFS/S3 real; validar que PaddleOCR carga en la imagen (en la prueba cayó a Tesseract: `paddlex[ocr]` sin dependencias extra; revisar si el `ocr-local` del compose se comporta igual).
+
+## Plantillas médicas y Excel estilo censo (2026-10-08)
+- Hecho: plantillas por defecto médicas: `resumen` (paciente, ingreso, evolución por día, plan de manejo, pendientes, alta, aseguradora), `whatsapp` (un bloque por paciente en texto corrido, sin negritas ni viñetas) y `reporte` (21 columnas del censo A–U).
+- Hecho: hoja «Pacientes» del Excel con las columnas del censo primero y las de la app (Novedad, Qué cambió, Estatus, Última actualización, Enlace) al final; encabezado verde, fechas reales y fórmula de días de estancia.
+- Falta: las plantillas ya guardadas en BD no cambian solas: usar «Restablecer» en Ajustes -> Plantillas. Probar con un caso real y afinar instrucciones; EVOLUCION INICIAL/EVOLUCION son aproximaciones de la IA al texto del censo.
+
+## Resumen detallado y recreación de páginas adjuntas (2026-10-08)
+- Hecho: plantilla `resumen` más detallada (tablas Campo | Valor alineadas al censo/WhatsApp) y bloque por página en «Contenido de adjuntos»: qué trata, datos relevantes, datos faltantes y recreación en markdown.
+- Hecho: `renderPage` agrupa las regiones del OCR por renglón con posición (`yNN% | xNN% texto`) para que el LLM reconstruya filas y columnas; prompts `v2`/`inc2` (no copiar ruido del OCR, bloques por página, incremental conserva bloques previos).
+- Falta: «Restablecer» la plantilla de resumen y «Regenerar» el ticket de prueba; probar la fidelidad con manuscrito real. Salida más larga: considerar `LLM_MAX_OUTPUT_TOKENS` mayor (p. ej. 16000). Error previo ajeno: `prisma/seed-demo.ts(22,28)` (tipo `S3StorageConfig`).
+
+## Salida larga y manuscrito (2026-10-08)
+- Hecho: tope de salida del LLM por defecto 16000 (`LLM_MAX_OUTPUT_TOKENS`, antes 8000), documentado en `.env.example` con la nota para bajarlo o subirlo según el modelo.
+- Hecho: detección de corte por límite de tokens con error claro (`LlmTruncatedError`): el resumen no se guarda truncado y el hilo queda en error con un mensaje en español sencillo.
+- Hecho: documentación de manuscrito: `TEXTRACT_MODE=analyze` en producción, `OCR_VISION_RETRY=true` con modelo de visión para «vision», `OCR_VISION_MAX_REGIONS` (80 para notas completas) y `OCR_RENDER_DPI=300` en `.env.example`; sección «Notas manuscritas y resúmenes largos» en `docs/despliegue.md`.
+- Falta: probar con el ticket manuscrito real tras activar `OCR_VISION_RETRY`; evaluar visión por página completa si no basta.
+
+## WhatsApp con formato y ajustes de OCR en la UI (2026-10-08)
+- Hecho: plantilla de WhatsApp sin valores de ejemplo (el modelo copiaba «Hab. 312», «apendicectomía»…), con *negrita*, _cursiva_, `código`, viñetas y secciones; límite 3500 caracteres y 2000 tokens; vista previa con formato y botones de formato en el diálogo.
+- Hecho: Ajustes -> OCR con opciones avanzadas (releer con IA, máximo de partes, DPI, modo Textract) y Ajustes -> IA con longitud máxima de resumen; todo por `Setting` y sin reiniciar (`.env` solo como defecto).
+- Falta: «Restablecer» las plantillas en Ajustes -> Plantillas; probar el WhatsApp y el OCR de manuscrito con un ticket real; decidir si un corte por longitud debe fallar el job al primer intento (hoy gasta los 5).

@@ -1,6 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { EventsService } from './events.service';
-import { DEFAULT_REPORT_TEMPLATE_MARKDOWN } from '../templates/report-columns';
+/** Columnas fijas de prueba (independientes del default de la plantilla de reporte). */
+const TEST_REPORT_TEMPLATE_MARKDOWN = `- Paciente: Nombre completo del paciente.
+- Hospital: Hospital donde está internado.
+- Diagnóstico: Diagnóstico en una frase.
+`;
 
 const SECRET = 'MARIA-LOPEZ-DIAGNOSTICO-SECRETO';
 const MAIL_SECRET = 'CUERPO-DEL-CORREO-SECRETO';
@@ -99,7 +103,7 @@ function setup(
     getActive: () =>
       Promise.resolve({
         version: 4,
-        markdown: DEFAULT_REPORT_TEMPLATE_MARKDOWN,
+        markdown: TEST_REPORT_TEMPLATE_MARKDOWN,
       }),
   };
   const reports: any = {

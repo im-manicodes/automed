@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { OcrSettingsService } from '../settings/ocr-settings.service';
 import { LLM_PROVIDER } from '../llm/llm-provider.interface';
 import type { LlmProvider } from '../llm/llm-provider.interface';
 import { cropRegionPng } from './image-crop';
@@ -33,28 +34,30 @@ export function parseVisionReading(raw: string): VisionReading | null {
   }
 }
 
-/** Reintento opcional (OCR_VISION_RETRY=true): relee con un LLM con visión una región dudosa. */
+/** Reintento opcional (Ajustes -> OCR u OCR_VISION_RETRY=true): relee con un LLM con visión una región dudosa. */
 @Injectable()
 export class VisionRetryService {
   private readonly cfg: OcrConfig;
 
   constructor(
     config: ConfigService,
+    private readonly ocrSettings: OcrSettingsService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
   ) {
     this.cfg = readOcrConfig(config);
   }
 
-  get enabled() {
-    return this.cfg.visionRetry;
+  /** Vigente por llamada (panel > .env). */
+  async isEnabled(): Promise<boolean> {
+    return (await this.ocrSettings.getEffective()).visionRetry;
   }
 
   get acceptThreshold() {
     return this.cfg.visionAcceptThreshold;
   }
 
-  get maxRegions() {
-    return this.cfg.visionMaxRegions;
+  async getMaxRegions(): Promise<number> {
+    return (await this.ocrSettings.getEffective()).visionMaxRegions;
   }
 
   /** Devuelve la lectura del modelo o null si no hubo respuesta usable. */

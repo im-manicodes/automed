@@ -178,6 +178,16 @@ docker compose ps && curl localhost:3000/api/health
 ```
 Haz backup de la BD antes de actualizar si hay migraciones nuevas (`apps/api/prisma/migrations`). Las migraciones son hacia adelante (`migrate deploy`).
 
+## 9b. Notas manuscritas y resúmenes largos
+Todo se configura desde la web, sin reiniciar (el `.env` solo da valores por defecto):
+1. En producción elige el motor **Textract** en Ajustes -> OCR y, en «Opciones avanzadas de lectura», el modo «Formularios y tablas (mejor con letra a mano)».
+2. Activa «Releer con IA las partes dudosas (letra a mano)» en las mismas opciones, y elige un modelo con visión para la tarea «vision» en Ajustes -> IA.
+3. Si una nota tiene muchas partes dudosas, sube «Máximo de partes a releer» (defecto 30; 80 para una nota completa). «Calidad de lectura» a 300 DPI ayuda con letra pequeña (más lento).
+4. Cuidado con el coste y la privacidad: cada parte dudosa hace una llamada de visión. Son datos de salud; en producción usa Bedrock.
+5. Sigue corrigiendo las zonas con recuadro rojo desde el celular: lo que corriges tiene prioridad y solo se regenera el documento afectado.
+6. Si el resumen falla por longitud, sube «Longitud máxima de cada resumen» en Ajustes -> IA (defecto 16000; algunos modelos aceptan menos).
+7. Leer páginas completas como imagen (visión por página completa) queda como siguiente fase; no está hecho.
+
 ## 10. Solución de problemas
 | Síntoma | Causa probable / qué hacer |
 |---|---|

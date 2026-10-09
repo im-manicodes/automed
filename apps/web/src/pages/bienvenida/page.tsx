@@ -16,7 +16,7 @@ import { useAjustesOcr, useAplicarOcr } from '../../hooks/useAjustesOcr'
 import type { AjustesIa, MotorOcr } from '../../lib/api'
 import { errorMessage } from '../../lib/format'
 import { borradorAlmacenamientoDesde, cuerpoAlmacenamiento, nombreAlmacenamiento, type BorradorAlmacenamiento } from '../../lib/almacenamiento'
-import { faltaParaOcr, nombreMotorOcr } from '../../lib/ocr'
+import { avanzadoDesde, avanzadoValido, faltaParaOcr, nombreMotorOcr, type AvanzadoOcr } from '../../lib/ocr'
 import { borradorDesde, cambiosDesde, conProveedor, faltaClave, nombreProveedor, TAREAS, type BorradorIa } from '../../lib/ia'
 
 const TOTAL = 7
@@ -35,8 +35,10 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
   const [motorElegido, setMotorElegido] = useState<MotorOcr | null>(null)
   const ocr = useAjustesOcr({ enabled: paso >= PASO_OCR })
   const { aplicar, loading: guardandoOcr } = useAplicarOcr()
+  const [avanzadoEditado, setAvanzadoEditado] = useState<AvanzadoOcr | null>(null)
   const motor = motorElegido ?? ocr.data?.motor ?? 'ninguno'
   const claves = borrador.aws ?? {}
+  const avanzado = avanzadoEditado ?? (ocr.data ? avanzadoDesde(ocr.data) : undefined)
   const faltaOcr = ocr.data ? faltaParaOcr(motor, ocr.data, ajustes, claves) : null
   const [usarServidor, setUsarServidor] = useState(false)
   const [eligio, setEligio] = useState(false)
@@ -62,7 +64,7 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
   // Guarda la lectura de PDFs elegida (y las claves de AWS nuevas, solo con Textract).
   const guardarOcr = async () => {
     if (!ocr.data) return
-    const r = await aplicar({ motor, actual: ocr.data, claves })
+    const r = await aplicar({ motor, actual: ocr.data, claves, avanzado })
     if (r.ia) {
       setAjustes(r.ia)
       setBorrador((b) => ({ ...b, aws: undefined }))
@@ -94,7 +96,7 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
   }
   const atras = () => setPaso((p) => (p === PASO_OCR && usarServidor ? 2 : p - 1))
   const esperaOllama = borrador.proveedor === 'ollama' && !usarServidor && !ollamaListo
-  const bloqueado = (paso === 2 && !usarServidor && !eligio) || (paso === 3 && (faltaClave(borrador, ajustes) || esperaOllama)) || (paso === PASO_OCR && (faltaOcr !== null || guardandoOcr)) || (paso === PASO_ALM && (!almListo || guardarAlm.loading))
+  const bloqueado = (paso === 2 && !usarServidor && !eligio) || (paso === 3 && (faltaClave(borrador, ajustes) || esperaOllama)) || (paso === PASO_OCR && (faltaOcr !== null || (!!avanzado && !avanzadoValido(avanzado)) || guardandoOcr)) || (paso === PASO_ALM && (!almListo || guardarAlm.loading))
   const conConfig = !usarServidor
 
   return (
@@ -181,6 +183,8 @@ function Asistente({ inicial }: { inicial: AjustesIa }) {
                   onClaves={(aws) => setBorrador((b) => ({ ...b, aws }))}
                   onRecheck={() => ocr.refetch()}
                   antesDeProbar={guardarOcr}
+                  avanzado={avanzado}
+                  onAvanzado={setAvanzadoEditado}
                 />
                 {faltaOcr && <p role="status" className="text-sm text-amber-900">{faltaOcr}</p>}
               </>

@@ -395,6 +395,8 @@ export interface AjustesIa {
   ollamaUrl: string
   awsRegion: string
   maxInputTokens: number
+  /** Longitud máxima de cada respuesta del modelo (1000..64000). */
+  maxOutputTokens: number
   /** Solo si hay clave guardada; la clave en sí nunca llega al navegador. */
   claves: { openai: boolean; anthropic: boolean; aws: boolean }
   sugeridos: Record<ProveedorIa, { texto: string[]; vision: string[] }>
@@ -406,6 +408,7 @@ export interface CambiosAjustesIa {
   ollamaUrl?: string
   awsRegion?: string
   maxInputTokens?: number
+  maxOutputTokens?: number
   /** string = nueva clave, null = quitar, ausente = no cambiar. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
@@ -467,6 +470,12 @@ export interface AjustesOcr {
   motor: MotorOcr
   origen: 'panel' | 'servidor'
   textractMode: 'detect' | 'analyze'
+  /** Releer con IA (visión) las partes dudosas. */
+  visionRetry: boolean
+  /** Máximo de partes a releer (1..200). */
+  visionMaxRegions: number
+  /** Calidad de lectura al rasterizar (150..400). */
+  renderDpi: number
   entorno: { servidor: boolean }
   servicioLocal: { estado: 'detenido' | 'iniciando' | 'listo' | 'error'; fallbackReason?: string | null; mensaje?: string }
 }
@@ -474,6 +483,9 @@ export interface AjustesOcr {
 export interface CambiosAjustesOcr {
   motor?: MotorOcr
   textractMode?: 'detect' | 'analyze'
+  visionRetry?: boolean
+  visionMaxRegions?: number
+  renderDpi?: number
 }
 
 export interface PruebaOcrResultado {

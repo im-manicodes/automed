@@ -174,4 +174,15 @@ describe('DynamicLlmProvider', () => {
     await svc.text('s', 'u');
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
+
+  it('un nuevo maxOutputTokens (defaultMaxTokens) recrea el adaptador', async () => {
+    const { svc, adapters, set } = setup();
+    await svc.text('s', 'p');
+    set(eff({}, { defaultMaxTokens: 32000 }));
+    await svc.text('s', 'p');
+    expect(adapters).toHaveLength(2);
+    expect(mockCreate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ defaultMaxTokens: 32000 }),
+    );
+  });
 });

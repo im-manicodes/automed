@@ -1,6 +1,7 @@
 import { LuInfo } from 'react-icons/lu'
 import type { AjustesOcr, MotorOcr } from '../../lib/api'
-import type { ClavesAws } from '../../lib/ocr'
+import type { AvanzadoOcr as ValorAvanzado, ClavesAws } from '../../lib/ocr'
+import AvanzadoOcr from './AvanzadoOcr'
 import BotonProbarOcr from './BotonProbarOcr'
 import CamposAws from './CamposAws'
 import PanelServicioOcr from './PanelServicioOcr'
@@ -17,10 +18,13 @@ interface Props {
   onRecheck: () => Promise<unknown> | void
   /** Guarda las claves escritas antes de probar Textract. */
   antesDeProbar?: () => Promise<unknown>
+  /** Ajustes avanzados (releer con IA, calidad); si falta, no se muestran. */
+  avanzado?: ValorAvanzado
+  onAvanzado?: (v: ValorAvanzado) => void
 }
 
 /** Selector de lectura de PDFs escaneados con el detalle de la opción elegida. */
-export default function ConfigOcr({ ajustes, motor, onMotor, awsGuardada, claves, onClaves, onRecheck, antesDeProbar }: Props) {
+export default function ConfigOcr({ ajustes, motor, onMotor, awsGuardada, claves, onClaves, onRecheck, antesDeProbar, avanzado, onAvanzado }: Props) {
   return (
     <div className="space-y-4">
       <SelectorOcr value={motor} onChange={onMotor} entorno={ajustes.entorno} />
@@ -31,6 +35,7 @@ export default function ConfigOcr({ ajustes, motor, onMotor, awsGuardada, claves
           <BotonProbarOcr antes={antesDeProbar} />
         </div>
       )}
+      {motor !== 'ninguno' && avanzado && onAvanzado && <AvanzadoOcr motor={motor} valor={avanzado} onChange={onAvanzado} />}
       {motor === 'ninguno' && (
         <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
           <LuInfo className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Puedes elegirlo después en Ajustes. Mientras tanto, los PDF digitales se leen sin problema.

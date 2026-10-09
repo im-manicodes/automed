@@ -16,6 +16,9 @@ export interface InputMessage {
 export interface InputRegion {
   x: number;
   y: number;
+  /** Ancho/alto normalizados (0..1) de la caja; si ambos vienen, se agrupa por renglones. */
+  w?: number;
+  h?: number;
   text: string;
   status: 'ok' | 'dudoso' | 'corregido';
   userText: string | null;
@@ -120,12 +123,49 @@ export function renderPage(
   }
   const ordered = [...page.regions].sort((a, b) => a.y - b.y || a.x - b.x);
   let doubtful = 0;
-  const lines = ordered.map((r) => {
+  const render = (r: InputRegion) => {
     const t = regionText(r);
     if (t !== null) return t;
     doubtful++;
     return `[ilegible #${nextIllegible()} · ${docName} · p.${page.pageNumber}]`;
-  });
+  };
+  const hasBoxes = ordered.every(
+    (r) => typeof r.w === 'number' && typeof r.h === 'number',
+  );
+  if (!hasBoxes) {
+    return { text: ordered.map(render).join('\n'), doubtful };
+  }
+
+  // Agrupa en renglones: el centro vertical cae dentro de la altura del renglón (tolerancia 0.6·h).
+  interface Row {
+    top: number;
+    bottom: number;
+    items: InputRegion[];
+  }
+  const rows: Row[] = [];
+  for (const r of ordered) {
+    const h = r.h as number;
+    const center = r.y + h / 2;
+    const last = rows[rows.length - 1];
+    const tol = 0.6 * h;
+    if (last && center >= last.top - tol && center <= last.bottom + tol) {
+      last.items.push(r);
+      last.top = Math.min(last.top, r.y);
+      last.bottom = Math.max(last.bottom, r.y + h);
+    } else {
+      rows.push({ top: r.y, bottom: r.y + h, items: [r] });
+    }
+  }
+  const pct = (v: number) => Math.round(v * 100);
+  const lines: string[] = [];
+  for (const row of rows) {
+    row.items.sort((a, b) => a.x - b.x || a.y - b.y);
+  }
+  // Numeración #n en orden de lectura: renglones arriba->abajo, izquierda->derecha.
+  for (const row of rows) {
+    const parts = row.items.map((r) => `x${pct(r.x)}% ${render(r)}`);
+    lines.push(`y${pct(row.top)}% | ${parts.join(' | ')}`);
+  }
   return { text: lines.join('\n'), doubtful };
 }
 

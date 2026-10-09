@@ -224,8 +224,10 @@ describe('GeneratorService', () => {
     expect(
       JSON.stringify(wb.getWorksheet('Pacientes')!.getSheetValues()),
     ).not.toContain('t4');
+    const colEstatus = (pac.getRow(1).values as unknown[]).indexOf('Estatus');
+    expect(colEstatus).toBeGreaterThan(0);
     const t5 = [2, 3, 4]
-      .map((i) => JSON.stringify(pac.getRow(i).getCell(3).value))
+      .map((i) => JSON.stringify(pac.getRow(i).getCell(colEstatus).value))
       .find((v) => v.includes('desactualizado'));
     expect(t5).toContain('Resumen desactualizado: hay mensajes sin analizar');
   });
