@@ -5,8 +5,11 @@
 #   docker run -p 3000:3000 -v automed-models:/models --env-file .env automed
 # (Docker de desarrollo con hot reload: docker-compose.yml.)
 
+# Imagen base configurable (el CI usa un mirror para no depender de Docker Hub).
+ARG NODE_IMAGE=node:22-slim
+
 # ---- 1. Front ----
-FROM node:22-slim AS web
+FROM ${NODE_IMAGE} AS web
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -17,7 +20,7 @@ RUN pnpm --filter web build
 
 # ---- 2. API (solo dependencias de producción; incluye `prisma` y `tsx` para migrate deploy y el seed;
 #      `src/` va porque prisma/seed.ts importa de ahí) ----
-FROM node:22-slim AS api
+FROM ${NODE_IMAGE} AS api
 RUN corepack enable && apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -34,7 +37,7 @@ RUN pnpm --filter api --legacy deploy --prod /out \
  && cp apps/api/prisma.config.ts /out/prisma.config.ts
 
 # ---- 3. Imagen final ----
-FROM node:22-slim
+FROM ${NODE_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends openssl bash \
  && rm -rf /var/lib/apt/lists/*
 
