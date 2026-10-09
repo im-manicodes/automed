@@ -170,6 +170,9 @@ En producción usa solo `db:deploy` (y `db:seed` si quieres la plantilla/ajustes
 ## 8b. Reporte diario en Excel (datos sensibles de salud)
 El reporte (`/api/reports`) contiene nombres, diagnósticos, montos y pendientes de pacientes hospitalizados. Los `.xlsx` se guardan en RustFS bajo `reportes/AAAA-MM-DD/` (incluye esas rutas en tus políticas de acceso y backups) y solo se descargan con sesión. En producción el LLM debe ser Bedrock (elegido en la web); con Ollama/API keys son solo pruebas. La API nueva depende de `exceljs`: tras actualizar usa `docker compose up -d --build api` (en dev con hot reload también hay que reconstruir la imagen para instalar la dependencia). La bitácora de eventos (tabla `HospitalEvent`, migración `20261012100000_eventos_hospitalizacion`) también contiene datos de pacientes: inclúyela en los respaldos de la base; la migración se aplica con `prisma:deploy` o reiniciando la api (`docker compose restart api`). La programación diaria usa `Setting` `reporte.programado|hora|zona` (zona por defecto `America/Mexico_City`) y se evalúa en el worker de la API, por lo que la API debe estar encendida a esa hora (si estaba apagada, se genera al volver a arrancar el mismo día).
 
+## 8c. Imagen en GHCR (GitHub Actions)
+`.github/workflows/docker-image.yml` publica la imagen única en `ghcr.io/flotuz/automed` al hacer push a `main` (tag `latest` y `sha-<corto>`), al crear un tag `v*` (semver) o a mano (`workflow_dispatch`). Pasos: job `test` (`pnpm lint` y `pnpm test`), construcción con buildx y caché `gha`, prueba de humo (la imagen contiene `dist/main.js`, `/app/frontend/index.html`, el CLI `prisma`, `tsx` y `prisma/`) y publicación con `GITHUB_TOKEN` (permiso `packages: write`). La imagen ya no trae Python ni OCR: el entrypoint solo ejecuta `prisma migrate deploy` y arranca la API; `/models` sigue siendo un volumen persistente.
+
 ## 9. Actualizar
 ```bash
 git pull

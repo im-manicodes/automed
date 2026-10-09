@@ -10,6 +10,7 @@ import GuiaMicrosoft from './pages/guia-microsoft/page'
 import Bienvenida from './pages/bienvenida/page'
 import ConfiguracionIa from './pages/configuracion-ia/page'
 import Plantilla from './pages/plantilla/page'
+import Registro from './pages/registro/page'
 import Reportes from './pages/reportes/page'
 import TicketDetalle from './pages/ticket-detalle/page'
 import Tickets from './pages/tickets/page'
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/ajustes/almacenamiento" element={<Almacenamiento />} />
           <Route path="/ajustes/guia-microsoft" element={<GuiaMicrosoft />} />
           <Route path="/ajustes/ia" element={<ConfiguracionIa />} />
+          <Route path="/ajustes/registro" element={<Registro />} />
           <Route path="*" element={<Navigate to="/tickets" replace />} />
         </Route>
        </Route>

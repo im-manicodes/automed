@@ -480,6 +480,24 @@ export interface AjustesOcr {
   servicioLocal: { estado: 'detenido' | 'iniciando' | 'listo' | 'error'; fallbackReason?: string | null; mensaje?: string }
 }
 
+/** OCR local que instala y arranca la propia app (/settings/ocr/local). */
+export type EstadoInstalacionOcr = 'no-instalado' | 'instalando' | 'descargando-modelos' | 'listo' | 'error'
+
+export interface OcrLocal {
+  /** false: el OCR lo da un servicio externo (OCR_LOCAL_URL) y no se gestiona desde la app. */
+  gestionado: boolean
+  estado: EstadoInstalacionOcr
+  paso: string
+  /** Avance aproximado 0..100. */
+  progreso: number
+  error: string | null
+  /** Hay una versión nueva del OCR: conviene reinstalar. */
+  desactualizado: boolean
+  proceso: 'detenido' | 'iniciando' | 'en-marcha' | 'error'
+  lineas: { id: number; ts: string; nivel: NivelRegistro; mensaje: string }[]
+  requisitos: { espacioGb: number; internet: boolean }
+}
+
 export interface CambiosAjustesOcr {
   motor?: MotorOcr
   textractMode?: 'detect' | 'analyze'
@@ -514,4 +532,22 @@ export interface CambiosAlmacenamiento {
 export interface PruebaAlmacenamientoResultado {
   ok: boolean
   mensaje: string
+}
+
+// --- Registro de la API (/settings/logs) ---
+export type NivelRegistro = 'error' | 'warn' | 'log' | 'debug' | 'verbose'
+
+export interface EntradaRegistro {
+  id: number
+  /** ISO 8601. */
+  ts: string
+  nivel: NivelRegistro
+  contexto: string
+  mensaje: string
+}
+
+export interface RespuestaRegistro {
+  entries: EntradaRegistro[]
+  /** Último id emitido por el servidor (aunque no pase el filtro); se usa como `desde`. */
+  ultimoId: number
 }

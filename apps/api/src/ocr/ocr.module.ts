@@ -14,6 +14,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { PdfExtractClientService } from './pdf-extract-client.service';
 import { DynamicOcrEngine } from './dynamic-ocr-engine.service';
 import { OcrProbeService } from './ocr-probe.service';
+import { OcrInstallerService } from './ocr-installer.service';
+import { OcrSupervisorService } from './ocr-supervisor.service';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { OcrProbeService } from './ocr-probe.service';
     PdfExtractClientService,
     DynamicOcrEngine,
     OcrProbeService,
+    OcrInstallerService,
+    OcrSupervisorService,
   ],
   exports: [ATTACHMENT_PROCESSOR, OCR_ENGINE, PdfRasterizerService],
 })

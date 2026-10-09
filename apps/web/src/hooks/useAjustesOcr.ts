@@ -2,11 +2,13 @@ import { useCallback } from 'react'
 import { useQuery } from './useQuery'
 import { useMutation } from './useMutation'
 import { useGuardarAjustesIa } from './useAjustesIa'
+import { usePolling } from './usePolling'
 import type {
   AjustesIa,
   AjustesOcr,
   CambiosAjustesOcr,
   MotorOcr,
+  OcrLocal,
   PruebaOcrResultado,
 } from '../lib/api'
 import { cambiosAws, type AvanzadoOcr, type ClavesAws } from '../lib/ocr'
@@ -23,6 +25,37 @@ export function useGuardarAjustesOcr(cb: Callbacks<AjustesOcr> = {}) {
 
 export function usePruebaOcr() {
   return useMutation<PruebaOcrResultado>({ url: '/settings/ocr/probar' })
+}
+
+/** Cada cuánto se consulta el avance mientras se instala o arranca el OCR local. */
+export const INTERVALO_OCR_LOCAL_MS = 2000
+
+/** ¿El OCR local está cambiando (instalación o arranque) y conviene seguir consultando? */
+export const ocrLocalOcupado = (o: OcrLocal | null) =>
+  !!o && (o.estado === 'instalando' || o.estado === 'descargando-modelos' || o.proceso === 'iniciando')
+
+/** Estado del OCR local gestionado por la app; consulta cada 2 s mientras instala o arranca. */
+export function useOcrLocal(cb: Callbacks<OcrLocal> & { enabled?: boolean } = {}) {
+  const query = useQuery<OcrLocal>({ url: '/settings/ocr/local', ...cb })
+  const { refetch } = query
+  usePolling(() => void refetch(), INTERVALO_OCR_LOCAL_MS, ocrLocalOcupado(query.data))
+  return query
+}
+
+export function useInstalarOcrLocal(cb: Callbacks<OcrLocal> = {}) {
+  return useMutation<OcrLocal>({ url: '/settings/ocr/local/instalar', ...cb })
+}
+
+export function useIniciarOcrLocal(cb: Callbacks<OcrLocal> = {}) {
+  return useMutation<OcrLocal>({ url: '/settings/ocr/local/iniciar', ...cb })
+}
+
+export function useDetenerOcrLocal(cb: Callbacks<OcrLocal> = {}) {
+  return useMutation<OcrLocal>({ url: '/settings/ocr/local/detener', ...cb })
+}
+
+export function useDesinstalarOcrLocal(cb: Callbacks<OcrLocal> = {}) {
+  return useMutation<OcrLocal>({ url: '/settings/ocr/local', method: 'DELETE', ...cb })
 }
 
 /**

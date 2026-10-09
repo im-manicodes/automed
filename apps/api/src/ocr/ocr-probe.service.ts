@@ -2,17 +2,19 @@ import {
   DetectDocumentTextCommand,
   TextractClient,
 } from '@aws-sdk/client-textract';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCanvas } from '@napi-rs/canvas';
 import { AiSettingsService } from '../settings/ai-settings.service';
 import { mapTestError } from '../settings/ai-test.service';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
 import { readOcrConfig } from './ocr-config';
+import { OcrInstallerService } from './ocr-installer.service';
+import { OcrSupervisorService } from './ocr-supervisor.service';
 
 export type LocalServiceStatus =
   | { estado: 'listo'; fallbackReason: string | null }
-  | { estado: 'detenido'; mensaje: string };
+  | { estado: 'detenido' | 'iniciando' | 'error'; mensaje: string };
 
 export interface OcrProbeResult {
   ok: boolean;
@@ -25,6 +27,14 @@ const PROBE_TIMEOUT_MS = 20_000;
 const STATUS_TIMEOUT_MS = 2500;
 const SERVER_DOWN_MSG =
   'El servicio de OCR no responde. Revisa que el contenedor ocr-local esté en marcha.';
+const MANAGED_NOT_INSTALLED_MSG =
+  'El OCR local no está instalado. Pulsa «Instalar OCR local».';
+const MANAGED_INSTALLING_MSG =
+  'Se está instalando el OCR local. Puedes seguir usando la app mientras tanto.';
+const MANAGED_STARTING_MSG = 'El OCR local se está iniciando.';
+const MANAGED_STOPPED_MSG = 'El OCR local está detenido. Pulsa «Iniciar».';
+const MANAGED_CRASHED_MSG =
+  'El OCR local se detuvo por un fallo. Revisa el registro y pulsa «Iniciar» o «Reinstalar».';
 /** Textract acepta como respuesta "válida" estos errores: la autenticación ya pasó. */
 const DOC_ERRORS = /BadDocument|UnsupportedDocument|InvalidParameter/i;
 
@@ -35,7 +45,14 @@ export class OcrProbeService {
     private readonly config: ConfigService,
     private readonly settings: OcrSettingsService,
     private readonly ai: AiSettingsService,
+    @Optional() private readonly installer?: OcrInstallerService,
+    @Optional() private readonly supervisor?: OcrSupervisorService,
   ) {}
+
+  /** ¿La API instala y arranca el OCR local (no hay un servicio externo en OCR_LOCAL_URL)? */
+  private get managed(): boolean {
+    return !!this.installer?.managed;
+  }
 
   /** Imagen diminuta de prueba (blanca, con un texto) generada en memoria. */
   testImage(): Uint8Array {
@@ -71,19 +88,49 @@ export class OcrProbeService {
   }
 
   /**
-   * Estado del servicio OCR local en la versión web (OCR_LOCAL_URL, p. ej. el contenedor ocr-local).
-   * Health check corto; nunca lanza.
+   * Estado del servicio OCR local en la versión web. Con servicio externo (OCR_LOCAL_URL, p. ej. el
+   * contenedor ocr-local de desarrollo) solo hace el health check; en modo gestionado lo combina con
+   * el estado del instalador y del proceso (iniciando/error). Nunca lanza.
    */
   async serverLocalStatus(): Promise<LocalServiceStatus> {
+    if (this.managed && this.installer) {
+      try {
+        const st = await this.installer.getState();
+        if (st.estado === 'instalando' || st.estado === 'descargando-modelos') {
+          return { estado: 'iniciando', mensaje: MANAGED_INSTALLING_MSG };
+        }
+        if (st.estado === 'error') {
+          return {
+            estado: 'error',
+            mensaje: st.error ?? 'La instalación del OCR local falló.',
+          };
+        }
+        if (st.estado === 'no-instalado') {
+          return { estado: 'detenido', mensaje: MANAGED_NOT_INSTALLED_MSG };
+        }
+      } catch {
+        /* sin BD: se decide solo con el health check */
+      }
+    }
     try {
       const h = await this.checkHealth(
         readOcrConfig(this.config).localUrl,
         STATUS_TIMEOUT_MS,
       );
       if (h.ok === false) throw new Error('unhealthy');
+      this.supervisor?.markHealthy();
       return { estado: 'listo', fallbackReason: h.fallback_reason ?? null };
     } catch {
-      return { estado: 'detenido', mensaje: SERVER_DOWN_MSG };
+      if (!this.managed)
+        return { estado: 'detenido', mensaje: SERVER_DOWN_MSG };
+      const proceso = this.supervisor?.status().proceso ?? 'detenido';
+      if (proceso === 'iniciando' || proceso === 'en-marcha') {
+        return { estado: 'iniciando', mensaje: MANAGED_STARTING_MSG };
+      }
+      if (proceso === 'error') {
+        return { estado: 'error', mensaje: MANAGED_CRASHED_MSG };
+      }
+      return { estado: 'detenido', mensaje: MANAGED_STOPPED_MSG };
     }
   }
 
@@ -145,7 +192,9 @@ export class OcrProbeService {
     } catch {
       return done(
         false,
-        'No se pudo conectar con el servicio de OCR. Revisa que el contenedor ocr-local esté en marcha.',
+        this.managed
+          ? 'No se pudo conectar con el OCR local. Revisa en Ajustes que esté instalado e iniciado.'
+          : 'No se pudo conectar con el servicio de OCR. Revisa que el contenedor ocr-local esté en marcha.',
       );
     }
   }

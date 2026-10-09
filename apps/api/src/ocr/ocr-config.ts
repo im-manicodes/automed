@@ -33,7 +33,7 @@ export function readOcrConfig(config: Pick<ConfigService, 'get'>): OcrConfig {
     visionRetry: get('OCR_VISION_RETRY') === 'true',
     visionAcceptThreshold: num(get('OCR_VISION_ACCEPT_THRESHOLD'), 0.9),
     visionMaxRegions: num(get('OCR_VISION_MAX_REGIONS'), 30),
-    localUrl: (get('OCR_LOCAL_URL') ?? 'http://localhost:8000').replace(
+    localUrl: (get('OCR_LOCAL_URL') ?? 'http://127.0.0.1:8000').replace(
       /\/$/,
       '',
     ),

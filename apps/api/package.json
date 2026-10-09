@@ -6,7 +6,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "prisma generate && nest build && node scripts/build-ocr-asset.mjs",
+    "ocr:asset": "node scripts/build-ocr-asset.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -67,7 +68,8 @@
     "pg": "^8.23.1",
     "prisma": "7.10.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -93,7 +95,6 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "tsx": "^4.23.15",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },

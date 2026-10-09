@@ -18,6 +18,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ReportsModule } from './reports/reports.module';
 import { EventsModule } from './events/events.module';
+import { LogsModule } from './logs/logs.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { EventsModule } from './events/events.module';
     JobsModule,
     ReportsModule,
     EventsModule,
+    LogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
