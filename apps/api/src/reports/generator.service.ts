@@ -123,6 +123,7 @@ export class GeneratorService {
       threads.map((t) => t.id),
       report.fecha,
     );
+    const overrides = await this.eventOverrides(threads.map((t) => t.id));
     const rows: ExcelRow[] = [];
     let done = 0;
     for (const t of threads) {
@@ -138,29 +139,39 @@ export class GeneratorService {
           templateVersion: template.version,
         },
       });
-      const ex: ExtractedPatient | null = cached
+      const ex0: ExtractedPatient | null = cached
         ? {
             estado: cached.estado as ExtractedPatient['estado'],
             novedadTexto: cached.novedadTexto ?? '',
             data: asData(cached.data),
           }
         : await this.extract(syn.markdown, columnas);
-      if (!cached && ex) {
+      if (!cached && ex0) {
         try {
           await this.prisma.threadReportData.create({
             data: {
               threadId: t.id,
               synthesisId: syn.id,
               templateVersion: template.version,
-              estado: ex.estado,
-              novedadTexto: ex.novedadTexto,
-              data: ex.data,
+              estado: ex0.estado,
+              novedadTexto: ex0.novedadTexto,
+              data: ex0.data,
             },
           });
         } catch {
           /* carrera con otro reporte: el caché ya existe */
         }
       }
+      // El estado que el usuario fijó en el último evento manda sobre la clasificación del LLM.
+      const ov = overrides.get(t.id);
+      const ex: ExtractedPatient | null =
+        ex0 && ov
+          ? {
+              estado: ov.estado,
+              novedadTexto: ex0.novedadTexto || ov.novedadTexto,
+              data: { ...ex0.data, ...ov.data },
+            }
+          : ex0;
       const desactualizado =
         t.tieneMensajesNuevos ||
         t.status === 'pendiente' ||
@@ -321,6 +332,34 @@ export class GeneratorService {
           estado: r.estado,
           data: asData(r.data),
         });
+    }
+    return map;
+  }
+
+  /** Último evento del hilo con estado definido (hospitalizado/alta): el usuario lo fijó a mano. */
+  private async eventOverrides(
+    threadIds: string[],
+  ): Promise<Map<string, ExtractedPatient>> {
+    const map = new Map<string, ExtractedPatient>();
+    if (!threadIds.length) return map;
+    const evs = await this.prisma.hospitalEvent.findMany({
+      where: {
+        threadId: { in: threadIds },
+        estado: { in: ['hospitalizado', 'alta'] },
+      },
+      orderBy: { fechaEvento: 'desc' },
+      select: { threadId: true, estado: true, novedadTexto: true, data: true },
+    });
+    for (const e of evs) {
+      if (map.has(e.threadId)) continue;
+      const data: Record<string, string> = {};
+      for (const [k, v] of Object.entries(asData(e.data)))
+        if (typeof v === 'string' && v.trim()) data[k] = v;
+      map.set(e.threadId, {
+        estado: e.estado as ExtractedPatient['estado'],
+        novedadTexto: e.novedadTexto ?? '',
+        data,
+      });
     }
     return map;
   }
