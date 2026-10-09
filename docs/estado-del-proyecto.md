@@ -314,6 +314,9 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 - Hecho: docs reescritas (CLAUDE.md, AGENTS.md, README, `docs/despliegue.md`, `docs/entra-id-registro.md` para app web con secreto de cliente, `docs/benchmark-ocr.md`). Los hitos anteriores sobre escritorio/relay/pdf-extract/Ollama en compose quedan como histórico.
 - Falta: construir y probar las imágenes (`api`, `web`, `ocr-local`); probar el OAuth real de Microsoft con la config desde Ajustes; Textract/Bedrock sin cambios (sin re-probar).
 
+## Compose de desarrollo con S3 preconfigurado (2026-10-08)
+- Hecho: `docker-compose.yml` (servicio `api`, solo dev) fija `S3_ENDPOINT` (`http://rustfs:9000`), `S3_BUCKET` (`automed`), `S3_ACCESS_KEY` y `S3_SECRET_KEY` (`rustfsadmin`, coinciden con `RUSTFS_ACCESS_KEY`/`RUSTFS_SECRET_KEY` del servicio `rustfs`), sobrescribibles por variables del `.env`. Lo guardado en Ajustes -> Almacenamiento tiene prioridad. Producción (`Dockerfile`, `deploy/entrypoint.sh`) sin cambios. `docker compose config -q` valida.
+
 ## Imagen única y almacenamiento configurable (2026-10-08)
 - Hecho: `Dockerfile` raíz + `deploy/entrypoint.sh` (web servida por la API + api + OCR local; sin RustFS); `docker-compose.yml` queda SOLO para desarrollo (hot reload, Vite :5173).
 - Hecho: almacenamiento elegible desde la web (RustFS o AWS S3): `storage.config`, `StorageSettingsService`, `DynamicStorageService`, `/api/settings/storage` (+ `test`), Ajustes -> Almacenamiento y paso en `/bienvenida`.
