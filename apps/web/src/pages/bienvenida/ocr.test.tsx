@@ -21,7 +21,7 @@ function rutas(ocr: MockHandler, extra: Record<string, MockHandler> = {}) {
     'GET /api/settings/storage': { body: ajustesAlmacenamiento() },
     'GET /api/settings/ocr': ocr,
     'PUT /api/settings/ocr': (req: { body: unknown }) => ({ body: ajustesOcr({ motor: (req.body as { motor: AjustesOcr['motor'] }).motor }) }),
-    'PUT /api/settings/ia': { body: ajustesIa({ claves: { openai: false, anthropic: false, aws: true } }) },
+    'PUT /api/settings/ia': { body: ajustesIa({ claves: { openai: false, anthropic: false, aws: true, foundry: false } }) },
     ...extra,
   }
 }
@@ -90,7 +90,7 @@ describe('Asistente: lectura de PDFs escaneados', () => {
   })
 
   it('Textract con claves ya guardadas permite avanzar sin escribirlas', async () => {
-    mockFetch({ ...rutas({ body: ajustesOcr() }), 'GET /api/settings/ia': { body: ajustesIa({ claves: { openai: false, anthropic: false, aws: true } }) } })
+    mockFetch({ ...rutas({ body: ajustesOcr() }), 'GET /api/settings/ia': { body: ajustesIa({ claves: { openai: false, anthropic: false, aws: true, foundry: false } }) } })
     const user = await irAlPasoOcr()
     await user.click(screen.getByRole('radio', { name: /Amazon Textract/ }))
     expect(screen.getByText('Ya hay una clave guardada')).toBeInTheDocument()

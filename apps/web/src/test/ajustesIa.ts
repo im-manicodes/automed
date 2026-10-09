@@ -6,15 +6,17 @@ export const ajustesIa = (o: Partial<AjustesIa> = {}): AjustesIa => ({
   origen: 'servidor',
   modelos: { resumen: 'qwen3-vl:4b-instruct', whatsapp: 'qwen3-vl:4b-instruct', evento: 'qwen3-vl:4b-instruct', reporte: 'qwen3-vl:4b-instruct', vision: 'qwen3-vl:4b-instruct' },
   ollamaUrl: 'http://localhost:11434/v1',
+  foundryEndpoint: '',
   awsRegion: 'us-east-1',
   maxInputTokens: 24000,
   maxOutputTokens: 8000,
-  claves: { openai: false, anthropic: false, aws: false },
+  claves: { openai: false, anthropic: false, aws: false, foundry: false },
   sugeridos: {
     ollama: { texto: ['qwen3-vl:4b-instruct'], vision: ['qwen3-vl:4b-instruct'] },
     openai: { texto: ['gpt-4o-mini', 'gpt-4o'], vision: ['gpt-4o'] },
     anthropic: { texto: ['claude-haiku-4-5'], vision: ['claude-sonnet-4-5'] },
     bedrock: { texto: ['amazon.nova-lite-v1:0'], vision: ['amazon.nova-pro-v1:0'] },
+    foundry: { texto: ['gpt-4o-mini'], vision: ['gpt-4o'] },
   },
   ...o,
 })

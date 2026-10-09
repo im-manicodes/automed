@@ -9,6 +9,8 @@ export interface AiTestDraft {
   modelo?: string;
   claveOpenai?: string;
   claveAnthropic?: string;
+  claveFoundry?: string;
+  foundryEndpoint?: string;
   ollamaUrl?: string;
   awsRegion?: string;
   claveAwsAccessKeyId?: string;
@@ -85,12 +87,18 @@ export class AiTestService {
     const proveedor = d.proveedor as LlmProviderName | undefined;
     if (proveedor !== undefined && !AI_PROVIDERS.includes(proveedor)) {
       throw new BadRequestException(
-        'Proveedor no válido (ollama, openai, anthropic o bedrock)',
+        'Proveedor no válido (ollama, openai, anthropic, bedrock o foundry)',
       );
     }
     const modelo = str(d.modelo, 'El modelo', 200);
     const claveOpenai = str(d.claveOpenai, 'La clave de OpenAI', 500);
     const claveAnthropic = str(d.claveAnthropic, 'La clave de Anthropic', 500);
+    const claveFoundry = str(d.claveFoundry, 'La clave de Foundry', 500);
+    const foundryEndpoint = str(
+      d.foundryEndpoint,
+      'La dirección de Foundry',
+      500,
+    );
     const ollamaUrl = str(d.ollamaUrl, 'La dirección de Ollama', 500);
     const awsRegion = str(d.awsRegion, 'La región de AWS', 50);
     const awsId = str(d.claveAwsAccessKeyId, 'La clave de acceso de AWS', 128);
@@ -115,6 +123,21 @@ export class AiTestService {
       }
     }
 
+    if (foundryEndpoint) {
+      let ok = false;
+      try {
+        const u = new URL(foundryEndpoint);
+        ok = u.protocol === 'http:' || u.protocol === 'https:';
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        throw new BadRequestException(
+          'La dirección de Foundry debe empezar con http:// o https://',
+        );
+      }
+    }
+
     const eff = await this.ai.getEffective();
     const provider = proveedor ?? eff.proveedor;
     const model =
@@ -129,6 +152,8 @@ export class AiTestService {
       modelVision: model,
       openaiApiKey: claveOpenai ?? eff.llm.openaiApiKey,
       anthropicApiKey: claveAnthropic ?? eff.llm.anthropicApiKey,
+      foundryApiKey: claveFoundry ?? eff.llm.foundryApiKey,
+      foundryEndpoint: foundryEndpoint ?? eff.llm.foundryEndpoint,
       ollamaBaseUrl: ollamaUrl ?? eff.llm.ollamaBaseUrl,
       awsRegion: awsRegion ?? eff.llm.awsRegion,
       awsCredentials:

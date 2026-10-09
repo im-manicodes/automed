@@ -137,6 +137,30 @@ describe('DynamicLlmProvider', () => {
     expect(mockCreate).toHaveBeenCalledTimes(6);
   });
 
+  it('recrea el adaptador de Foundry al cambiar la clave o el endpoint', async () => {
+    const { svc, set } = setup();
+    const f = (over: Record<string, unknown> = {}) =>
+      eff(
+        { proveedor: 'foundry' },
+        {
+          provider: 'foundry',
+          foundryApiKey: 'k1',
+          foundryEndpoint: 'https://a/openai/v1',
+          ...over,
+        },
+      );
+    set(f());
+    await svc.text('s', 'u');
+    await svc.text('s', 'u');
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    set(f({ foundryApiKey: 'k2' }));
+    await svc.text('s', 'u');
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    set(f({ foundryApiKey: 'k2', foundryEndpoint: 'https://b/openai/v1' }));
+    await svc.text('s', 'u');
+    expect(mockCreate).toHaveBeenCalledTimes(3);
+  });
+
   it('recrea el adaptador de Bedrock al cambiar las credenciales AWS', async () => {
     const { svc, set } = setup();
     const bedrock = (awsCredentials?: unknown) =>

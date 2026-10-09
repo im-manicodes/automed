@@ -16,6 +16,7 @@ export const AI_PROVIDERS: readonly LlmProviderName[] = [
   'openai',
   'anthropic',
   'bedrock',
+  'foundry',
 ];
 
 export const MIN_MAX_INPUT_TOKENS = 2000;
@@ -29,11 +30,13 @@ export interface AiStoredConfig {
   proveedor?: LlmProviderName;
   modelos?: Partial<Record<LlmTask, string>>;
   ollamaUrl?: string;
+  foundryEndpoint?: string;
   awsRegion?: string;
   maxInputTokens?: number;
   maxOutputTokens?: number;
   openaiKeyEnc?: string;
   anthropicKeyEnc?: string;
+  foundryKeyEnc?: string;
   awsAccessKeyIdEnc?: string;
   awsSecretEnc?: string;
 }
@@ -43,6 +46,7 @@ export interface AiEffectiveConfig {
   proveedor: LlmProviderName;
   modelos: Record<LlmTask, string>;
   ollamaUrl: string;
+  foundryEndpoint: string;
   awsRegion: string;
   maxInputTokens: number;
   maxOutputTokens: number;
@@ -63,10 +67,16 @@ export interface AiPublicSettings {
   origen: 'panel' | 'servidor';
   modelos: Record<LlmTask, string>;
   ollamaUrl: string;
+  foundryEndpoint: string;
   awsRegion: string;
   maxInputTokens: number;
   maxOutputTokens: number;
-  claves: { openai: boolean; anthropic: boolean; aws: boolean };
+  claves: {
+    openai: boolean;
+    anthropic: boolean;
+    foundry: boolean;
+    aws: boolean;
+  };
   sugeridos: Record<LlmProviderName, AiSuggestedModels>;
 }
 
@@ -75,11 +85,13 @@ export interface AiSettingsInput {
   proveedor?: LlmProviderName;
   modelos?: Partial<Record<LlmTask, string>>;
   ollamaUrl?: string;
+  foundryEndpoint?: string;
   awsRegion?: string;
   maxInputTokens?: number;
   maxOutputTokens?: number;
   claveOpenai?: string | null;
   claveAnthropic?: string | null;
+  claveFoundry?: string | null;
   /** Las dos claves de AWS van juntas: ambas con valor, o ambas null para borrarlas. */
   claveAwsAccessKeyId?: string | null;
   claveAwsSecreto?: string | null;
@@ -111,6 +123,11 @@ const SUGGESTED: Record<LlmProviderName, AiSuggestedModels> = {
   ollama: {
     texto: ['qwen3-vl:4b-instruct', 'llama3.2:3b'],
     vision: ['qwen3-vl:4b-instruct', 'llama3.2-vision:11b'],
+  },
+  // Nombres de deployment genéricos (el real lo define el usuario en su recurso).
+  foundry: {
+    texto: ['gpt-5', 'gpt-5-mini', 'gpt-4.1'],
+    vision: ['gpt-5', 'gpt-4.1', 'gpt-4o'],
   },
 };
 
@@ -189,6 +206,8 @@ export class AiSettingsService {
       vision: m.vision || baseVision || resumen,
     };
     const ollamaUrl = stored?.ollamaUrl || env.ollamaBaseUrl;
+    const foundryEndpoint =
+      stored?.foundryEndpoint || env.foundryEndpoint || '';
     const awsRegion = stored?.awsRegion || env.awsRegion;
     const envTokens = Number(this.config.get<string>('SYNTH_MAX_INPUT_TOKENS'));
     const maxInputTokens =
@@ -212,11 +231,14 @@ export class AiSettingsService {
       this.decryptKey(stored?.openaiKeyEnc) ?? env.openaiApiKey;
     const anthropicApiKey =
       this.decryptKey(stored?.anthropicKeyEnc) ?? env.anthropicApiKey;
+    const foundryApiKey =
+      this.decryptKey(stored?.foundryKeyEnc) ?? env.foundryApiKey;
     const awsCredentials = this.awsFrom(stored);
     return {
       proveedor,
       modelos,
       ollamaUrl,
+      foundryEndpoint,
       awsRegion,
       maxInputTokens,
       maxOutputTokens,
@@ -228,6 +250,8 @@ export class AiSettingsService {
         modelVision: modelos.vision,
         openaiApiKey,
         anthropicApiKey,
+        foundryApiKey,
+        foundryEndpoint: foundryEndpoint || undefined,
         ollamaBaseUrl: ollamaUrl,
         awsRegion,
         defaultMaxTokens: maxOutputTokens,
@@ -280,12 +304,14 @@ export class AiSettingsService {
       origen: e.origen,
       modelos: { ...e.modelos },
       ollamaUrl: e.ollamaUrl,
+      foundryEndpoint: e.foundryEndpoint,
       awsRegion: e.awsRegion,
       maxInputTokens: e.maxInputTokens,
       maxOutputTokens: e.maxOutputTokens,
       claves: {
         openai: !!e.llm.openaiApiKey,
         anthropic: !!e.llm.anthropicApiKey,
+        foundry: !!e.llm.foundryApiKey,
         aws: !!e.llm.awsCredentials,
       },
       sugeridos,
@@ -304,7 +330,7 @@ export class AiSettingsService {
     if (input.proveedor !== undefined) {
       if (!AI_PROVIDERS.includes(input.proveedor)) {
         throw new BadRequestException(
-          'Proveedor no válido (ollama, openai, anthropic o bedrock)',
+          'Proveedor no válido (ollama, openai, anthropic, bedrock o foundry)',
         );
       }
       if (input.proveedor !== next.proveedor && input.modelos === undefined) {
@@ -354,6 +380,22 @@ export class AiSettingsService {
       next.ollamaUrl = String(input.ollamaUrl).trim();
       touchesConfig = true;
     }
+    if (input.foundryEndpoint !== undefined) {
+      let ok = false;
+      try {
+        const u = new URL(String(input.foundryEndpoint).trim());
+        ok = u.protocol === 'http:' || u.protocol === 'https:';
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        throw new BadRequestException(
+          'La dirección de Foundry debe empezar con http:// o https://',
+        );
+      }
+      next.foundryEndpoint = String(input.foundryEndpoint).trim();
+      touchesConfig = true;
+    }
     if (input.awsRegion !== undefined) {
       const r =
         typeof input.awsRegion === 'string' ? input.awsRegion.trim() : '';
@@ -390,6 +432,7 @@ export class AiSettingsService {
     for (const [field, enc, label] of [
       ['claveOpenai', 'openaiKeyEnc', 'OpenAI'],
       ['claveAnthropic', 'anthropicKeyEnc', 'Anthropic'],
+      ['claveFoundry', 'foundryKeyEnc', 'Foundry'],
     ] as const) {
       const v = input[field];
       if (v === undefined) continue;

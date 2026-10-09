@@ -1,5 +1,6 @@
 import { AnthropicLlmProvider } from './anthropic-llm.provider';
 import { BedrockLlmProvider } from './bedrock-llm.provider';
+import { FoundryLlmProvider } from './foundry-llm.provider';
 import type { LlmConfig } from './llm-config';
 import type { LlmProvider } from './llm-provider.interface';
 import { OllamaLlmProvider } from './ollama-llm.provider';
@@ -12,6 +13,8 @@ export function createLlmProvider(cfg: LlmConfig): LlmProvider {
       return new BedrockLlmProvider(cfg);
     case 'openai':
       return new OpenAiLlmProvider(cfg);
+    case 'foundry':
+      return new FoundryLlmProvider(cfg);
     case 'ollama':
       return new OllamaLlmProvider(cfg);
     default:

@@ -7,7 +7,7 @@ Guía para dejar auto-med funcionando (1 usuario, 1 buzón de Outlook). Todo en 
 - Node 22 y pnpm 11 (solo para desarrollo local, migraciones manuales o el benchmark).
 - Un PostgreSQL **externo** accesible desde la máquina y desde los contenedores (el compose no lo incluye).
 - Una cuenta Microsoft (Outlook / Microsoft 365) y permiso para registrar una app en Entra ID (ver `docs/entra-id-registro.md`).
-- Un proveedor de LLM: API key de Anthropic u OpenAI (pruebas) o AWS Bedrock (producción).
+- Un proveedor de LLM: API key de Anthropic, OpenAI o Microsoft Foundry (pruebas) o AWS Bedrock (producción).
 - Para OCR en producción: cuenta AWS con Textract. Para pruebas sin AWS: el servicio local `services/ocr-local` (PaddleOCR/Tesseract, solo CPU).
 
 ## 2. Configurar `.env` paso a paso
@@ -34,7 +34,7 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `PDF_TEXT_MODE`, `PDF_TEXT_MIN_CHARS` | (opcionales) Extractor de PDF digital en Node, dentro del proceso de la API (`node` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. No hay servicio Python aparte. |
 | `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*`, `OCR_LOCAL_TIMEOUT_MS`, `TEXTRACT_MODE` | (opcionales, ya no están en `.env.example`) Valores por defecto de OCR; casi todo se cambia en Ajustes -> OCR. Ver `docs/benchmark-ocr.md`. |
 | `LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `SYNTH_MAX_INPUT_TOKENS` | (opcionales) Límites y costo del LLM. |
-| (no van en `.env`) | **Proveedor LLM, modelos, claves (Anthropic/OpenAI), URL de Ollama, región AWS y motor OCR (`local`/`textract`) se eligen en la web** (asistente de bienvenida en el primer inicio de sesión, Ajustes -> Inteligencia artificial y Ajustes -> OCR) y se guardan en la base de datos (claves cifradas). Las variables `LLM_*`, `*_API_KEY`, `OLLAMA_BASE_URL`, `AWS_REGION`, `OCR_ENGINE` aún se leen como valores por defecto, pero ya no se documentan. Las credenciales de Bedrock/Textract siguen siendo las estándar de AWS (rol o variables), no se piden en la web. |
+| (no van en `.env`) | **Proveedor LLM, modelos, claves (Anthropic/OpenAI/Foundry), endpoint de Foundry, URL de Ollama, región AWS y motor OCR (`local`/`textract`) se eligen en la web** (asistente de bienvenida en el primer inicio de sesión, Ajustes -> Inteligencia artificial y Ajustes -> OCR) y se guardan en la base de datos (claves cifradas). Las variables `LLM_*`, `*_API_KEY`, `OLLAMA_BASE_URL`, `AWS_REGION`, `OCR_ENGINE` aún se leen como valores por defecto, pero ya no se documentan. Las credenciales de Bedrock/Textract siguen siendo las estándar de AWS (rol o variables), no se piden en la web. |
 | `AWS_REGION` (+ credenciales AWS estándar) | Región para Bedrock y Textract. |
 | `VITE_API_URL` | Solo desarrollo del front (`pnpm dev`). |
 
@@ -115,6 +115,13 @@ curl localhost:8000/health    # {"ok":true,"engine":"paddle","fallback_reason":n
 ```
 Con un perfil de inferencia entre regiones, el permiso debe cubrir el perfil **y** el modelo base en las regiones que el perfil use (suele hacerse con `arn:aws:bedrock:*::foundation-model/<model-id>`).
 4. Prueba con un hilo corto antes de analizar muchos.
+
+## 5b. Foundry (Microsoft Foundry / Azure OpenAI) como LLM
+1. En el portal de Azure crea un recurso de **Microsoft Foundry** (o Azure OpenAI) en la región que prefieras.
+2. Despliega un modelo (por ejemplo, desde *Models + endpoints* o *Deployments*). El **nombre del deployment** es el «modelo» que se usa en la app.
+3. Copia el **endpoint** con forma `https://<recurso>.openai.azure.com/openai/v1` y una **clave API** del recurso (*Keys and Endpoint*).
+4. En la web (bienvenida o Ajustes -> Inteligencia artificial) elige Foundry, pega el endpoint y la clave (se guarda cifrada y no vuelve a mostrarse) y escribe el nombre del deployment en el modelo de cada tarea.
+5. Pulsa **Probar conexión** antes de analizar hilos. La clave va en la cabecera `api-key`; la petición no envía `temperature`.
 
 ## 6. Registro en Entra ID y config de Microsoft desde Ajustes
 Sigue `docs/entra-id-registro.md` (registro de app web con secreto de cliente, permisos delegados `Mail.Read`, `offline_access` y `User.Read`, URI de redirección). Registra la app como "Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft".

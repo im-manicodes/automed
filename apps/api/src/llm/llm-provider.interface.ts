@@ -43,7 +43,7 @@ export class LlmTruncatedError extends Error {
   }
 }
 
-/** Proveedor LLM intercambiable (ollama | openai | anthropic | bedrock). */
+/** Proveedor LLM intercambiable (ollama | openai | anthropic | bedrock | foundry). */
 export interface LlmProvider {
   /** Modelo que se usa para la tarea (se guarda, p. ej., en Synthesis.model). */
   modelFor(task: LlmTask): Promise<string>;

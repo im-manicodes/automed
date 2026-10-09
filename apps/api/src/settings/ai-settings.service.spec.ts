@@ -92,6 +92,36 @@ describe('AiSettingsService', () => {
     expect((rows.get('ia.config') as any).anthropicKeyEnc).toBeUndefined();
   });
 
+  it('foundry: clave cifrada, endpoint validado y getPublic sin clave', async () => {
+    const { svc, rows } = setup();
+    await svc.save({
+      proveedor: 'foundry',
+      claveFoundry: 'foundry-secreta',
+      foundryEndpoint: 'https://r.openai.azure.com/openai/v1',
+      modelos: { resumen: 'mi-deployment' },
+    });
+    const stored = JSON.stringify(rows.get('ia.config'));
+    expect(stored).not.toContain('foundry-secreta');
+    expect(stored).toContain('foundryKeyEnc');
+    const e = await svc.getEffective();
+    expect(e.llm.foundryApiKey).toBe('foundry-secreta');
+    expect(e.llm.foundryEndpoint).toBe('https://r.openai.azure.com/openai/v1');
+    expect(e.modelos.resumen).toBe('mi-deployment');
+    const pub = await svc.getPublic();
+    expect(pub.claves.foundry).toBe(true);
+    expect(pub.foundryEndpoint).toBe('https://r.openai.azure.com/openai/v1');
+    expect(JSON.stringify(pub)).not.toContain('foundry-secreta');
+    await expect(svc.save({ foundryEndpoint: 'ftp://x' })).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(svc.save({ claveFoundry: '' })).rejects.toThrow(
+      BadRequestException,
+    );
+    await svc.save({ claveFoundry: null });
+    expect((await svc.getPublic()).claves.foundry).toBe(false);
+    expect((rows.get('ia.config') as any).foundryKeyEnc).toBeUndefined();
+  });
+
   it('credenciales AWS: cifradas en reposo, descifradas solo por getAwsCredentials y nunca en getPublic', async () => {
     const { svc, rows } = setup();
     expect(await svc.getAwsCredentials()).toBeUndefined();
@@ -154,6 +184,7 @@ describe('AiSettingsService', () => {
     expect(pub.claves).toEqual({
       openai: true,
       anthropic: true,
+      foundry: false,
       aws: false,
     });
     expect(pub.sugeridos.ollama.texto[0]).toBe('qwen3-vl:4b-instruct');

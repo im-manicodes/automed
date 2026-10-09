@@ -28,6 +28,16 @@ export default function CredencialesProveedor({ ajustes, borrador, onChange, har
       {p === 'anthropic' && (
         <CampoClave label="Clave de Anthropic" guardada={ajustes.claves.anthropic} value={borrador.claveAnthropic} onChange={(v) => onChange({ ...borrador, claveAnthropic: v })} />
       )}
+      {p === 'foundry' && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="foundry-endpoint" className="block font-semibold">Endpoint de Foundry</label>
+            <input id="foundry-endpoint" type="url" inputMode="url" placeholder="https://mi-recurso.openai.azure.com/openai/v1" className="min-h-12 w-full rounded-xl border border-slate-300 px-3" value={borrador.foundryEndpoint} onChange={(e) => onChange({ ...borrador, foundryEndpoint: e.target.value })} />
+            <p className="text-sm text-slate-600">Copia el Endpoint de tu recurso en el portal de Foundry; termina en /openai/v1.</p>
+          </div>
+          <CampoClave label="Clave de Foundry" guardada={ajustes.claves.foundry} value={borrador.claveFoundry} onChange={(v) => onChange({ ...borrador, claveFoundry: v })} />
+        </div>
+      )}
       {p === 'ollama' && (
         <PanelOllama hardware={hardware} onRecheck={onRecheck} modelos={Object.values(borrador.modelos)} onListoChange={onOllamaListo} />
       )}
@@ -47,6 +57,8 @@ export default function CredencialesProveedor({ ajustes, borrador, onChange, har
           modelo,
           ollamaUrl: borrador.ollamaUrl,
           awsRegion: borrador.awsRegion,
+          ...(p === 'foundry' && borrador.foundryEndpoint.trim() ? { foundryEndpoint: borrador.foundryEndpoint.trim() } : {}),
+          ...(typeof borrador.claveFoundry === 'string' && borrador.claveFoundry ? { claveFoundry: borrador.claveFoundry } : {}),
           ...(typeof borrador.claveOpenai === 'string' && borrador.claveOpenai ? { claveOpenai: borrador.claveOpenai } : {}),
           ...(typeof borrador.claveAnthropic === 'string' && borrador.claveAnthropic ? { claveAnthropic: borrador.claveAnthropic } : {}),
         }}

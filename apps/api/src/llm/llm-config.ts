@@ -1,4 +1,5 @@
-export type LlmProviderName = 'anthropic' | 'openai' | 'bedrock' | 'ollama';
+export type LlmProviderName =
+  'anthropic' | 'openai' | 'bedrock' | 'ollama' | 'foundry';
 
 export interface LlmConfig {
   provider: LlmProviderName;
@@ -6,6 +7,9 @@ export interface LlmConfig {
   modelVision: string;
   anthropicApiKey?: string;
   openaiApiKey?: string;
+  /** Microsoft Foundry: clave API y endpoint del recurso (`.../openai/v1`); el modelo = deployment. */
+  foundryApiKey?: string;
+  foundryEndpoint?: string;
   ollamaBaseUrl: string;
   awsRegion: string;
   /** Credenciales AWS explícitas (panel); sin ellas se usa la cadena por defecto de AWS. */
@@ -26,6 +30,8 @@ export const DEFAULT_MODELS: Record<LlmProviderName, string> = {
   // `-instruct`: el tag `qwen3-vl:4b` a secas apunta a la de razonamiento (mismo digest que `4b-thinking`),
   // que mete su razonamiento en la respuesta y gasta el límite de tokens.
   ollama: 'qwen3-vl:4b-instruct',
+  // En Foundry el modelo es el nombre del deployment (lo elige el usuario): sin valor por defecto.
+  foundry: '',
 };
 
 const num = (v: string | undefined, d: number) => {
@@ -42,10 +48,11 @@ export function readLlmConfig(config: {
     raw !== 'anthropic' &&
     raw !== 'openai' &&
     raw !== 'bedrock' &&
-    raw !== 'ollama'
+    raw !== 'ollama' &&
+    raw !== 'foundry'
   ) {
     throw new Error(
-      `LLM_PROVIDER inválido: "${raw}" (anthropic | openai | bedrock | ollama)`,
+      `LLM_PROVIDER inválido: "${raw}" (anthropic | openai | bedrock | ollama | foundry)`,
     );
   }
   const provider: LlmProviderName = raw;
@@ -56,6 +63,8 @@ export function readLlmConfig(config: {
     modelVision: get('LLM_MODEL_VISION') || modelText,
     anthropicApiKey: get('ANTHROPIC_API_KEY') || undefined,
     openaiApiKey: get('OPENAI_API_KEY') || undefined,
+    foundryApiKey: get('FOUNDRY_API_KEY') || undefined,
+    foundryEndpoint: get('FOUNDRY_ENDPOINT') || undefined,
     ollamaBaseUrl: get('OLLAMA_BASE_URL') || 'http://localhost:11434/v1',
     awsRegion: get('AWS_REGION') || 'us-east-1',
     timeoutMs: num(get('LLM_TIMEOUT_MS'), 120000),

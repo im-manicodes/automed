@@ -14,6 +14,7 @@ export const PROVEEDORES: { id: ProveedorIa; nombre: string; descripcion: string
   { id: 'openai', nombre: 'OpenAI', descripcion: 'Necesita una clave de API de OpenAI.' },
   { id: 'anthropic', nombre: 'Anthropic (Claude)', descripcion: 'Necesita una clave de API de Anthropic.' },
   { id: 'bedrock', nombre: 'Amazon Bedrock', descripcion: 'Para empresas con cuenta de AWS.' },
+  { id: 'foundry', nombre: 'Microsoft Foundry', descripcion: 'Modelos desplegados en tu cuenta de Azure.' },
 ]
 
 export const nombreProveedor = (p: ProveedorIa) => PROVEEDORES.find((x) => x.id === p)?.nombre ?? p
@@ -24,11 +25,13 @@ export interface BorradorIa {
   modelos: Record<LlmTask, string>
   ollamaUrl: string
   awsRegion: string
+  foundryEndpoint: string
   maxInputTokens: number
   maxOutputTokens: number
   /** undefined = sin cambios, string = clave nueva, null = quitar la guardada. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
+  claveFoundry?: string | null
   /** Claves de AWS (Bedrock y Textract comparten las mismas). */
   aws?: ClavesAws
 }
@@ -39,6 +42,7 @@ export function borradorDesde(a: AjustesIa): BorradorIa {
     modelos: { ...a.modelos },
     ollamaUrl: a.ollamaUrl,
     awsRegion: a.awsRegion,
+    foundryEndpoint: a.foundryEndpoint ?? '',
     maxInputTokens: a.maxInputTokens,
     maxOutputTokens: a.maxOutputTokens,
   }
@@ -62,11 +66,13 @@ export function cambiosDesde(b: BorradorIa): CambiosAjustesIa {
     modelos: b.modelos,
     ollamaUrl: b.ollamaUrl,
     awsRegion: b.awsRegion,
+    foundryEndpoint: b.foundryEndpoint,
     maxInputTokens: b.maxInputTokens,
     maxOutputTokens: b.maxOutputTokens,
   }
   if (b.claveOpenai !== undefined) c.claveOpenai = b.claveOpenai
   if (b.claveAnthropic !== undefined) c.claveAnthropic = b.claveAnthropic
+  if (b.claveFoundry !== undefined) c.claveFoundry = b.claveFoundry
   if (b.aws) Object.assign(c, cambiosAws(b.aws))
   return c
 }
@@ -74,6 +80,12 @@ export function cambiosDesde(b: BorradorIa): CambiosAjustesIa {
 /** ¿Falta la clave del proveedor elegido? (ni guardada ni escrita) */
 export function faltaClave(b: BorradorIa, a: AjustesIa): boolean {
   if (b.proveedor === 'bedrock' && b.aws && awsIncompleta(b.aws)) return true
+  if (b.proveedor === 'foundry') {
+    if (b.foundryEndpoint.trim() === '') return true
+    if (b.claveFoundry === null) return true
+    if (b.claveFoundry === undefined) return !a.claves.foundry
+    return b.claveFoundry.trim() === ''
+  }
   const clave = b.proveedor === 'openai' ? b.claveOpenai : b.proveedor === 'anthropic' ? b.claveAnthropic : 'no aplica'
   const guardada = b.proveedor === 'openai' ? a.claves.openai : b.proveedor === 'anthropic' ? a.claves.anthropic : true
   if (clave === 'no aplica') return false

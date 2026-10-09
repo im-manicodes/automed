@@ -29,6 +29,8 @@ export class DynamicLlmProvider implements LlmProvider {
           c.provider,
           c.provider === 'openai' ? c.openaiApiKey : null,
           c.provider === 'anthropic' ? c.anthropicApiKey : null,
+          c.provider === 'foundry' ? c.foundryApiKey : null,
+          c.provider === 'foundry' ? c.foundryEndpoint : null,
           c.provider === 'ollama' ? c.ollamaBaseUrl : null,
           c.provider === 'bedrock' ? c.awsRegion : null,
           c.provider === 'bedrock' ? (c.awsCredentials ?? null) : null,

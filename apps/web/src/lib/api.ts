@@ -385,7 +385,7 @@ export interface CambiosAjustesMicrosoft {
 
 // --- Configuración de IA (/settings/ia) ---
 export type LlmTask = 'resumen' | 'whatsapp' | 'evento' | 'reporte' | 'vision'
-export type ProveedorIa = 'ollama' | 'openai' | 'anthropic' | 'bedrock'
+export type ProveedorIa = 'ollama' | 'openai' | 'anthropic' | 'bedrock' | 'foundry'
 
 export interface AjustesIa {
   necesitaBienvenida: boolean
@@ -393,12 +393,14 @@ export interface AjustesIa {
   origen: 'panel' | 'servidor'
   modelos: Record<LlmTask, string>
   ollamaUrl: string
+  /** Endpoint del recurso de Microsoft Foundry (vacío si no hay). */
+  foundryEndpoint: string
   awsRegion: string
   maxInputTokens: number
   /** Longitud máxima de cada respuesta del modelo (1000..64000). */
   maxOutputTokens: number
   /** Solo si hay clave guardada; la clave en sí nunca llega al navegador. */
-  claves: { openai: boolean; anthropic: boolean; aws: boolean }
+  claves: { openai: boolean; anthropic: boolean; aws: boolean; foundry: boolean }
   sugeridos: Record<ProveedorIa, { texto: string[]; vision: string[] }>
 }
 
@@ -412,6 +414,8 @@ export interface CambiosAjustesIa {
   /** string = nueva clave, null = quitar, ausente = no cambiar. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
+  claveFoundry?: string | null
+  foundryEndpoint?: string
   /** Ambas juntas (nuevas) o ambas null (quitar). */
   claveAwsAccessKeyId?: string | null
   claveAwsSecreto?: string | null
@@ -423,6 +427,8 @@ export interface PruebaIaBorrador {
   modelo?: string
   claveOpenai?: string
   claveAnthropic?: string
+  claveFoundry?: string
+  foundryEndpoint?: string
   ollamaUrl?: string
   awsRegion?: string
 }

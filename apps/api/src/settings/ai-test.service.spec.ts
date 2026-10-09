@@ -103,6 +103,42 @@ describe('AiTestService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('foundry: usa clave y endpoint del borrador o, si no hay, los guardados; valida el endpoint', async () => {
+    const ai2 = {
+      getEffective: jest.fn().mockResolvedValue({
+        ...eff,
+        llm: {
+          ...eff.llm,
+          foundryApiKey: 'f-guardada',
+          foundryEndpoint: 'https://g/openai/v1',
+        },
+      }),
+    };
+    const s2 = new AiTestService(ai2 as unknown as AiSettingsService);
+    const spy = jest.spyOn(factory, 'createLlmProvider').mockReturnValue({
+      complete: jest.fn().mockResolvedValue('OK'),
+    } as never);
+    await s2.test({ proveedor: 'foundry', modelo: 'dep' });
+    expect(spy.mock.calls[0][0]).toMatchObject({
+      provider: 'foundry',
+      foundryApiKey: 'f-guardada',
+      foundryEndpoint: 'https://g/openai/v1',
+    });
+    await s2.test({
+      proveedor: 'foundry',
+      modelo: 'dep',
+      claveFoundry: 'f-nueva',
+      foundryEndpoint: 'https://n/openai/v1',
+    });
+    expect(spy.mock.calls[1][0]).toMatchObject({
+      foundryApiKey: 'f-nueva',
+      foundryEndpoint: 'https://n/openai/v1',
+    });
+    await expect(
+      s2.test({ proveedor: 'foundry', foundryEndpoint: 'ftp://x' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('error del proveedor: mensaje mapeado sin eco de la clave', async () => {
     jest.spyOn(factory, 'createLlmProvider').mockReturnValue({
       complete: jest

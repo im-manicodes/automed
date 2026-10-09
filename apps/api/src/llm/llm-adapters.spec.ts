@@ -1,5 +1,6 @@
 import { AnthropicLlmProvider } from './anthropic-llm.provider';
 import { BedrockLlmProvider } from './bedrock-llm.provider';
+import { FoundryLlmProvider } from './foundry-llm.provider';
 import { OllamaLlmProvider } from './ollama-llm.provider';
 import { OpenAiLlmProvider } from './openai-llm.provider';
 import { createLlmProvider } from './llm-provider.factory';
@@ -56,6 +57,7 @@ describe('readLlmConfig / selección de adaptador', () => {
     ['bedrock', BedrockLlmProvider],
     ['openai', OpenAiLlmProvider],
     ['ollama', OllamaLlmProvider],
+    ['foundry', FoundryLlmProvider],
   ] as const)('LLM_PROVIDER=%s crea el adaptador correcto', (name, cls) => {
     const p = createLlmProvider(
       readLlmConfig(
@@ -67,6 +69,40 @@ describe('readLlmConfig / selección de adaptador', () => {
       ),
     );
     expect(p).toBeInstanceOf(cls);
+  });
+
+  it('foundry: lee FOUNDRY_* del entorno, usa max_completion_tokens y no envía temperature', async () => {
+    const c = readLlmConfig(
+      envOf({
+        LLM_PROVIDER: 'foundry',
+        FOUNDRY_API_KEY: 'k',
+        FOUNDRY_ENDPOINT: 'https://r.openai.azure.com/openai/v1',
+      }),
+    );
+    expect([c.provider, c.foundryApiKey, c.foundryEndpoint]).toEqual([
+      'foundry',
+      'k',
+      'https://r.openai.azure.com/openai/v1',
+    ]);
+    const create = jest.fn().mockResolvedValue({
+      choices: [{ finish_reason: 'stop', message: { content: ' ok ' } }],
+    });
+    const p = new FoundryLlmProvider(
+      cfg({ provider: 'foundry' }),
+      { chat: { completions: { create } } } as never,
+      noSleep,
+    );
+    await expect(
+      p.vision(img, 'lee', { model: 'mi-deployment', maxTokens: 123 }),
+    ).resolves.toBe('ok');
+    const arg = create.mock.calls[0][0];
+    expect(arg.model).toBe('mi-deployment');
+    expect(arg.max_completion_tokens).toBe(123);
+    expect(arg).not.toHaveProperty('temperature');
+    expect(arg).not.toHaveProperty('max_tokens');
+    expect(arg.messages[0].content[0].image_url.url).toMatch(
+      /^data:image\/png;base64,/,
+    );
   });
 
   it('no envía temperature a modelos que la rechazan', () => {
@@ -323,6 +359,7 @@ describe('LlmTruncatedError (parada por límite de tokens)', () => {
   it.each([
     ['openai', OpenAiLlmProvider],
     ['ollama', OllamaLlmProvider],
+    ['foundry', FoundryLlmProvider],
   ] as const)(
     '%s: finish_reason=length lanza solo con failOnTruncate',
     async (name, Cls) => {

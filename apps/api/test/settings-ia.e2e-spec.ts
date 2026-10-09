@@ -125,7 +125,7 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
     expect(res.body).toMatchObject({
       necesitaBienvenida: true,
       origen: 'servidor',
-      claves: { openai: false, anthropic: false },
+      claves: { openai: false, anthropic: false, foundry: false },
     });
     expect(res.body.sugeridos.ollama.texto[0]).toBe('qwen3-vl:4b-instruct');
     expect(JSON.stringify(res.body)).not.toMatch(/Enc|sk-/);
@@ -147,6 +147,8 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
     await bad({ ollamaUrl: 'ftp://x' }, /http/);
     await bad({ maxInputTokens: 1999 }, /al menos 2000/);
     await bad({ claveOpenai: '' }, /no es válida/);
+    await bad({ foundryEndpoint: 'ftp://x' }, /Foundry.*http/);
+    await bad({ claveFoundry: '' }, /Foundry no es válida/);
     expect(db.setting.rows).toHaveLength(0);
   });
 
@@ -157,6 +159,7 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
     expect(put.body.claves).toEqual({
       openai: true,
       anthropic: false,
+      foundry: false,
       aws: false,
     });
     expect(put.body.proveedor).toBe('openai');
@@ -176,6 +179,29 @@ describe('Ajustes de IA (e2e, sin BD ni red)', () => {
       .send({ claveOpenai: null })
       .expect(200);
     expect(del.body.claves.openai).toBe(false);
+  });
+
+  it('PUT foundry guarda clave CIFRADA y endpoint; GET no expone la clave', async () => {
+    const FK = 'foundry-clave-secreta-123';
+    const put = await authed(http().put('/api/settings/ia'))
+      .send({
+        proveedor: 'foundry',
+        claveFoundry: FK,
+        foundryEndpoint: 'https://r.openai.azure.com/openai/v1',
+        modelos: { resumen: 'mi-deployment' },
+      })
+      .expect(200);
+    expect(put.body).toMatchObject({
+      proveedor: 'foundry',
+      foundryEndpoint: 'https://r.openai.azure.com/openai/v1',
+    });
+    expect(put.body.claves.foundry).toBe(true);
+    expect(JSON.stringify(put.body)).not.toContain(FK);
+    const stored = db.setting.rows.find((r) => r.key === 'ia.config');
+    expect(JSON.stringify(stored!.value)).not.toContain(FK);
+    expect(stored!.value.foundryKeyEnc).toEqual(expect.any(String));
+    const get = await authed(http().get('/api/settings/ia')).expect(200);
+    expect(JSON.stringify(get.body)).not.toContain(FK);
   });
 
   it('PUT {bienvenidaCompletada:true} -> necesitaBienvenida false', async () => {

@@ -37,7 +37,7 @@ function rutas(hw: MockHandler = { body: hardwareIa() }, ocr: MockHandler = { bo
     'PUT /api/settings/ocr': (req: { body: unknown }) => ({ body: ajustesOcr({ motor: (req.body as { motor: 'local' | 'textract' | 'ninguno' }).motor }) }),
     'GET /api/settings/ia': { body: ajustesIa() },
     'GET /api/settings/ia/hardware': hw,
-    'PUT /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, proveedor: 'openai', claves: { openai: true, anthropic: false, aws: false } }) },
+    'PUT /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, proveedor: 'openai', claves: { openai: true, anthropic: false, aws: false, foundry: false } }) },
     'POST /api/settings/ia/test': { body: { ok: true, ms: 321, mensaje: 'ok' } },
   }
 }
@@ -80,6 +80,33 @@ describe('Asistente de bienvenida', () => {
     expect(body).toMatchObject({ proveedor: 'openai', claveOpenai: 'sk-secreta-123', bienvenidaCompletada: true })
     expect(body.modelos.resumen).toBe('gpt-4o-mini')
     expect(document.body.innerHTML).not.toContain('sk-secreta-123')
+  })
+
+  it('con Foundry exige endpoint y clave, y los envía al guardar', async () => {
+    const f = mockFetch(rutas())
+    renderPage()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Siguiente/ }))
+    await user.click(await screen.findByRole('radio', { name: /Microsoft Foundry/ }))
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+
+    expect(screen.getByRole('button', { name: /Siguiente/ })).toBeDisabled()
+    await user.type(screen.getByLabelText('Endpoint de Foundry'), 'https://mi.openai.azure.com/openai/v1')
+    expect(screen.getByRole('button', { name: /Siguiente/ })).toBeDisabled()
+    await user.type(screen.getByLabelText('Clave de Foundry'), 'fk-secreta-123')
+    await user.click(screen.getByRole('button', { name: 'Probar' }))
+    await screen.findByText('Funciona (321 ms)')
+    const prueba = f.mock.calls.find(([u]) => String(u).endsWith('/settings/ia/test'))
+    expect(JSON.parse(String(prueba?.[1]?.body))).toMatchObject({ proveedor: 'foundry', claveFoundry: 'fk-secreta-123', foundryEndpoint: 'https://mi.openai.azure.com/openai/v1' })
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    await screen.findByText('¿Cómo leemos tus PDFs escaneados?')
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    await screen.findByText('¿Dónde guardamos tus archivos?')
+    await user.click(screen.getByRole('button', { name: /Siguiente/ }))
+    await user.click(screen.getByRole('button', { name: 'Conectar Outlook' }))
+    await waitFor(() => expect(puts(f).length).toBeGreaterThan(0))
+    expect(puts(f)[0]).toMatchObject({ proveedor: 'foundry', claveFoundry: 'fk-secreta-123', foundryEndpoint: 'https://mi.openai.azure.com/openai/v1' })
   })
 
   it('deshabilita Ollama y muestra el motivo si la RAM no alcanza', async () => {

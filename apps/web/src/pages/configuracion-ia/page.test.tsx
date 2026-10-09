@@ -11,7 +11,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('Configuración de IA', () => {
   it('carga, edita un modelo, guarda y prueba', async () => {
-    const actual = ajustesIa({ necesitaBienvenida: false, proveedor: 'openai', claves: { openai: true, anthropic: false, aws: false } })
+    const actual = ajustesIa({ necesitaBienvenida: false, proveedor: 'openai', claves: { openai: true, anthropic: false, aws: false, foundry: false } })
     const f = mockFetch({
       'GET /api/settings/ia': { body: actual },
       'GET /api/settings/ia/hardware': { body: hardwareIa() },
@@ -43,6 +43,36 @@ describe('Configuración de IA', () => {
   })
 })
 
+describe('Configuración de IA: Foundry', () => {
+  it('muestra endpoint y clave, y guarda ambos', async () => {
+    const actual = ajustesIa({ necesitaBienvenida: false, proveedor: 'foundry', foundryEndpoint: 'https://a.openai.azure.com/openai/v1', claves: { openai: false, anthropic: false, aws: false, foundry: true } })
+    const f = mockFetch({
+      'GET /api/settings/ia': { body: actual },
+      'GET /api/settings/ia/hardware': { body: hardwareIa() },
+      'PUT /api/settings/ia': { body: actual },
+    })
+    render(
+      <MemoryRouter>
+        <ToastProvider>
+          <ConfiguracionIa />
+        </ToastProvider>
+      </MemoryRouter>,
+    )
+    const user = userEvent.setup()
+    expect(await screen.findByText('Ya hay una clave guardada')).toBeInTheDocument()
+    const ep = screen.getByLabelText('Endpoint de Foundry')
+    expect(ep).toHaveValue('https://a.openai.azure.com/openai/v1')
+    await user.clear(ep)
+    await user.type(ep, 'https://b.openai.azure.com/openai/v1')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(screen.getByText('Cambios guardados.')).toBeInTheDocument())
+    const put = f.mock.calls.find(([, i]) => i?.method === 'PUT')
+    const body = JSON.parse(String(put?.[1]?.body))
+    expect(body).toMatchObject({ proveedor: 'foundry', foundryEndpoint: 'https://b.openai.azure.com/openai/v1' })
+    expect(body).not.toHaveProperty('claveFoundry')
+  })
+})
+
 describe('Configuración de IA: lectura de PDFs escaneados', () => {
   const base = () => ajustesIa({ necesitaBienvenida: false })
   const montar = (ocr: Record<string, unknown>) => {
@@ -51,7 +81,7 @@ describe('Configuración de IA: lectura de PDFs escaneados', () => {
       'GET /api/settings/ia': { body: base() },
       'GET /api/settings/ia/hardware': { body: hardwareIa() },
       'GET /api/settings/ocr': () => ({ body: ajustesOcr({ motor }) }),
-      'PUT /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, claves: { openai: false, anthropic: false, aws: true } }) },
+      'PUT /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, claves: { openai: false, anthropic: false, aws: true, foundry: false } }) },
       'PUT /api/settings/ocr': (req) => {
         motor = (req.body as { motor: typeof motor }).motor
         return { body: ajustesOcr({ motor }) }
@@ -105,7 +135,7 @@ describe('Configuración de IA: lectura de PDFs escaneados', () => {
   })
 
   it('Probar Textract muestra el error de AWS', async () => {
-    montar({ 'GET /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, claves: { openai: false, anthropic: false, aws: true } }) } })
+    montar({ 'GET /api/settings/ia': { body: ajustesIa({ necesitaBienvenida: false, claves: { openai: false, anthropic: false, aws: true, foundry: false } }) } })
     const user = userEvent.setup()
     await user.click(await screen.findByRole('radio', { name: /Amazon Textract/ }))
     await user.click(screen.getByRole('button', { name: 'Probar Textract' }))
