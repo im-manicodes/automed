@@ -23,16 +23,16 @@ Un único `.env` lo leen la api, Prisma, docker compose y el benchmark.
 | `WEB_ORIGIN` | Origen del front (CORS y redirección tras el login). Dev: `http://localhost:5173`; con compose se fija a `http://localhost:5173 (dev) o :3000 (imagen única)`. |
 | `DATABASE_URL` | Conexión a PostgreSQL **desde tu máquina** (desarrollo, migraciones, benchmark, tests). Usa `localhost`. |
 | `DATABASE_URL_DOCKER` | La misma BD **vista desde el contenedor de la api**: normalmente `host.docker.internal` en lugar de `localhost` (compose añade `extra_hosts: host.docker.internal:host-gateway`). Es obligatoria para `docker compose up`. |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE` | RustFS (S3 compatible). Con compose el endpoint se fuerza a `http://rustfs:9000`. **Cambia las claves por defecto** (`rustfsadmin`) fuera de tu máquina. El bucket se crea solo al arrancar. |
+| *(almacenamiento)* | Ya no va en `.env`: se configura en la web (Ajustes -> Almacenamiento y asistente de bienvenida). En dev, el RustFS del compose usa `rustfsadmin` / `rustfsadmin` en `http://rustfs:9000`. **Cambia esas claves** fuera de tu máquina. |
 | `TOKEN_ENC_KEY` | Clave AES-GCM (32 bytes en base64) para cifrar el refresh token de Microsoft. Si la cambias, hay que volver a conectar Outlook (Ajustes). |
 | `JWT_SECRET` | **Obligatorio**, mínimo 32 caracteres (`openssl rand -base64 48`). Firma el JWT de sesión; sin él la API no arranca. Si lo cambias, todas las sesiones se cierran. |
 | `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL` | Duración del JWT de acceso (`15m`) y del refresh token (`30d`, rotativo). |
-| `COOKIE_SECURE` | (opcional) `true`/`false` fuerza el atributo `Secure` de las cookies de sesión; vacío = se deduce de `MS_REDIRECT_URI` (https => Secure). En producción tras HTTPS: `true`. |
-| `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` | (opcionales) Valores por defecto del OAuth de Microsoft; lo normal es pegarlos en **Ajustes -> Microsoft** (el panel manda sobre `.env`). Ver sección 6. |
+| `COOKIE_SECURE` | (opcional) `true`/`false` fuerza el atributo `Secure` de las cookies de sesión; vacío = se deduce de la URL de redirección de Microsoft configurada en Ajustes (https => Secure). En producción tras HTTPS: `true`. |
+| `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URI` | (opcionales, ya no están en `.env.example`) Valores por defecto del OAuth de Microsoft; lo normal es pegarlos en **Ajustes -> Microsoft** (el panel manda sobre `.env`). Ver sección 6. |
 | `SYNC_INTERVAL_MIN` | Cada cuántos minutos se sincroniza el correo (solo descarga/guarda; nunca analiza). `0` lo desactiva. |
 | `JOBS_ENABLED`, `JOBS_CONCURRENCY`, `JOBS_POLL_MS`, `JOBS_MAX_ATTEMPTS`, `JOBS_BACKOFF_*`, `JOBS_LOCK_TIMEOUT_SEC` | Cola de trabajos en PostgreSQL. `JOBS_ENABLED=false` apaga el worker **y** el polling del sync (útil para verificar el despliegue sin tocar nada externo). |
 | `PDF_TEXT_MODE`, `PDF_TEXT_MIN_CHARS` | (opcionales) Extractor de PDF digital en Node, dentro del proceso de la API (`node` por defecto; `off` = todo por OCR). Las páginas con capa de texto (>= `PDF_TEXT_MIN_CHARS` caracteres, 60 por defecto, y que no sean un escaneo con texto residual) pasan a markdown sin OCR (`OcrPage.engine='pdf-text'`, sin regiones a revisar); las escaneadas siguen por OCR. No hay servicio Python aparte. |
-| `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*`, `OCR_LOCAL_TIMEOUT_MS`, `TEXTRACT_MODE` | (opcionales, comentados en `.env.example`) Ajustes finos de OCR; ver `docs/benchmark-ocr.md`. |
+| `OCR_RENDER_DPI`, `OCR_CONFIDENCE_THRESHOLD`, `OCR_VISION_*`, `OCR_LOCAL_TIMEOUT_MS`, `TEXTRACT_MODE` | (opcionales, ya no están en `.env.example`) Valores por defecto de OCR; casi todo se cambia en Ajustes -> OCR. Ver `docs/benchmark-ocr.md`. |
 | `LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_TEMPERATURE`, `SYNTH_MAX_INPUT_TOKENS` | (opcionales) Límites y costo del LLM. |
 | (no van en `.env`) | **Proveedor LLM, modelos, claves (Anthropic/OpenAI), URL de Ollama, región AWS y motor OCR (`local`/`textract`) se eligen en la web** (asistente de bienvenida en el primer inicio de sesión, Ajustes -> Inteligencia artificial y Ajustes -> OCR) y se guardan en la base de datos (claves cifradas). Las variables `LLM_*`, `*_API_KEY`, `OLLAMA_BASE_URL`, `AWS_REGION`, `OCR_ENGINE` aún se leen como valores por defecto, pero ya no se documentan. Las credenciales de Bedrock/Textract siguen siendo las estándar de AWS (rol o variables), no se piden en la web. |
 | `AWS_REGION` (+ credenciales AWS estándar) | Región para Bedrock y Textract. |
@@ -195,7 +195,7 @@ Todo se configura desde la web, sin reiniciar (el `.env` solo da valores por def
 | api no queda `healthy`; logs: "Can't reach database server" | Postgres del host no acepta conexiones desde Docker: ver "PostgreSQL del host"; revisa usuario/clave y `host.docker.internal`. |
 | `/api/health` responde `db:false` | Igual que arriba, o la BD cambió de contraseña. |
 | `storage:false` | RustFS no arrancó o las claves S3 no coinciden con las del volumen existente (RustFS conserva las claves con las que se creó). |
-| Conectar Outlook: `redirect_uri` no coincide | `MS_REDIRECT_URI` debe ser idéntica a la registrada en Entra. |
+| Conectar Outlook: `redirect_uri` no coincide | La URL de redirección en Ajustes -> Microsoft debe ser idéntica a la registrada en Entra. |
 | Tras iniciar sesión vuelve a la pantalla de entrada | Cookie no enviada: con HTTPS pon `COOKIE_SECURE=true` y usa el mismo host; revisa `WEB_ORIGIN`. |
 | "La conexión con Outlook caducó" | Ajustes -> Conectar Outlook de nuevo (token revocado, o cambiaste `TOKEN_ENC_KEY`). |
 | La API no arranca: "JWT_SECRET falta o es demasiado corto" | Define `JWT_SECRET` (>= 32 caracteres) en `.env`. |
