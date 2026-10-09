@@ -75,3 +75,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Redespliega en Dokploy solo tras publicar la imagen en GHCR (si no, bajaría el `latest` anterior).
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Avisar a Dokploy
+        env:
+          DOKPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
+        run: |
+          test -n "$DOKPLOY_WEBHOOK_URL" || { echo "Falta el secreto DOKPLOY_WEBHOOK_URL"; exit 1; }
+          curl --fail --silent --show-error --retry 3 --max-time 30 -X POST "$DOKPLOY_WEBHOOK_URL" -o /dev/null
