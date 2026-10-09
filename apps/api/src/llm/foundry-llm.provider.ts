@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { BaseLlmProvider } from './base-llm.provider';
-import type { LlmConfig } from './llm-config';
+import { reasoningHeadroom, type LlmConfig } from './llm-config';
 import { LlmTruncatedError } from './llm-provider.interface';
 import type { LlmRequest } from './llm-provider.interface';
 
@@ -48,7 +48,7 @@ export class FoundryLlmProvider extends BaseLlmProvider {
     ];
     const res = await this.client.chat.completions.create({
       model,
-      max_completion_tokens: maxTokens,
+      max_completion_tokens: maxTokens + reasoningHeadroom(model),
       messages: [
         ...(req.system
           ? [{ role: 'system' as const, content: req.system }]

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { BaseLlmProvider } from './base-llm.provider';
-import type { LlmConfig } from './llm-config';
+import { reasoningHeadroom, type LlmConfig } from './llm-config';
 import { LlmTruncatedError } from './llm-provider.interface';
 import type { LlmRequest } from './llm-provider.interface';
 
@@ -41,7 +41,7 @@ export class OpenAiLlmProvider extends BaseLlmProvider {
     ];
     const res = await this.client.chat.completions.create({
       model,
-      max_completion_tokens: maxTokens,
+      max_completion_tokens: maxTokens + reasoningHeadroom(model),
       ...(temperature !== undefined ? { temperature } : {}),
       messages: [
         ...(req.system

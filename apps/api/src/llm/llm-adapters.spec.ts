@@ -1,3 +1,4 @@
+import { reasoningHeadroom } from './llm-config';
 import { AnthropicLlmProvider } from './anthropic-llm.provider';
 import { BedrockLlmProvider } from './bedrock-llm.provider';
 import { FoundryLlmProvider } from './foundry-llm.provider';
@@ -396,5 +397,14 @@ describe('LlmTruncatedError (parada por límite de tokens)', () => {
     ).rejects.toBeInstanceOf(LlmTruncatedError);
     expect(send).toHaveBeenCalledTimes(1);
     await expect(p.text('s', 'u')).resolves.toBe('parcial');
+  });
+});
+
+describe('reasoningHeadroom', () => {
+  it('da margen solo a modelos con razonamiento', () => {
+    expect(reasoningHeadroom('gpt-5-mini')).toBeGreaterThan(0);
+    expect(reasoningHeadroom('o3')).toBeGreaterThan(0);
+    expect(reasoningHeadroom('gpt-4.1')).toBe(0);
+    expect(reasoningHeadroom('qwen3-vl:4b-instruct')).toBe(0);
   });
 });

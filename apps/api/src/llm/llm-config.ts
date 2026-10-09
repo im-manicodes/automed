@@ -86,3 +86,13 @@ export function modelAcceptsTemperature(model: string): boolean {
   if (/(^|[./])(gpt-5|o\d)/.test(m)) return false;
   return true;
 }
+
+/** Tokens extra para modelos con razonamiento (GPT-5/o-series): el razonamiento cuenta dentro de `max_completion_tokens`. */
+export const REASONING_HEADROOM_TOKENS = 6000;
+
+/** Margen de salida según el modelo; 0 si no razona (o si el nombre del deployment no lo delata). */
+export function reasoningHeadroom(model: string): number {
+  return /(^|[./-])(gpt-5|o\d)/.test(model.toLowerCase())
+    ? REASONING_HEADROOM_TOKENS
+    : 0;
+}

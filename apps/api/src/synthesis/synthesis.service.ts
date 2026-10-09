@@ -359,9 +359,9 @@ export class SynthesisService implements ThreadSynthesizer {
         buildWhatsappPrompt(tpl.markdown, body),
         { maxTokens: 2000, task: 'whatsapp' },
       );
-    } catch {
+    } catch (e) {
       this.logger.warn(
-        `No se pudo redactar el mensaje de WhatsApp (hilo ${threadId})`,
+        `No se pudo redactar el mensaje de WhatsApp (hilo ${threadId}): ${(e as Error)?.name ?? 'error'}`,
       );
       throw new ServiceUnavailableException(
         'No se pudo preparar el mensaje ahora. Intenta de nuevo en un momento.',
