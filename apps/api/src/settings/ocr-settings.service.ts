@@ -127,7 +127,7 @@ export class OcrSettingsService {
     const row = await this.prisma.setting.findUnique({
       where: { key: OCR_CONFIG_KEY },
     });
-    return isObj(row?.value) ? (row.value as OcrStoredConfig) : null;
+    return isObj(row?.value) ? row.value : null;
   }
 
   /** Endpoint y clave de Azure (panel > AZURE_OCR_ENDPOINT / AZURE_OCR_KEY); null si falta algo. */

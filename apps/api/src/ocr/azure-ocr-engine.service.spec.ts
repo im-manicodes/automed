@@ -60,11 +60,11 @@ describe('AzureOcrEngineService', () => {
     jest.useRealTimers();
     expect(r.pageNumber).toBe(4);
     expect(r.words[0].text).toBe('a');
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain(
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
       'https://x.azure.com/documentintelligence/documentModels/prebuilt-read:analyze',
     );
-    expect((init as RequestInit).headers).toMatchObject({
+    expect(init.headers).toMatchObject({
       'Ocp-Apim-Subscription-Key': 'k',
     });
   });
@@ -76,13 +76,11 @@ describe('AzureOcrEngineService', () => {
         key: 'secreta',
       }),
     } as never);
-    jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: { code: 'Unauthorized' } }), {
-          status: 401,
-        }),
-      );
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'Unauthorized' } }), {
+        status: 401,
+      }),
+    );
     const err = await svc
       .recognize(img, 1)
       .catch((e: Error & { status?: number }) => e);
