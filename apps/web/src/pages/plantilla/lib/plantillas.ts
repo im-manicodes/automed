@@ -36,7 +36,7 @@ export const TIPOS_PLANTILLA: PlantillaTipo[] = [
     etiqueta: 'Mensaje de WhatsApp',
     titulo: 'Formato del mensaje de WhatsApp',
     ayuda:
-      'Aquí decides cómo se ve el mensaje de WhatsApp que se escribe con el último correo de un ticket: estructura, estilo y largo. Lo que va entre <!-- --> son instrucciones para la inteligencia artificial.',
+      'Aquí decides cómo se ve el mensaje de WhatsApp con el status del paciente, que se escribe a partir del resumen de un ticket: estructura, estilo y largo. Lo que va entre <!-- --> son instrucciones para la inteligencia artificial.',
     max: 3000,
     exigeTitulos: false,
     textoVistaPrevia: 'Muestra cómo quedaría con un correo de ejemplo.',

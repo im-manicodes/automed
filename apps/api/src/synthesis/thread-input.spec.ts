@@ -169,27 +169,6 @@ describe('renderPage con geometría', () => {
     expect(r.text).not.toContain('a'.repeat(81));
   });
 
-  it("con dudosas: 'omitir' las descarta sin marca y conserva las corregidas", () => {
-    const r = renderPage(
-      {
-        pageNumber: 2,
-        text: null,
-        regions: [
-          reg({ x: 0.1, y: 0.1, status: 'dudoso', text: 'ras?o' }),
-          reg({ x: 0.1, y: 0.3, status: 'dudoso', userText: 'corregido' }),
-          reg({ x: 0.1, y: 0.5, text: 'bien' }),
-        ],
-      },
-      'doc.pdf',
-      () => 1,
-      { dudosas: 'omitir' },
-    );
-    expect(r.doubtful).toBe(1);
-    expect(r.text).toContain('corregido');
-    expect(r.text).toContain('bien');
-    expect(r.text).not.toMatch(/ras\?o|ilegible/);
-  });
-
   it('mezcla dudosa/corregida y numera #n de arriba a abajo e izquierda a derecha', () => {
     const r = run([
       reg({ x: 0.6, y: 0.1, status: 'dudoso' }),

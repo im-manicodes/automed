@@ -76,7 +76,7 @@ export const DEFAULT_TEMPLATE_MARKDOWN = `<!-- Reglas generales (no se copian a 
 <!-- 2 a 3 líneas: tipo de documento, fecha y quién lo emite. -->
 
 #### Datos relevantes
-<!-- Tabla | Sección | Campo | Valor |. En "Sección" indica la parte del formulario donde está cada dato (encabezado, datos del paciente, nota pre/post operatoria, indicaciones...). Solo datos que se entiendan; lo ilegible va como [ilegible]. -->
+<!-- Tabla | Sección | Campo | Valor | con UNA FILA por cada campo del formulario, también los vacíos o ilegibles (Valor "—" o [ilegible]). En "Sección" indica la parte del formulario donde está cada dato (encabezado, datos del paciente, nota pre/post operatoria, anestesia, cuentas, indicaciones...). Nunca uses viñetas aquí. -->
 | Sección | Campo | Valor |
 | --- | --- | --- |
 
@@ -84,7 +84,7 @@ export const DEFAULT_TEMPLATE_MARKDOWN = `<!-- Reglas generales (no se copian a 
 <!-- Lista de campos vacíos, ilegibles o no indicados en la página. "Ninguno" si no hay. -->
 
 #### Recreación de la página
-<!-- Recrea la página con tablas markdown que respeten las mismas filas, columnas y orden del formulario original, usando la posición del texto (yNN% | xNN%) para ubicar encabezado, datos del paciente, nota pre/post operatoria, indicaciones, etc. Casillas como [x] / [ ]. Texto largo dentro de la celda. Conserva las marcas [ilegible #n · documento · p.k]. No adivines ni completes lo que no se lee. Si la página es digital y ya viene en markdown, cópiala y ordénala sin inventar nada. -->
+<!-- Recrea la página SOLO con tablas markdown (celdas y columnas, sin viñetas): una tabla por cada sección del formulario (encabezado, datos del paciente, nota pre-operatoria, nota post-operatoria, anestesia, cuentas, indicaciones, etc.) con sus columnas reales, que respeten las mismas filas, columnas y orden del formulario original, usando la posición del texto (yNN% | xNN%) para ubicar cada dato. Casillas como [x] / [ ]. Texto largo dentro de la celda. Conserva las marcas [ilegible #n · documento · p.k]. No adivines ni completes lo que no se lee. Si la página es digital y ya viene en markdown, cópiala y ordénala sin inventar nada. -->
 
 ## Dudas por aclarar
 <!-- Preguntas abiertas, datos contradictorios o partes ilegibles que requieren confirmación. -->

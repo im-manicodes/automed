@@ -23,7 +23,7 @@ describe('WhatsappDialog', () => {
     renderDlg('*Hola*')
     expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true')
     expect(screen.getByRole('dialog')).toHaveFocus()
-    expect(screen.getByText(/último correo y sus adjuntos/)).toBeInTheDocument()
+    expect(screen.getByText(/resumen del ticket/)).toBeInTheDocument()
     expect(screen.getByText('Hola').tagName).toBe('STRONG')
   })
 

@@ -20,10 +20,8 @@ import {
   buildInputBlocks,
   chunkBlocks,
   estimateTokens,
-  formatMessage,
   InputMessage,
   InputPage,
-  renderPage,
 } from './thread-input';
 import {
   MAP_SYSTEM_PROMPT,
@@ -38,7 +36,7 @@ import {
   buildMapPrompt,
   buildReducePrompt,
   buildWhatsappPrompt,
-  SAMPLE_WHATSAPP_EMAIL_TEXT,
+  SAMPLE_WHATSAPP_SUMMARY_TEXT,
   WHATSAPP_SYSTEM_PROMPT,
 } from './synthesis-prompts';
 
@@ -301,7 +299,7 @@ export class SynthesisService implements ThreadSynthesizer {
     if (kind === 'whatsapp') {
       const out = await this.llm.text(
         WHATSAPP_SYSTEM_PROMPT,
-        buildWhatsappPrompt(tpl, SAMPLE_WHATSAPP_EMAIL_TEXT),
+        buildWhatsappPrompt(tpl, SAMPLE_WHATSAPP_SUMMARY_TEXT),
         { maxTokens: 2000, task: 'whatsapp' },
       );
       return { markdown: sanearParaWhatsApp(stripFences(out)) };
@@ -315,40 +313,26 @@ export class SynthesisService implements ThreadSynthesizer {
   }
 
   /**
-   * Mensaje de WhatsApp redactado por el LLM SOLO con el último correo del hilo y el OCR ya
-   * existente de sus adjuntos (un adjunto sin OCR se declara «sin leer», no se procesa). No usa
-   * la síntesis ni mensajes anteriores y no guarda nada.
+   * Mensaje de WhatsApp con el status del paciente, redactado por el LLM SOLO con la síntesis
+   * vigente del ticket (no reenvía el hilo ni los adjuntos) y el formato de la plantilla
+   * `whatsapp`. Exige que el ticket ya tenga resumen. No guarda nada.
    */
   async whatsappLast(threadId: string): Promise<{ texto: string }> {
-    const { messages, pagesBySha } = await this.loadThreadData(threadId);
-    const last = [...messages].sort(
-      (a, b) => b.receivedAt.getTime() - a.receivedAt.getTime(),
-    )[0];
-    if (!last) throw new ConflictException('El ticket no tiene correos');
-    let counter = 0;
-    const seen = new Set<string>();
-    const docs: string[] = [];
-    for (const att of last.attachments) {
-      if (seen.has(att.sha256)) continue;
-      seen.add(att.sha256);
-      const pages = pagesBySha.get(att.sha256) ?? [];
-      // Sin OCR, sin texto o con zonas dudosas: no se menciona nada (el mensaje solo informa).
-      for (const p of [...pages].sort((a, b) => a.pageNumber - b.pageNumber)) {
-        const r = renderPage(p, att.filename, () => ++counter, {
-          dudosas: 'omitir',
-        });
-        if (!r.text) continue;
-        docs.push(
-          `### Documento: ${att.filename} · página ${p.pageNumber}\n${r.text}`,
-        );
-      }
-    }
-    // Respeta SYNTH_MAX_INPUT_TOKENS: se recorta el OCR si no cabe.
+    const syn = await this.prisma.synthesis.findFirst({
+      where: { threadId },
+      orderBy: { version: 'desc' },
+      select: { markdown: true },
+    });
+    if (!syn)
+      throw new ConflictException(
+        'Analiza el ticket antes de generar el mensaje.',
+      );
+    // Respeta SYNTH_MAX_INPUT_TOKENS: se recorta el resumen si no cabe.
     const maxChars = Math.max(
       2000,
       ((await this.maxInputTokens()) - PROMPT_OVERHEAD_TOKENS) * 4,
     );
-    let body = [formatMessage(last, 1), ...docs].join('\n\n');
+    let body = syn.markdown;
     if (body.length > maxChars)
       body = body.slice(0, maxChars) + '\n[... recortado ...]';
     const tpl = await this.templates.getActive('whatsapp');

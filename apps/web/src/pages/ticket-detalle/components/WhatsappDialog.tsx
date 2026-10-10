@@ -7,7 +7,7 @@ import { enlaceWhatsApp } from '../lib/whatsapp'
 import { envolverSeleccion, renderWhatsapp } from '../lib/whatsappMarkup'
 
 interface Props {
-  /** Texto propuesto por la IA a partir del último correo. */
+  /** Texto propuesto por la IA a partir del resumen del ticket. */
   initial: string
   onClose: () => void
 }
@@ -48,7 +48,7 @@ export default function WhatsappDialog({ initial, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="wa-title" className="w-full max-w-lg space-y-3 rounded-2xl bg-white p-5 shadow-xl outline-none">
         <h2 id="wa-title" className="text-xl font-bold">Mensaje para WhatsApp</h2>
-        <p className="text-sm text-slate-700">Se redactó con el último correo y sus adjuntos. Revísalo antes de enviarlo.</p>
+        <p className="text-sm text-slate-700">Se redactó con el resumen del ticket. Revísalo antes de enviarlo.</p>
         <div role="tablist" aria-label="Modo" className="flex gap-2">
           <button type="button" role="tab" aria-selected={pestana === 'vista'} className={tab(pestana === 'vista')} onClick={() => setPestana('vista')}>Vista previa</button>
           <button type="button" role="tab" aria-selected={pestana === 'editar'} className={tab(pestana === 'editar')} onClick={() => setPestana('editar')}>Editar</button>

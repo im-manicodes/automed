@@ -16,7 +16,7 @@ export function useTicketAcciones(id: string) {
   const reprocess = useMutation<Estado>({ url: `${base}/reprocess` })
   const reanalyzeLast = useMutation<Estado & { mode: 'incremental'; messageId: string }>({ url: `${base}/reanalyze-last` })
   const regenerate = useMutation<RegenerateResponse>({ url: `${base}/synthesis/regenerate` })
-  /** Mensaje de WhatsApp redactado por IA solo con el último correo (no guarda nada). */
+  /** Mensaje de WhatsApp redactado por IA con el resumen vigente del ticket (no guarda nada). */
   const whatsappLast = useMutation<{ texto: string }>({ url: `${base}/whatsapp-last` })
   /** Borrador del evento propuesto por IA con la síntesis vigente (no guarda nada). */
   const eventDraft = useMutation<EventoBorrador>({ url: `${base}/event-draft` })

@@ -33,25 +33,20 @@ export interface TemplateKindDef {
 
 export const DEFAULT_WHATSAPP_TEMPLATE_NAME = 'Formato de WhatsApp estándar';
 
-export const DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN = `*{NOMBRE APELLIDOS}* · {N} años · _{UCI o Hab.}_ · Ingreso {dd/mm}
+export const DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN = `*{NOMBRE APELLIDOS}*, {edad} años | {UCI / Hab. / Ingreso dd/mm}
+{Diagnóstico principal; PO de {procedimiento} ({dd/mm}) y evolución quirúrgica}
+{dd/mm}: {evolución más reciente en texto corrido: síntomas, exploración, manejo}
+SV: TA {…}, FC {…}, FR {…}, T {…}, SatO2 {…}
+Estudios: {estudio: cifra}, {estudio: cifra}
+En espera de: {pendiente}
 
-*Diagnóstico:* {diagnóstico o PO con su fecha}
+*{NOMBRE APELLIDOS}*: alta por mejoría. {motivo y tratamiento de egreso}
 
-*Evolución {dd/mm}:*
-{evolución más reciente en texto corrido}
-\`TA {…}\` \`FC {…}\` \`FR {…}\` \`T {…}\` \`SatO2 {…}\`
-
-*Estudios:* \`{estudio: cifra}\` \`{estudio: cifra}\`
-
-*Pendientes:*
-• {pendiente}
-• {pendiente}
-
-<!-- Todo lo que está entre llaves {…} es un MARCADOR: reemplázalo con datos del correo o sus adjuntos. PROHIBIDO copiar los marcadores {…} literalmente y PROHIBIDO inventar valores: usa solo lo que aparezca en el correo. -->
-<!-- Si no hay dato para una línea o sección completa (diagnóstico, signos vitales, estudios, pendientes...), OMÍTELA. No escribas "No indicado" ni listes los campos que faltan. No añadas comentarios sobre documentos, legibilidad ni datos que falten. -->
-<!-- Formato WhatsApp: *negrita* para nombres y títulos, _cursiva_ para ubicación o aclaraciones, \`código\` para cifras (signos vitales, laboratorios, dosis, estudios), "• " para viñetas. Separa las secciones con una línea en blanco. -->
-<!-- Si el paciente fue dado de alta, usa un bloque corto: "*{NOMBRE APELLIDOS}* — _Alta por mejoría_" y debajo el tratamiento indicado. -->
-<!-- Si hay varios pacientes, un bloque por paciente separado por una línea en blanco. Tono formal e informativo, directo. -->
+<!-- Todo lo que está entre llaves {…} es un MARCADOR: reemplázalo con datos del resumen. PROHIBIDO copiar los marcadores {…} literalmente y PROHIBIDO inventar valores: usa solo lo que aparezca en el resumen. -->
+<!-- Si no hay dato para una línea completa (diagnóstico, SV, estudios, en espera...), OMÍTELA sin comentarios. Tono formal e informativo, directo: sin comentarios sobre documentos, legibilidad ni datos que falten. -->
+<!-- Texto corrido breve, abreviaturas médicas habituales (PO, TA, FC, FR, SatO2) y fechas dd/mm. Solo el nombre del paciente va en *negrita*. -->
+<!-- Si el paciente fue dado de alta, usa solo el último bloque ("alta por mejoría" u otro motivo) con el tratamiento indicado y omite el resto. -->
+<!-- Si hay varios pacientes, un bloque por paciente separado por una línea en blanco. -->
 `;
 
 export const MAX_WHATSAPP_TEMPLATE_CHARS = 3000;
@@ -84,7 +79,7 @@ export const TEMPLATE_KINDS: Record<TemplateKind, TemplateKindDef> = {
     defaultMarkdown: DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN,
     minChars: MIN_TEMPLATE_CHARS,
     maxChars: MAX_WHATSAPP_TEMPLATE_CHARS,
-    help: 'Formato del mensaje de WhatsApp del último correo (un bloque por paciente). Usa marcas de WhatsApp: *negrita*, _cursiva_, `código` (para cifras) y • viñetas. Pon {marcadores} donde va cada dato (nunca valores de ejemplo reales) y tus instrucciones dentro de <!-- comentarios -->.',
+    help: 'Formato del mensaje de WhatsApp con el status del paciente, sacado del resumen del ticket (un bloque por paciente). Usa marcas de WhatsApp: *negrita*, _cursiva_, `código` (para cifras) y • viñetas. Pon {marcadores} donde va cada dato (nunca valores de ejemplo reales) y tus instrucciones dentro de <!-- comentarios -->.',
     validate: validateWhatsappTemplate,
   },
   reporte: {

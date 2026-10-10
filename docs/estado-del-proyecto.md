@@ -365,3 +365,8 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 
 ## Mensaje de WhatsApp informativo (2026-10-09)
 - Hecho: el mensaje es una actualización formal e informativa: sin describir documentos, sin «ilegible»/«por confirmar»/«Falta». `renderPage(..., { dudosas: 'omitir' })` descarta las zonas dudosas sin corregir (las corregidas por el usuario sí entran) y `whatsappLast` ya no manda «adjunto sin leer» ni «página sin texto». Prompt y plantilla por defecto actualizados; una plantilla ya guardada se restablece en Ajustes -> Plantillas -> WhatsApp. Síntesis, reporte y eventos no cambian (siguen con la pista `OCR dudoso`).
+
+## WhatsApp desde el resumen y adjuntos en tablas (2026-10-09)
+- Hecho: `whatsappLast` ya no usa el último correo ni el OCR: una llamada al LLM con SOLO la síntesis vigente (409 si el ticket no tiene resumen) y la plantilla `whatsapp`, con el estilo de los status reales (`Nombre, edad | ubicación`, PO con fecha, evolución por fecha, SV, estudios, en espera de, altas en una línea). El prompt ignora «Dudas por aclarar», «Contenido de adjuntos» y toda marca `[ilegible]`/«por confirmar». Se revirtió la opción `dudosas:'omitir'` de `renderPage` (ya sin uso).
+- Hecho: la plantilla `resumen` por defecto exige tablas en «Datos relevantes» (una fila por campo) y «Recreación de la página» (una tabla por sección del formulario); `PROMPT_VERSION` v3 / `inc3`.
+- Falta (manual): las plantillas ya guardadas no se pisan: restablecer `resumen` y `whatsapp` en Ajustes -> Plantillas y regenerar el resumen del ticket.

@@ -6,17 +6,16 @@ import {
   validateWhatsappTemplate,
 } from '../templates/template-kinds';
 
-function setup(messages: any[], pages: any[] = []) {
+function setup(markdown: string | null = '## Resumen\nPaciente estable') {
   const prisma: any = {
-    thread: { findUnique: jest.fn().mockResolvedValue({ id: 't1', messages }) },
-    ocrPage: {
-      findMany: jest.fn(({ where }: any) =>
-        Promise.resolve(
-          pages.filter((p) => where.sha256.in.includes(p.sha256)),
-        ),
-      ),
+    synthesis: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest
+        .fn()
+        .mockResolvedValue(markdown === null ? null : { markdown }),
     },
-    synthesis: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
+    thread: { findUnique: jest.fn() },
   };
   const templates: any = {
     getActive: jest.fn((kind: string) =>
@@ -42,97 +41,38 @@ function setup(messages: any[], pages: any[] = []) {
     llm,
   };
 }
-const msg = (id: string, day: number, body: string, atts: any[] = []) => ({
-  id,
-  from: 'ana@x.com',
-  to: ['yo@x.com'],
-  cc: [],
-  subject: 'Asunto',
-  bodyText: body,
-  isFromMe: false,
-  receivedAt: new Date(`2026-03-0${day}T10:00:00Z`),
-  attachments: atts,
-});
 
 describe('SynthesisService.whatsappLast', () => {
-  it('omite las zonas dudosas y los adjuntos sin texto, sin marcas ni avisos', async () => {
-    const s = setup(
-      [msg('m1', 1, 'CUERPO', [{ sha256: 'h1', filename: 'nota.pdf' }])],
-      [
-        {
-          sha256: 'h1',
-          pageNumber: 1,
-          text: null,
-          regions: [
-            {
-              x: 0.1,
-              y: 0.1,
-              w: 0.2,
-              h: 0.02,
-              text: 'TA 120/80',
-              status: 'ok',
-              userText: null,
-            },
-            {
-              x: 0.1,
-              y: 0.3,
-              w: 0.2,
-              h: 0.02,
-              text: 'ras?o',
-              status: 'dudoso',
-              userText: null,
-            },
-            {
-              x: 0.1,
-              y: 0.5,
-              w: 0.2,
-              h: 0.02,
-              text: 'mal',
-              status: 'dudoso',
-              userText: 'FC 80',
-            },
-          ],
-        },
-        { sha256: 'h1', pageNumber: 2, text: '', regions: [] },
-      ],
-    );
-    await s.svc.whatsappLast('t1');
-    const [, user] = s.llm.text.mock.calls[0];
-    expect(user).toContain('TA 120/80');
-    expect(user).toContain('FC 80');
-    expect(user).not.toContain('ras?o');
-    expect(user).not.toMatch(/ilegible|sin leer|sin texto/);
-    expect(user).not.toContain('página 2');
-  });
-
-  it('el prompt lleva solo el último correo y el OCR de sus adjuntos', async () => {
-    const s = setup(
-      [
-        msg('m1', 1, 'CUERPO VIEJO', [{ sha256: 'h1', filename: 'viejo.pdf' }]),
-        msg('m2', 2, 'CUERPO NUEVO', [
-          { sha256: 'h2', filename: 'nuevo.pdf' },
-          { sha256: 'h3', filename: 'pendiente.pdf' },
-        ]),
-      ],
-      [
-        { sha256: 'h1', pageNumber: 1, text: 'OCR VIEJO', regions: [] },
-        { sha256: 'h2', pageNumber: 1, text: 'OCR NUEVO', regions: [] },
-      ],
-    );
+  it('el prompt lleva solo la síntesis vigente y no guarda nada', async () => {
+    const s = setup('## Evolución\nRESUMEN_VIGENTE_XYZ');
     const r = await s.svc.whatsappLast('t1');
     const [, user] = s.llm.text.mock.calls[0];
-    expect(user).toContain('CUERPO NUEVO');
-    expect(user).toContain('OCR NUEVO');
-    expect(user).not.toContain('adjunto sin leer');
-    expect(user).not.toContain('CUERPO VIEJO');
-    expect(user).not.toContain('OCR VIEJO');
+    expect(s.prisma.synthesis.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { threadId: 't1' },
+        orderBy: { version: 'desc' },
+      }),
+    );
+    expect(user).toContain('RESUMEN_VIGENTE_XYZ');
+    expect(s.prisma.thread.findUnique).not.toHaveBeenCalled();
     expect(r.texto).toBe('*Hola*\n• *Pide* pago');
     expect(s.prisma.synthesis.create).not.toHaveBeenCalled();
-    expect(s.prisma.synthesis.findMany).not.toHaveBeenCalled();
+  });
+
+  it('recorta el resumen si no cabe en maxInputTokens', async () => {
+    const s = setup('x'.repeat(50_000));
+    const aiSettings: any = {
+      getEffective: jest.fn().mockResolvedValue({ maxInputTokens: 2000 }),
+    };
+    const svc = new SynthesisService(s.prisma, s.templates, s.llm, aiSettings);
+    await svc.whatsappLast('t1');
+    const [, user] = s.llm.text.mock.calls[0];
+    expect(user).toContain('[... recortado ...]');
+    expect(user.length).toBeLessThan(20_000);
   });
 
   it('usa la plantilla whatsapp como formato y no la del resumen', async () => {
-    const s = setup([msg('m1', 1, 'HOLA')]);
+    const s = setup();
     await s.svc.whatsappLast('t1');
     expect(s.templates.getActive).toHaveBeenCalledWith('whatsapp');
     expect(s.templates.getActive).not.toHaveBeenCalledWith('resumen');
@@ -141,26 +81,27 @@ describe('SynthesisService.whatsappLast', () => {
     expect(user).not.toContain('PLANTILLA_RESUMEN_XYZ');
     // las reglas de seguridad no editables siguen en el system prompt
     expect(system).toContain('NO inventes nada');
-    expect(system).toContain('PROHIBIDO describir los documentos');
+    expect(system).toContain('PROHIBIDO describir documentos');
+    expect(system).toContain('IGNORA por completo');
+    expect(system).toContain('Dudas por aclarar');
     expect(system).not.toContain('_Falta: ...');
-    expect(system).not.toContain('adjunto sin leer');
     expect(s.llm.text.mock.calls[0][2]).toMatchObject({ maxTokens: 2000 });
   });
 
-  it('preview whatsapp usa el formato propuesto y el correo de ejemplo', async () => {
-    const s = setup([]);
+  it('preview whatsapp usa el formato propuesto y un resumen de ejemplo', async () => {
+    const s = setup();
     const r = await s.svc.preview('FORMATO_PROPUESTO', 'whatsapp');
     const [system, user] = s.llm.text.mock.calls[0];
     expect(system).toContain('NO inventes nada');
     expect(user).toContain('FORMATO_PROPUESTO');
-    expect(user).toContain('Cotización de mantenimiento');
+    expect(user).toContain('RESUMEN DEL TICKET');
     expect(r.markdown).toBeTruthy();
     expect(s.llm.text.mock.calls[0][2]).toMatchObject({ maxTokens: 2000 });
     expect(s.templates.getActive).not.toHaveBeenCalled();
   });
 
-  it('409 sin correos', async () => {
-    const s = setup([]);
+  it('409 si el ticket no tiene resumen todavía', async () => {
+    const s = setup(null);
     await expect(s.svc.whatsappLast('t1')).rejects.toBeInstanceOf(
       ConflictException,
     );
@@ -168,7 +109,7 @@ describe('SynthesisService.whatsappLast', () => {
   });
 
   it('error del LLM -> 503 con mensaje seguro', async () => {
-    const s = setup([msg('m1', 1, 'SECRETO')]);
+    const s = setup('SECRETO');
     s.llm.text.mockRejectedValue(new Error('SECRETO boom'));
     const e: any = await s.svc.whatsappLast('t1').catch((x) => x);
     expect(e).toBeInstanceOf(ServiceUnavailableException);

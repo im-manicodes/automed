@@ -115,25 +115,17 @@ export function regionText(r: InputRegion): string | null {
 /**
  * Texto de una página. Regiones en orden de lectura (y, luego x). `nextIllegible` entrega el
  * número consecutivo (#n) de cada marca. Sin regiones se usa el texto plano de la página.
- * Con `dudosas: 'omitir'` las regiones dudosas sin corregir se descartan sin marca.
  */
 export function renderPage(
   page: InputPage,
   docName: string,
   nextIllegible: () => number,
-  opts: { dudosas?: 'marcar' | 'omitir' } = {},
 ): { text: string; doubtful: number } {
   if (page.regions.length === 0) {
     return { text: (page.text ?? '').trim(), doubtful: 0 };
   }
+  const ordered = [...page.regions].sort((a, b) => a.y - b.y || a.x - b.x);
   let doubtful = 0;
-  let regions = page.regions;
-  if (opts.dudosas === 'omitir') {
-    // Las dudosas sin corregir no se mencionan ni se usan (p. ej. mensaje de WhatsApp).
-    regions = regions.filter((r) => regionText(r) !== null);
-    doubtful = page.regions.length - regions.length;
-  }
-  const ordered = [...regions].sort((a, b) => a.y - b.y || a.x - b.x);
   const render = (r: InputRegion) => {
     const t = regionText(r);
     if (t !== null) return t;
