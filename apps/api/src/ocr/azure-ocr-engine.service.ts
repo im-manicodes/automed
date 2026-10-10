@@ -1,14 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
-import { shrinkToJpeg } from './image-crop';
 import { mapAzurePage, type AzurePage } from './azure-mapper';
 import type { OcrEngine, OcrPageResult } from './ocr-engine.interface';
 
 const API_VERSION = '2024-11-30';
 const POLL_MS = 1000;
 const TIMEOUT_MS = 120_000;
-/** La capa gratuita (F0) acepta imágenes de hasta 4 MB (la de pago, 500 MB): se envía siempre menos. */
-const MAX_BYTES = 3.8 * 1024 * 1024;
+/** La capa gratuita (F0) acepta imágenes de hasta 4 MB (la de pago S0, 500 MB). */
+const F0_MAX_BYTES = 4 * 1024 * 1024;
 
 export const AZURE_NOT_CONFIGURED_MESSAGE =
   'Falta la dirección o la clave de Azure. Configúralas en Ajustes -> OCR.';
@@ -37,11 +36,6 @@ export class AzureOcrEngineService implements OcrEngine {
   ): Promise<OcrPageResult> {
     const creds = await this.settings.getAzureCredentials();
     if (!creds) throw new Error(AZURE_NOT_CONFIGURED_MESSAGE);
-    // Una página rasterizada puede pasar de 4 MB: se recomprime (JPEG) antes de enviarla.
-    const body =
-      image.byteLength > MAX_BYTES
-        ? await shrinkToJpeg(image, MAX_BYTES)
-        : image;
     const base = creds.endpoint.replace(/\/+$/, '');
     const headers = { 'Ocp-Apim-Subscription-Key': creds.key };
     const deadline = Date.now() + TIMEOUT_MS;
@@ -50,11 +44,19 @@ export class AzureOcrEngineService implements OcrEngine {
       {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/octet-stream' },
-        body: body as BodyInit,
+        body: image as BodyInit,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       },
     );
-    if (!start.ok) throw await azureError(start);
+    if (!start.ok) {
+      // La imagen se envía SIEMPRE original (sin recomprimir, para no perder detalle).
+      if (start.status === 400 && image.byteLength > F0_MAX_BYTES) {
+        throw new Error(
+          `La página ${pageNumber} pesa ${(image.byteLength / 1024 / 1024).toFixed(1)} MB y el plan Gratis (F0) de Azure acepta hasta 4 MB. Cambia el recurso a Standard (S0) en el portal de Azure.`,
+        );
+      }
+      throw await azureError(start);
+    }
     const op = start.headers.get('operation-location');
     if (!op) throw new Error('Azure no devolvió la operación de lectura');
     for (;;) {

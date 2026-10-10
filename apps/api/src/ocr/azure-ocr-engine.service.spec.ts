@@ -88,3 +88,26 @@ describe('AzureOcrEngineService', () => {
     expect((err as Error).message).not.toContain('secreta');
   });
 });
+
+describe('AzureOcrEngineService (imagen original)', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('envía los bytes originales sin recomprimir', async () => {
+    const svc = new AzureOcrEngineService({
+      getAzureCredentials: async () => ({
+        endpoint: 'https://x.azure.com',
+        key: 'k',
+      }),
+    } as never);
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'InvalidRequest' } }), {
+        status: 400,
+      }),
+    );
+    const big = new Uint8Array(5 * 1024 * 1024);
+    const err = await svc.recognize(big, 3).catch((e: Error) => e);
+    expect((fetchMock.mock.calls[0][1] as RequestInit).body).toBe(big);
+    expect((err as Error).message).toMatch(/Standard \(S0\)/);
+    expect((err as Error).message).toMatch(/página 3/);
+  });
+});

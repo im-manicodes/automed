@@ -381,6 +381,6 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 - Hecho (resumen): `renderPage` omite las regiones dudosas sin corregir (sin marca `[ilegible]` ni pista «OCR dudoso»); prompts v4/inc4 y plantilla por defecto prohíben «ilegible» y texto sin sentido; `stripEchoedInput` quita el eco de la entrada (`## HILO COMPLETO…`) que el modelo copiaba; una relectura de visión con `[ilegible]` se descarta.
 - Falta (manual): «Reprocesar» el ticket de «Matias Escobar Gutierrez» para releer con Azure; restablecer la plantilla `resumen` si tiene la versión antigua.
 
-## Azure 400 (InvalidRequest) con páginas grandes (2026-10-09)
-- Hecho: la capa gratuita F0 de Document Intelligence acepta imágenes de hasta 4 MB y una página PNG rasterizada a 250 DPI puede pasarse: `AzureOcrEngineService` recomprime a JPEG (calidad 85, escalando x0.8 si hace falta; `shrinkToJpeg` en `ocr/image-crop.ts`) cuando pesa > 3.8 MB. El error de Azure ahora registra también el código interno (`InvalidRequest/<innererror>`), nunca contenido.
-- Falta: confirmar con el código interno del log si el 400 era por tamaño (si no, revisar formato/dimensiones mínimas).
+## Azure recibe la imagen original (2026-10-09)
+- Hecho: la página se envía SIEMPRE original a Azure (sin recomprimir, para no perder detalle de lectura). Se quitó `shrinkToJpeg`. Un 400 con una página de más de 4 MB (límite del plan Gratis F0; S0 acepta hasta 500 MB) da el mensaje «Cambia el recurso a Standard (S0)»; el log de Azure incluye el código interno (`InvalidRequest/<innererror>`), nunca contenido.
+- Falta (manual): pasar el recurso `automed-ocr` a Standard (S0) en el portal de Azure (Pricing tier).
