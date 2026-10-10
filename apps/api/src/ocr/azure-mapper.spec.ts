@@ -16,7 +16,7 @@ describe('mapAzurePage', () => {
           {
             content: 'mundo',
             polygon: [70, 10, 120, 10, 120, 30, 70, 30],
-            confidence: 0.5,
+            confidence: 0.8,
             span: { offset: 5, length: 5 },
           },
         ],
@@ -33,8 +33,46 @@ describe('mapAzurePage', () => {
     expect(r.pageNumber).toBe(2);
     expect(r.words[0].box).toEqual({ x: 0.1, y: 0.1, w: 0.2, h: 0.2 });
     expect(r.lines?.[0].text).toBe('Hola mundo');
-    expect(r.lines?.[0].confidence).toBeCloseTo(0.7);
+    expect(r.lines?.[0].confidence).toBeCloseTo(0.85);
     expect(r.lines?.[0].box.w).toBeCloseTo(0.5);
+  });
+
+  it('una palabra muy débil no se diluye en el promedio de la línea', () => {
+    const r = mapAzurePage(
+      {
+        width: 100,
+        height: 100,
+        words: [
+          {
+            content: 'a',
+            polygon: [0, 0, 10, 0, 10, 10, 0, 10],
+            confidence: 0.99,
+            span: { offset: 0, length: 1 },
+          },
+          {
+            content: 'b',
+            polygon: [20, 0, 30, 0, 30, 10, 20, 10],
+            confidence: 0.99,
+            span: { offset: 2, length: 1 },
+          },
+          {
+            content: 'c',
+            polygon: [40, 0, 50, 0, 50, 10, 40, 10],
+            confidence: 0.4,
+            span: { offset: 4, length: 1 },
+          },
+        ],
+        lines: [
+          {
+            content: 'a b c',
+            polygon: [0, 0, 50, 0, 50, 10, 0, 10],
+            spans: [{ offset: 0, length: 5 }],
+          },
+        ],
+      },
+      1,
+    );
+    expect(r.lines?.[0].confidence).toBeCloseTo(0.4);
   });
 
   it('página vacía o sin tamaño: sin resultados', () => {

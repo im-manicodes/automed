@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { confidenceLevel, pageConfidence } from '../ocr/ocr-confidence';
 import { PrismaService } from '../prisma/prisma.service';
 import { ownPageKey } from '../storage/storage-keys';
 import { StorageService } from '../storage/storage.service';
@@ -16,34 +17,41 @@ export class AttachmentsService {
     const pages = await this.prisma.ocrPage.findMany({
       where: { sha256: att.sha256 },
       orderBy: { pageNumber: 'asc' },
-      include: {
-        regions: {
-          where: { status: { in: ['dudoso', 'corregido'] } },
-          orderBy: [{ y: 'asc' }, { x: 'asc' }],
-        },
-      },
+      include: { regions: { orderBy: [{ y: 'asc' }, { x: 'asc' }] } },
     });
+    const all = pages.flatMap((p) => p.regions);
+    const total = pageConfidence(all);
     return {
       attachmentId: att.id,
       filename: att.filename,
       status: att.status,
-      pages: pages.map((p) => ({
-        pageNumber: p.pageNumber,
-        width: p.width,
-        height: p.height,
-        imageUrl: `/api/attachments/${att.id}/pages/${p.pageNumber}/image`,
-        regions: p.regions.map((r) => ({
-          id: r.id,
-          x: r.x,
-          y: r.y,
-          w: r.w,
-          h: r.h,
-          text: r.text,
-          confidence: r.confidence,
-          status: r.status,
-          textoUsuario: r.userText,
-        })),
-      })),
+      confianza: total,
+      nivel: confidenceLevel(total),
+      pages: pages.map((p) => {
+        const confianza = pageConfidence(p.regions);
+        return {
+          pageNumber: p.pageNumber,
+          width: p.width,
+          height: p.height,
+          imageUrl: `/api/attachments/${att.id}/pages/${p.pageNumber}/image`,
+          motor: p.engine,
+          confianza,
+          nivel: confidenceLevel(confianza),
+          regions: p.regions
+            .filter((r) => r.status === 'dudoso' || r.status === 'corregido')
+            .map((r) => ({
+              id: r.id,
+              x: r.x,
+              y: r.y,
+              w: r.w,
+              h: r.h,
+              text: r.text,
+              confidence: r.confidence,
+              status: r.status,
+              textoUsuario: r.userText,
+            })),
+        };
+      }),
     };
   }
 

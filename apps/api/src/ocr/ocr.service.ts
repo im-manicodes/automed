@@ -6,6 +6,7 @@ import { StorageService } from '../storage/storage.service';
 import type { AttachmentProcessor } from '../jobs/pipeline-hooks.interface';
 import { classifyRegions, regionsOf } from './ocr-classifier';
 import type { ClassifiedRegion } from './ocr-classifier';
+import { flagLowConfidencePage } from './ocr-confidence';
 import { OcrConfig, readOcrConfig } from './ocr-config';
 import { OCR_ENGINE } from './ocr-engine.interface';
 import type { OcrEngine } from './ocr-engine.interface';
@@ -95,6 +96,7 @@ export class OcrService implements AttachmentProcessor {
         this.cfg.confidenceThreshold,
       ).map((r) => ({ ...r, source: 'ocr' as const }));
       regions = await this.retryWithVision(page.png, regions);
+      regions = flagLowConfidencePage(regions);
       built.push({
         pageNumber: page.pageNumber,
         width: page.width,

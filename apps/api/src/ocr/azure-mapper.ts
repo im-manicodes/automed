@@ -1,3 +1,4 @@
+import { LINE_MIN_WORD_CONFIDENCE } from './ocr-confidence';
 import type { OcrPageResult, OcrWord } from './ocr-engine.interface';
 
 interface AzureSpan {
@@ -45,7 +46,8 @@ function boxOf(polygon: number[] | undefined, width: number, height: number) {
 /**
  * Azure AI Document Intelligence (prebuilt-read) entrega polígonos en la unidad de la página
  * (píxeles en imágenes) y confianza 0..1 solo por palabra. Las líneas no traen confianza: se
- * promedia la de las palabras cuyo `span` cae dentro del `span` de la línea.
+ * promedia la de las palabras cuyo `span` cae dentro del `span` de la línea; si alguna palabra
+ * baja de `LINE_MIN_WORD_CONFIDENCE`, la línea toma esa confianza.
  */
 export function mapAzurePage(
   page: AzurePage | undefined,
@@ -77,9 +79,14 @@ export function mapAzurePage(
             s.offset >= span.offset && s.offset < span.offset + span.length,
         )
       : [];
-    const confidence = inside.length
+    const mean = inside.length
       ? inside.reduce((a, s) => a + s.w.confidence, 0) / inside.length
       : 0;
+    const weakest = inside.length
+      ? Math.min(...inside.map((s) => s.w.confidence))
+      : 0;
+    // Una palabra muy débil no se diluye en el promedio de su línea.
+    const confidence = weakest < LINE_MIN_WORD_CONFIDENCE ? weakest : mean;
     lines.push({ text: al.content, confidence, box });
   }
   return { pageNumber, words, lines };

@@ -152,7 +152,7 @@ describe('EventoDialog', () => {
   })
 
   it('«Adjuntos» no pide nada hasta abrir la pestaña y luego carga las páginas', async () => {
-    const pages = mockFetch({ 'GET /api/attachments/a1/pages': { body: { attachmentId: 'a1', filename: 'informe1.pdf', status: 'listo', pages: [{ pageNumber: 1, regions: [] }, { pageNumber: 2, regions: [] }] } } })
+    const pages = mockFetch({ 'GET /api/attachments/a1/pages': { body: { attachmentId: 'a1', filename: 'informe1.pdf', status: 'listo', pages: [{ pageNumber: 1, nivel: 'alta', confianza: 0.95, motor: 'azure', regions: [] }, { pageNumber: 2, nivel: 'digital', confianza: null, motor: 'pdf-text', regions: [] }] } } })
     renderDlg(borrador(), { mensajes: mensajes(2) })
     expect(pages).not.toHaveBeenCalled()
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Adjuntos' }))
@@ -173,7 +173,7 @@ describe('EventoDialog', () => {
     expect(screen.getByText('Este ticket no tiene PDF.')).toBeInTheDocument()
     unmount()
 
-    mockFetch({ 'GET /api/attachments/a1/pages': { body: { attachmentId: 'a1', filename: 'informe1.pdf', status: 'listo', pages: [] } } })
+    mockFetch({ 'GET /api/attachments/a1/pages': { body: { attachmentId: 'a1', filename: 'informe1.pdf', status: 'listo', confianza: null, nivel: 'digital', pages: [] } } })
     renderDlg(borrador(), { mensajes: mensajes() })
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Adjuntos' }))
     expect(await screen.findByText('Este documento no tiene vista previa disponible.')).toBeInTheDocument()

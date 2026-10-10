@@ -44,5 +44,5 @@ function PaginasDoc({ id }: { id: string }) {
   if (!data) return <Spinner text="Cargando el documento…" />
   const paginas = data.pages.map((p) => p.pageNumber)
   if (paginas.length === 0) return <p className="p-4 text-slate-700">Este documento no tiene vista previa disponible.</p>
-  return <VisorPaginas attachmentId={id} paginas={paginas} />
+  return <VisorPaginas attachmentId={id} paginas={paginas} confianzas={data.pages.map((p) => ({ nivel: p.nivel, confianza: p.confianza }))} />
 }

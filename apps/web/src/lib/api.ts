@@ -150,11 +150,23 @@ export interface JobsStatus {
   error: number
 }
 
+/** Nivel de confianza de la lectura (OCR) de una página o documento. */
+export type NivelConfianza = 'digital' | 'alta' | 'media' | 'baja'
+
 export interface AttachmentPages {
   attachmentId: string
   filename: string
   status: ProcessStatus
-  pages: { pageNumber: number; regions: { id: string; status: 'ok' | 'dudoso' | 'corregido' }[] }[]
+  /** Confianza media 0..1 (null si todo es texto digital). */
+  confianza: number | null
+  nivel: NivelConfianza
+  pages: {
+    pageNumber: number
+    confianza: number | null
+    nivel: NivelConfianza
+    motor: string | null
+    regions: { id: string; status: 'ok' | 'dudoso' | 'corregido' }[]
+  }[]
 }
 
 export type ReportStatus = 'generando' | 'listo' | 'error'

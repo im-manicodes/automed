@@ -109,6 +109,36 @@ describe('OcrService (procesador de adjuntos)', () => {
     expect(regions[0]).toMatchObject({ x: 0.1, w: 0.2, source: 'ocr' });
   });
 
+  it('página pobre en conjunto (sin líneas bajo 0.85) marca las más débiles para revisión', async () => {
+    const { svc, engine, created } = setup();
+    (engine.recognize as jest.Mock).mockImplementation((_i, n: number) =>
+      Promise.resolve({
+        pageNumber: n,
+        words: [],
+        lines: [word('uno', 0.86), word('dos', 0.74), word('tres', 0.7)],
+      }),
+    );
+    await svc.process('att1');
+    const st = created[0].regions.create.map((r: any) => r.status);
+    expect(st).toEqual(['ok', 'dudoso', 'dudoso']);
+  });
+
+  it('página buena en conjunto no se marca', async () => {
+    const { svc, engine, created } = setup();
+    (engine.recognize as jest.Mock).mockImplementation((_i, n: number) =>
+      Promise.resolve({
+        pageNumber: n,
+        words: [],
+        lines: [word('uno', 0.9), word('dos', 0.88)],
+      }),
+    );
+    await svc.process('att1');
+    expect(created[0].regions.create.map((r: any) => r.status)).toEqual([
+      'ok',
+      'ok',
+    ]);
+  });
+
   it('dedupe por sha256: si ya hay páginas no vuelve a procesar', async () => {
     const { svc, rasterizer, engine, prisma } = setup({ existingPages: 3 });
     await svc.process('att1');

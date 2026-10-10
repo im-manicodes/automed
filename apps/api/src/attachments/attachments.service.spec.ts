@@ -60,3 +60,58 @@ describe('AttachmentsService (resolución de imágenes)', () => {
     expect(storage.exists).not.toHaveBeenCalled();
   });
 });
+
+describe('AttachmentsService.listPages (confianza)', () => {
+  it('calcula confianza y nivel por página y por adjunto; solo devuelve dudosas/corregidas', async () => {
+    const { svc } = setup('hilos/t2/pdf_1/original.pdf', 'k', []);
+    (svc as any).prisma.ocrPage.findMany.mockResolvedValue([
+      {
+        pageNumber: 1,
+        width: 1,
+        height: 1,
+        imageKey: 'k',
+        engine: 'azure',
+        regions: [
+          {
+            id: 'r1',
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+            text: 'aaaa',
+            confidence: 0.95,
+            status: 'ok',
+            userText: null,
+          },
+          {
+            id: 'r2',
+            x: 0,
+            y: 1,
+            w: 1,
+            h: 1,
+            text: 'bbbb',
+            confidence: 0.55,
+            status: 'dudoso',
+            userText: null,
+          },
+        ],
+      },
+      {
+        pageNumber: 2,
+        width: 1,
+        height: 1,
+        imageKey: 'k2',
+        engine: 'pdf-text',
+        regions: [],
+      },
+    ]);
+    const r = await svc.listPages('a1');
+    expect(r.pages[0].confianza).toBeCloseTo(0.75);
+    expect(r.pages[0].nivel).toBe('media');
+    expect(r.pages[0].motor).toBe('azure');
+    expect(r.pages[0].regions.map((g) => g.id)).toEqual(['r2']);
+    expect(r.pages[1]).toMatchObject({ confianza: null, nivel: 'digital' });
+    expect(r.confianza).toBeCloseTo(0.75);
+    expect(r.nivel).toBe('media');
+  });
+});

@@ -3,17 +3,21 @@ import { LuChevronLeft, LuChevronRight, LuMaximize, LuMinus, LuPlus } from 'reac
 import { usePaginaImagen } from '../../../hooks/usePaginaImagen'
 import { useRuedaZoom } from '../../../hooks/useRuedaZoom'
 import { ajustar, ajustarTamano, alternarZoom, desplazar, zoomEn, type Size, type Transform } from '../../../lib/viewport'
+import ConfianzaOcr from '../../../components/ConfianzaOcr'
 import ErrorBox from '../../../components/ErrorBox'
+import type { NivelConfianza } from '../../../lib/api'
 import Spinner from '../../../components/Spinner'
 
 interface Props {
   attachmentId: string
   /** Números de página disponibles (con imagen), en orden. */
   paginas: number[]
+  /** Confianza de lectura de cada página (mismo orden que `paginas`). */
+  confianzas?: { nivel: NivelConfianza; confianza: number | null }[]
 }
 
 /** Visor simple de páginas de un documento: anterior/siguiente, zoom con rueda/botones, arrastre y doble clic. */
-export default function VisorPaginas({ attachmentId, paginas }: Props) {
+export default function VisorPaginas({ attachmentId, paginas, confianzas }: Props) {
   const [indice, setIndice] = useState(0)
   const pageNumber = paginas[Math.min(indice, paginas.length - 1)]
   const { img, error, reintentar } = usePaginaImagen(attachmentId, pageNumber)
@@ -66,6 +70,13 @@ export default function VisorPaginas({ attachmentId, paginas }: Props) {
           <LuChevronRight className="size-5" aria-hidden />
         </button>
       </div>
+
+      {confianzas?.[indice]?.nivel && (
+        <div className="flex flex-wrap items-center gap-2">
+          <ConfianzaOcr nivel={confianzas[indice].nivel} confianza={confianzas[indice].confianza} />
+          {confianzas[indice].nivel === 'baja' && <span className="text-sm text-slate-700">Conviene revisar esta página.</span>}
+        </div>
+      )}
 
       <div
         ref={caja}
