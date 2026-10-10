@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
+import { shrinkToJpeg } from './image-crop';
 import { mapAzurePage, type AzurePage } from './azure-mapper';
 import type { OcrEngine, OcrPageResult } from './ocr-engine.interface';
 
 const API_VERSION = '2024-11-30';
 const POLL_MS = 1000;
 const TIMEOUT_MS = 120_000;
-/** Límite de Document Intelligence para imágenes en la capa gratuita es 4 MB; de pago 500 MB. */
-const MAX_BYTES = 50 * 1024 * 1024;
+/** La capa gratuita (F0) acepta imágenes de hasta 4 MB (la de pago, 500 MB): se envía siempre menos. */
+const MAX_BYTES = 3.8 * 1024 * 1024;
 
 export const AZURE_NOT_CONFIGURED_MESSAGE =
   'Falta la dirección o la clave de Azure. Configúralas en Ajustes -> OCR.';
@@ -36,11 +37,11 @@ export class AzureOcrEngineService implements OcrEngine {
   ): Promise<OcrPageResult> {
     const creds = await this.settings.getAzureCredentials();
     if (!creds) throw new Error(AZURE_NOT_CONFIGURED_MESSAGE);
-    if (image.byteLength > MAX_BYTES) {
-      throw new Error(
-        `La página ${pageNumber} es demasiado grande para Azure; baja la calidad de lectura`,
-      );
-    }
+    // Una página rasterizada puede pasar de 4 MB: se recomprime (JPEG) antes de enviarla.
+    const body =
+      image.byteLength > MAX_BYTES
+        ? await shrinkToJpeg(image, MAX_BYTES)
+        : image;
     const base = creds.endpoint.replace(/\/+$/, '');
     const headers = { 'Ocp-Apim-Subscription-Key': creds.key };
     const deadline = Date.now() + TIMEOUT_MS;
@@ -49,7 +50,7 @@ export class AzureOcrEngineService implements OcrEngine {
       {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/octet-stream' },
-        body: image as BodyInit,
+        body: body as BodyInit,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       },
     );
@@ -85,8 +86,11 @@ export class AzureOcrEngineService implements OcrEngine {
 export async function azureError(res: Response): Promise<Error> {
   let code = '';
   try {
-    const j = (await res.json()) as { error?: { code?: string } };
-    code = j.error?.code ?? '';
+    const j = (await res.json()) as {
+      error?: { code?: string; innererror?: { code?: string } };
+    };
+    // Códigos de Azure (p. ej. InvalidRequest/InvalidContentLength): nunca incluyen contenido.
+    code = [j.error?.code, j.error?.innererror?.code].filter(Boolean).join('/');
   } catch {
     /* sin cuerpo JSON */
   }
