@@ -362,3 +362,6 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 
 ## Lectura dudosa como pista para el LLM (2026-10-09)
 - Hecho: las regiones `dudoso` sin corregir ya no llegan al LLM como `[ilegible #n · doc · p.k]` a secas, sino con la mejor lectura del OCR: `[ilegible #n · doc · p.k · OCR dudoso: «texto»]` (texto limpio y de máx. 80 car.). Los prompts de síntesis, incremental y WhatsApp indican usarla solo como pista, marcar los datos clínicos «(por confirmar)» y conservar la marca. El recuadro rojo, `doubtfulCount` y `necesita_revision` no cambian. Motivo: con manuscrito casi todo queda bajo el umbral 0.85 y el mensaje salía vacío de datos.
+
+## Mensaje de WhatsApp informativo (2026-10-09)
+- Hecho: el mensaje es una actualización formal e informativa: sin describir documentos, sin «ilegible»/«por confirmar»/«Falta». `renderPage(..., { dudosas: 'omitir' })` descarta las zonas dudosas sin corregir (las corregidas por el usuario sí entran) y `whatsappLast` ya no manda «adjunto sin leer» ni «página sin texto». Prompt y plantilla por defecto actualizados; una plantilla ya guardada se restablece en Ajustes -> Plantillas -> WhatsApp. Síntesis, reporte y eventos no cambian (siguen con la pista `OCR dudoso`).

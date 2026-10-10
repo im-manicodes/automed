@@ -55,6 +55,56 @@ const msg = (id: string, day: number, body: string, atts: any[] = []) => ({
 });
 
 describe('SynthesisService.whatsappLast', () => {
+  it('omite las zonas dudosas y los adjuntos sin texto, sin marcas ni avisos', async () => {
+    const s = setup(
+      [msg('m1', 1, 'CUERPO', [{ sha256: 'h1', filename: 'nota.pdf' }])],
+      [
+        {
+          sha256: 'h1',
+          pageNumber: 1,
+          text: null,
+          regions: [
+            {
+              x: 0.1,
+              y: 0.1,
+              w: 0.2,
+              h: 0.02,
+              text: 'TA 120/80',
+              status: 'ok',
+              userText: null,
+            },
+            {
+              x: 0.1,
+              y: 0.3,
+              w: 0.2,
+              h: 0.02,
+              text: 'ras?o',
+              status: 'dudoso',
+              userText: null,
+            },
+            {
+              x: 0.1,
+              y: 0.5,
+              w: 0.2,
+              h: 0.02,
+              text: 'mal',
+              status: 'dudoso',
+              userText: 'FC 80',
+            },
+          ],
+        },
+        { sha256: 'h1', pageNumber: 2, text: '', regions: [] },
+      ],
+    );
+    await s.svc.whatsappLast('t1');
+    const [, user] = s.llm.text.mock.calls[0];
+    expect(user).toContain('TA 120/80');
+    expect(user).toContain('FC 80');
+    expect(user).not.toContain('ras?o');
+    expect(user).not.toMatch(/ilegible|sin leer|sin texto/);
+    expect(user).not.toContain('página 2');
+  });
+
   it('el prompt lleva solo el último correo y el OCR de sus adjuntos', async () => {
     const s = setup(
       [
@@ -73,7 +123,7 @@ describe('SynthesisService.whatsappLast', () => {
     const [, user] = s.llm.text.mock.calls[0];
     expect(user).toContain('CUERPO NUEVO');
     expect(user).toContain('OCR NUEVO');
-    expect(user).toContain('adjunto sin leer');
+    expect(user).not.toContain('adjunto sin leer');
     expect(user).not.toContain('CUERPO VIEJO');
     expect(user).not.toContain('OCR VIEJO');
     expect(r.texto).toBe('*Hola*\n• *Pide* pago');
@@ -91,8 +141,9 @@ describe('SynthesisService.whatsappLast', () => {
     expect(user).not.toContain('PLANTILLA_RESUMEN_XYZ');
     // las reglas de seguridad no editables siguen en el system prompt
     expect(system).toContain('NO inventes nada');
-    expect(system).toContain('adjunto sin leer');
-    expect(system).toContain('_Falta: ...');
+    expect(system).toContain('PROHIBIDO describir los documentos');
+    expect(system).not.toContain('_Falta: ...');
+    expect(system).not.toContain('adjunto sin leer');
     expect(s.llm.text.mock.calls[0][2]).toMatchObject({ maxTokens: 2000 });
   });
 

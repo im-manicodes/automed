@@ -332,14 +332,14 @@ export class SynthesisService implements ThreadSynthesizer {
       if (seen.has(att.sha256)) continue;
       seen.add(att.sha256);
       const pages = pagesBySha.get(att.sha256) ?? [];
-      if (pages.length === 0) {
-        docs.push(`### Documento: ${att.filename}\n(adjunto sin leer)`);
-        continue;
-      }
+      // Sin OCR, sin texto o con zonas dudosas: no se menciona nada (el mensaje solo informa).
       for (const p of [...pages].sort((a, b) => a.pageNumber - b.pageNumber)) {
-        const r = renderPage(p, att.filename, () => ++counter);
+        const r = renderPage(p, att.filename, () => ++counter, {
+          dudosas: 'omitir',
+        });
+        if (!r.text) continue;
         docs.push(
-          `### Documento: ${att.filename} · página ${p.pageNumber}\n${r.text || '(página sin texto)'}`,
+          `### Documento: ${att.filename} · página ${p.pageNumber}\n${r.text}`,
         );
       }
     }

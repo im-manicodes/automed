@@ -48,10 +48,10 @@ export const DEFAULT_WHATSAPP_TEMPLATE_MARKDOWN = `*{NOMBRE APELLIDOS}* · {N} a
 • {pendiente}
 
 <!-- Todo lo que está entre llaves {…} es un MARCADOR: reemplázalo con datos del correo o sus adjuntos. PROHIBIDO copiar los marcadores {…} literalmente y PROHIBIDO inventar valores: usa solo lo que aparezca en el correo. -->
-<!-- Si no hay dato para una línea o sección completa (diagnóstico, signos vitales, estudios, pendientes...), OMÍTELA. No escribas "No indicado" ni listes los campos que faltan. Si falta un dato clave, a lo sumo UNA línea final: _Falta: ..._ -->
+<!-- Si no hay dato para una línea o sección completa (diagnóstico, signos vitales, estudios, pendientes...), OMÍTELA. No escribas "No indicado" ni listes los campos que faltan. No añadas comentarios sobre documentos, legibilidad ni datos que falten. -->
 <!-- Formato WhatsApp: *negrita* para nombres y títulos, _cursiva_ para ubicación o aclaraciones, \`código\` para cifras (signos vitales, laboratorios, dosis, estudios), "• " para viñetas. Separa las secciones con una línea en blanco. -->
 <!-- Si el paciente fue dado de alta, usa un bloque corto: "*{NOMBRE APELLIDOS}* — _Alta por mejoría_" y debajo el tratamiento indicado. -->
-<!-- Si hay varios pacientes, un bloque por paciente separado por una línea en blanco. Español sencillo y directo. -->
+<!-- Si hay varios pacientes, un bloque por paciente separado por una línea en blanco. Tono formal e informativo, directo. -->
 `;
 
 export const MAX_WHATSAPP_TEMPLATE_CHARS = 3000;
