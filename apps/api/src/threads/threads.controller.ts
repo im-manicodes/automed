@@ -97,6 +97,13 @@ export class ThreadsController {
     return this.pipeline.reanalyzeLast(id);
   }
 
+  /** Genera el resumen sin esperar la revisión manual: las zonas dudosas se dejan fuera. */
+  @Post(':id/synthesis/continue')
+  @HttpCode(202)
+  continueWithoutReview(@Param('id') id: string) {
+    return this.pipeline.continueWithoutReview(id);
+  }
+
   /** Regenera la síntesis en modo COMPLETO (nueva versión, mayor consumo) sin reprocesar adjuntos/OCR. */
   @Post(':id/synthesis/regenerate')
   @HttpCode(202)

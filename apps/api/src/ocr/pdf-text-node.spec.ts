@@ -54,11 +54,13 @@ const canImport = process.execArgv
 const maybe = canImport ? describe : describe.skip;
 
 describe('classifyPage', () => {
-  it('replica las reglas del servicio Python', () => {
+  it('poco texto es escaneo; imagen a página completa es escaneo aunque tenga mucho texto', () => {
     expect(classifyPage(59, 0, 60)).toBe('escaneada');
     expect(classifyPage(60, 0, 60)).toBe('digital');
     expect(classifyPage(100, 0.9, 60)).toBe('escaneada');
-    expect(classifyPage(240, 0.9, 60)).toBe('digital');
+    // escaneo con capa de texto basura (OCR del escáner sobre manuscrito)
+    expect(classifyPage(240, 0.9, 60)).toBe('escaneada');
+    expect(classifyPage(900, 0.95, 60)).toBe('escaneada');
     expect(classifyPage(100, 0.85, 60)).toBe('digital');
   });
 });

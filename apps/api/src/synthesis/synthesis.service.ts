@@ -81,6 +81,19 @@ export function stripFences(s: string): string {
   return (m ? m[1] : s).trim();
 }
 
+/** Encabezados del prompt de entrada que el modelo a veces copia al final de su respuesta. */
+const ECHOED_HEADING =
+  /^#{1,3}\s*(HILO COMPLETO|NOVEDADES|NOTAS CONSOLIDADAS|PLANTILLA\b|SÍNTESIS ANTERIOR|DOCUMENTO CORREGIDO POR EL USUARIO|TAREA\b|RESUMEN DEL TICKET)/im;
+
+/** Corta la salida en el primer encabezado de la entrada que el modelo haya repetido. */
+export function stripEchoedInput(s: string): string {
+  const m = ECHOED_HEADING.exec(s);
+  return m && m.index > 0 ? s.slice(0, m.index).trim() : s;
+}
+
+/** Limpia la salida de síntesis: sin vallas de código y sin eco de la entrada. */
+export const cleanSynthesis = (s: string) => stripEchoedInput(stripFences(s));
+
 @Injectable()
 export class SynthesisService implements ThreadSynthesizer {
   private readonly logger = new Logger(SynthesisService.name);
@@ -309,7 +322,7 @@ export class SynthesisService implements ThreadSynthesizer {
       buildFinalPrompt(tpl, SAMPLE_THREAD_TEXT, false),
       { task: 'resumen' },
     );
-    return { markdown: stripFences(out) };
+    return { markdown: cleanSynthesis(out) };
   }
 
   /**
@@ -556,7 +569,7 @@ export class SynthesisService implements ThreadSynthesizer {
       Math.max(1000, (await this.maxInputTokens()) - overhead),
       meter,
     );
-    return stripFences(
+    return cleanSynthesis(
       await this.ask(
         meter,
         SYSTEM_PROMPT,
@@ -586,7 +599,7 @@ export class SynthesisService implements ThreadSynthesizer {
       Math.max(1000, (await this.maxInputTokens()) - overhead),
       meter,
     );
-    return stripFences(
+    return cleanSynthesis(
       await this.ask(
         meter,
         INCREMENTAL_SYSTEM_PROMPT,

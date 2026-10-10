@@ -1,5 +1,10 @@
 import { LlmTruncatedError } from '../llm/llm-provider.interface';
-import { SynthesisService, stripFences } from './synthesis.service';
+import {
+  SynthesisService,
+  cleanSynthesis,
+  stripEchoedInput,
+  stripFences,
+} from './synthesis.service';
 
 interface SetupOpts {
   maxTokens?: string;
@@ -149,7 +154,7 @@ describe('SynthesisService', () => {
     expect(s.syntheses).toHaveLength(0);
   });
 
-  it('sin síntesis previa: modo completo con ilegibles, isFromMe y plantilla; guarda cobertura', async () => {
+  it('sin síntesis previa: modo completo sin zonas dudosas, isFromMe y plantilla; guarda cobertura', async () => {
     const s = setup();
     const r = await s.svc.generate('t1');
     expect(r).toMatchObject({
@@ -162,7 +167,8 @@ describe('SynthesisService', () => {
     const [system, user] = s.llm.text.mock.calls[0];
     expect(system).toMatch(/NO inventes/);
     expect(user).toContain('## Resumen\n<!-- x -->');
-    expect(user).toContain('[ilegible #1 · doc.pdf · p.1 · OCR dudoso: «??»]');
+    expect(user).not.toMatch(/ilegible|OCR dudoso|\?\?/);
+    expect(system).toMatch(/Nunca escribas «ilegible»/);
     expect(user).toContain('ENVIADO POR MÍ');
     expect(s.syntheses[0]).toMatchObject({
       version: 1,
@@ -475,5 +481,21 @@ describe('SynthesisService', () => {
     expect(bad).toMatchObject({ columnas: [] });
     expect((bad as { error: string }).error).toContain('al menos una');
     expect(llm.text).not.toHaveBeenCalled();
+  });
+});
+
+describe('stripEchoedInput', () => {
+  it('corta el eco de la entrada que el modelo copia al final', () => {
+    const out =
+      '# Asunto\nResumen real\n\n## HILO COMPLETO (mensajes en orden cronológico y documentos adjuntos)\n### Mensaje 1\ntexto';
+    expect(stripEchoedInput(out)).toBe('# Asunto\nResumen real');
+    expect(cleanSynthesis('```markdown\n# A\nx\n```')).toBe('# A\nx');
+  });
+  it('no toca una salida normal ni una que empiece con un encabezado de la entrada', () => {
+    expect(stripEchoedInput('# A\n## Resumen ejecutivo\nok')).toBe(
+      '# A\n## Resumen ejecutivo\nok',
+    );
+    const solo = '## HILO COMPLETO\nx';
+    expect(stripEchoedInput(solo)).toBe(solo);
   });
 });

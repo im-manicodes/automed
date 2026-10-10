@@ -63,7 +63,7 @@ describe('buildInputBlocks', () => {
     ],
   ]);
 
-  it('ordena mensajes, indica isFromMe, usa texto_usuario y marca ilegibles', () => {
+  it('ordena mensajes, indica isFromMe, usa texto_usuario y omite las dudosas', () => {
     const { blocks, doubtfulCount } = buildInputBlocks(
       [
         msg({
@@ -86,9 +86,8 @@ describe('buildInputBlocks', () => {
     );
     expect(all).toContain('Total $500');
     expect(all).not.toContain('mal');
-    expect(all).toContain(
-      '[ilegible #1 · contrato.pdf · p.2 · OCR dudoso: «prim?»]',
-    );
+    // la zona dudosa sin corregir no llega al modelo: ni marca ni lectura dudosa
+    expect(all).not.toMatch(/ilegible|OCR dudoso|prim\?/);
     expect(doubtfulCount).toBe(1);
     // páginas en orden (p.1 antes que p.2) y líneas por y
     expect(all.indexOf('página 1')).toBeLessThan(all.indexOf('página 2'));
@@ -135,14 +134,8 @@ describe('renderPage con geometría', () => {
     userText: null,
     ...over,
   });
-  const run = (regions: InputRegion[]) => {
-    let n = 0;
-    return renderPage(
-      { pageNumber: 2, text: null, regions },
-      'doc.pdf',
-      () => ++n,
-    );
-  };
+  const run = (regions: InputRegion[]) =>
+    renderPage({ pageNumber: 2, text: null, regions });
 
   it('agrupa en renglones y ordena por x con pista de posición', () => {
     const r = run([
@@ -156,33 +149,17 @@ describe('renderPage con geometría', () => {
     expect(r.doubtful).toBe(0);
   });
 
-  it('la pista dudosa se limpia y se recorta; sin texto queda la marca simple', () => {
-    const largo = 'a'.repeat(200);
+  it('omite las dudosas sin marca ni pista, conserva las corregidas y cuenta las omitidas', () => {
     const r = run([
-      reg({ x: 0.1, y: 0.1, status: 'dudoso', text: 'Dx: [ap\nendi]«x»' }),
-      reg({ x: 0.1, y: 0.3, status: 'dudoso', text: '' }),
-      reg({ x: 0.1, y: 0.5, status: 'dudoso', text: largo }),
-    ]);
-    expect(r.text).toContain('OCR dudoso: «Dx: ap endi x»]');
-    expect(r.text).toContain('p.2]');
-    expect(r.text).toContain(`«${'a'.repeat(80)}»]`);
-    expect(r.text).not.toContain('a'.repeat(81));
-  });
-
-  it('mezcla dudosa/corregida y numera #n de arriba a abajo e izquierda a derecha', () => {
-    const r = run([
-      reg({ x: 0.6, y: 0.1, status: 'dudoso' }),
-      reg({ x: 0.1, y: 0.1, status: 'dudoso' }),
+      reg({ x: 0.6, y: 0.1, status: 'dudoso', text: 'basura xyz' }),
+      reg({ x: 0.1, y: 0.1, status: 'dudoso', text: 'otra basura' }),
       reg({ x: 0.3, y: 0.1, status: 'dudoso', userText: ' corregido ' }),
-      reg({ x: 0.1, y: 0.3, status: 'dudoso' }),
+      reg({ x: 0.1, y: 0.3, status: 'dudoso', text: 'mas basura' }),
+      reg({ x: 0.1, y: 0.5, text: 'bien' }),
     ]);
     expect(r.doubtful).toBe(3);
-    expect(r.text).toBe(
-      [
-        'y10% | x10% [ilegible #1 · doc.pdf · p.2 · OCR dudoso: «t»] | x30% corregido | x60% [ilegible #2 · doc.pdf · p.2 · OCR dudoso: «t»]',
-        'y30% | x10% [ilegible #3 · doc.pdf · p.2 · OCR dudoso: «t»]',
-      ].join('\n'),
-    );
+    expect(r.text).toBe('y10% | x30% corregido\ny50% | x10% bien');
+    expect(r.text).not.toMatch(/ilegible|basura|OCR dudoso/);
   });
 
   it('sin w/h conserva el formato anterior (una línea por región)', () => {

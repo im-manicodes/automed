@@ -19,17 +19,16 @@ interface Line {
   items: TextItem[];
 }
 
-/** Misma regla que `classify` de services/pdf-extract/app/extract.py. */
+/** Una página es digital solo si hay texto suficiente y no es una imagen a página completa. */
 export function classifyPage(
   chars: number,
   coverage: number,
   minChars: number,
 ): 'digital' | 'escaneada' {
   if (chars < minChars) return 'escaneada';
-  // Imagen a página completa con poco texto encima (p. ej. sello/folio): sigue siendo escaneo.
-  if (coverage > IMAGE_COVERAGE_THRESHOLD && chars < minChars * 4) {
-    return 'escaneada';
-  }
+  // Imagen a página completa: es un escaneo. Su capa de texto (sello/folio o el OCR del escáner
+  // sobre manuscrito) no es fiable, así que la página pasa por nuestro OCR y su revisión.
+  if (coverage > IMAGE_COVERAGE_THRESHOLD) return 'escaneada';
   return 'digital';
 }
 

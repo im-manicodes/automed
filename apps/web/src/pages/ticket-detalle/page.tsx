@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import AttachmentRow from './components/AttachmentRow'
+import AvisoRevision from './components/AvisoRevision'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import ErrorBox from '../../components/ErrorBox'
 import Markdown from '../../components/Markdown'
@@ -47,6 +48,7 @@ export default function TicketDetalle() {
   const [confirmRegen, setConfirmRegen] = useState(false)
   const [confirmUltimo, setConfirmUltimo] = useState(false)
   const [confirmTodo, setConfirmTodo] = useState(false)
+  const [confirmSinRevision, setConfirmSinRevision] = useState(false)
 
   usePolling(() => void refetch(), 5000, !!thread && isBusy(thread.status))
 
@@ -72,6 +74,10 @@ export default function TicketDetalle() {
   const analyzeLabel =
     thread.status === 'error' ? 'Reintentar análisis' : thread.tieneMensajesNuevos && analyzed ? 'Actualizar resumen' : 'Analizar este ticket'
   const attachmentCount = thread.messages.reduce((n, m) => n + m.attachments.length, 0)
+  const porRevisar =
+    thread.status === 'necesita_revision'
+      ? thread.messages.flatMap((m) => m.attachments).filter((a) => a.status === 'necesita_revision').map((a) => ({ id: a.id, filename: a.filename }))
+      : []
 
   const copy = async () => {
     if (!latest) return
@@ -155,6 +161,7 @@ export default function TicketDetalle() {
               <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />El análisis no pudo terminar. Puedes intentarlo otra vez.
             </p>
           )}
+          <AvisoRevision threadId={thread.id} pendientes={porRevisar} busy={busy} onContinuar={() => setConfirmSinRevision(true)} />
           {thread.tieneMensajesNuevos && (
             <p className="rounded-xl border border-violet-300 bg-violet-50 p-3 text-violet-900">
               <LuMail className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Llegaron mensajes nuevos que aún no están en el resumen.
@@ -384,6 +391,21 @@ export default function TicketDetalle() {
           <p><strong>Atención:</strong> se vuelve a leer TODO el hilo, correos y PDF (incluido el OCR), con inteligencia artificial.</p>
           <p>Consume <strong>mucho más</strong> que una actualización normal y puede tardar varios minutos.</p>
           <p>Úsalo solo si el resumen quedó mal. Para lo último que llegó, mejor “Re-analizar el último correo”.</p>
+        </ConfirmDialog>
+      )}
+
+      {confirmSinRevision && (
+        <ConfirmDialog
+          title="¿Generar el resumen sin corregir?"
+          confirmLabel="Sí, generar el resumen"
+          busy={busy}
+          onCancel={() => setConfirmSinRevision(false)}
+          onConfirm={() => {
+            void run(() => acciones.continuar(), 'Generando el resumen.').finally(() => setConfirmSinRevision(false))
+          }}
+        >
+          <p>Las partes marcadas en rojo que no corrijas se dejarán <strong>fuera del resumen</strong>.</p>
+          <p>Puedes corregirlas después y el resumen se actualizará.</p>
         </ConfirmDialog>
       )}
 

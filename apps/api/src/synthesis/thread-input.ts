@@ -43,7 +43,7 @@ export interface InputBlock {
 
 export interface BuiltInput {
   blocks: InputBlock[];
-  /** Regiones dudosas aún sin corregir (marcadas [ilegible #n ...]). */
+  /** Regiones dudosas aún sin corregir (sus partes dudosas se dejan fuera del texto enviado al modelo). */
   doubtfulCount: number;
 }
 
@@ -102,9 +102,6 @@ export function formatMessage(m: InputMessage, index: number): string {
   return lines.join('\n');
 }
 
-/** Largo máximo de la lectura dudosa que acompaña a una marca [ilegible]. */
-const MAX_HINT_CHARS = 80;
-
 /** Texto vigente de una región: corrección del usuario > OCR; dudosa sin corregir -> null. */
 export function regionText(r: InputRegion): string | null {
   if (r.userText && r.userText.trim() !== '') return r.userText.trim();
@@ -113,14 +110,14 @@ export function regionText(r: InputRegion): string | null {
 }
 
 /**
- * Texto de una página. Regiones en orden de lectura (y, luego x). `nextIllegible` entrega el
- * número consecutivo (#n) de cada marca. Sin regiones se usa el texto plano de la página.
+ * Texto de una página. Regiones en orden de lectura (y, luego x). Las regiones dudosas sin
+ * corregir se OMITEN (ni marca ni lectura dudosa: el resumen no debe llevar basura del OCR) y
+ * solo se cuentan en `doubtful`. Sin regiones se usa el texto plano de la página.
  */
-export function renderPage(
-  page: InputPage,
-  docName: string,
-  nextIllegible: () => number,
-): { text: string; doubtful: number } {
+export function renderPage(page: InputPage): {
+  text: string;
+  doubtful: number;
+} {
   if (page.regions.length === 0) {
     return { text: (page.text ?? '').trim(), doubtful: 0 };
   }
@@ -128,21 +125,15 @@ export function renderPage(
   let doubtful = 0;
   const render = (r: InputRegion) => {
     const t = regionText(r);
-    if (t !== null) return t;
-    doubtful++;
-    // Se conserva lo que el OCR leyó (con poca confianza) como pista, nunca como dato seguro.
-    const hint = r.text
-      .replace(/[[\]«»\r\n]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, MAX_HINT_CHARS);
-    return `[ilegible #${nextIllegible()} · ${docName} · p.${page.pageNumber}${hint ? ` · OCR dudoso: «${hint}»` : ''}]`;
+    if (t === null) doubtful++;
+    return t;
   };
   const hasBoxes = ordered.every(
     (r) => typeof r.w === 'number' && typeof r.h === 'number',
   );
   if (!hasBoxes) {
-    return { text: ordered.map(render).join('\n'), doubtful };
+    const kept = ordered.map(render).filter((t): t is string => t !== null);
+    return { text: kept.join('\n'), doubtful };
   }
 
   // Agrupa en renglones: el centro vertical cae dentro de la altura del renglón (tolerancia 0.6·h).
@@ -170,10 +161,14 @@ export function renderPage(
   for (const row of rows) {
     row.items.sort((a, b) => a.x - b.x || a.y - b.y);
   }
-  // Numeración #n en orden de lectura: renglones arriba->abajo, izquierda->derecha.
+  // Orden de lectura: renglones arriba->abajo, izquierda->derecha.
   for (const row of rows) {
-    const parts = row.items.map((r) => `x${pct(r.x)}% ${render(r)}`);
-    lines.push(`y${pct(row.top)}% | ${parts.join(' | ')}`);
+    const parts = row.items.flatMap((r) => {
+      const t = render(r);
+      return t === null ? [] : [`x${pct(r.x)}% ${t}`];
+    });
+    if (parts.length > 0)
+      lines.push(`y${pct(row.top)}% | ${parts.join(' | ')}`);
   }
   return { text: lines.join('\n'), doubtful };
 }
@@ -186,10 +181,8 @@ export function buildInputBlocks(
     (a, b) => a.receivedAt.getTime() - b.receivedAt.getTime(),
   );
   const blocks: InputBlock[] = [];
-  let counter = 0;
   let doubtfulCount = 0;
   const seen = new Map<string, string>();
-  const next = () => ++counter;
 
   ordered.forEach((m, i) => {
     blocks.push({
@@ -223,11 +216,11 @@ export function buildInputBlocks(
         continue;
       }
       for (const p of pages) {
-        const r = renderPage(p, att.filename, next);
+        const r = renderPage(p);
         doubtfulCount += r.doubtful;
         blocks.push({
           kind: 'document',
-          text: `### Documento: ${att.filename} · página ${p.pageNumber}\n${r.text || '(página sin texto)'}`,
+          text: `### Documento: ${att.filename} · página ${p.pageNumber}\n${r.text || '(sin contenido)'}`,
           messageId: m.id,
           sha256: att.sha256,
         });

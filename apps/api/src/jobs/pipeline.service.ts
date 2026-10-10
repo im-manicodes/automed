@@ -27,6 +27,8 @@ import type { ProcessStatus } from '../generated/prisma/client';
 const DONE: ProcessStatus[] = ['listo', 'necesita_revision'];
 const isDone = (s: ProcessStatus) => DONE.includes(s);
 const reanalyzeKey = (threadId: string) => `reanalyze:${threadId}`;
+/** PDFs cuya revisión manual el usuario decidió omitir para este hilo ({ shas: string[] }). */
+const reviewSkipKey = (threadId: string) => `review-skip:${threadId}`;
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
 /**
@@ -198,8 +200,24 @@ export class PipelineService implements OnModuleInit {
       create: { key, value: { full: true } },
       update: { value: { full: true } },
     });
+    // El OCR se reutiliza por sha256: para releer los PDFs se borra el guardado (las regiones
+    // caen en cascada). Los gemelos de otros hilos vuelven a pendiente y se restauran al terminar.
+    const shas = [
+      ...new Set(
+        (
+          await this.prisma.attachment.findMany({
+            where: { message: { threadId } },
+            select: { sha256: true },
+          })
+        ).map((a) => a.sha256),
+      ),
+    ];
+    await this.prisma.ocrPage.deleteMany({ where: { sha256: { in: shas } } });
+    await this.prisma.setting.deleteMany({
+      where: { key: reviewSkipKey(threadId) },
+    });
     await this.prisma.attachment.updateMany({
-      where: { message: { threadId } },
+      where: { sha256: { in: shas } },
       data: { status: 'pendiente' },
     });
     await this.state.transition(threadId, 'pendiente', {
@@ -288,6 +306,8 @@ export class PipelineService implements OnModuleInit {
       where: { sha256, status: { in: DONE } },
       data: { status: doubtful > 0 ? 'necesita_revision' : 'listo' },
     });
+    // El resumen espera a que se termine la revisión: mientras queden dudas no se re-sintetiza.
+    if (doubtful > 0) return [];
     // Solo hilos ya analizados: nunca se toca un hilo sin_analizar (nada sale sin analyze).
     const threads = await this.prisma.thread.findMany({
       where: {
@@ -299,6 +319,8 @@ export class PipelineService implements OnModuleInit {
     const queued: string[] = [];
     const stamp = Date.now();
     for (const t of threads) {
+      // Otro PDF del hilo puede seguir pendiente de revisión: se espera a que termine.
+      if ((await this.pendingReview(t.id)) > 0) continue;
       // listo/necesita_revision -> pendiente -> procesando (únicas transiciones válidas)
       if (!(await this.state.transition(t.id, 'pendiente'))) continue;
       if (!(await this.state.transition(t.id, 'procesando'))) continue;
@@ -351,6 +373,63 @@ export class PipelineService implements OnModuleInit {
       advertencia:
         'Se regenera la síntesis completa desde cero: se envía todo el hilo al modelo y consume más. Para el uso normal, la síntesis se actualiza sola con solo lo nuevo.',
     };
+  }
+
+  /** Adjuntos del hilo que aún piden revisión (excluye los que el usuario decidió omitir). */
+  private async pendingReview(threadId: string): Promise<number> {
+    const skip = await this.prisma.setting.findUnique({
+      where: { key: reviewSkipKey(threadId) },
+    });
+    const shas = (skip?.value as { shas?: unknown } | null)?.shas;
+    return this.prisma.attachment.count({
+      where: {
+        message: { threadId },
+        status: 'necesita_revision',
+        ...(Array.isArray(shas) && shas.length > 0
+          ? { sha256: { notIn: shas as string[] } }
+          : {}),
+      },
+    });
+  }
+
+  /**
+   * Genera el resumen sin esperar a que se corrijan las zonas dudosas (acción explícita): esos
+   * PDFs quedan marcados como omitidos para este hilo y sus partes dudosas se dejan fuera.
+   */
+  async continueWithoutReview(threadId: string) {
+    const t = await this.prisma.thread.findUnique({
+      where: { id: threadId },
+      select: { status: true },
+    });
+    if (!t) throw new NotFoundException('Ticket no encontrado');
+    if (t.status !== 'necesita_revision')
+      throw new ConflictException('El ticket no está esperando revisión');
+    const atts = await this.prisma.attachment.findMany({
+      where: { message: { threadId }, status: 'necesita_revision' },
+      select: { sha256: true },
+    });
+    const value = { shas: [...new Set(atts.map((a) => a.sha256))] };
+    await this.prisma.setting.upsert({
+      where: { key: reviewSkipKey(threadId) },
+      create: { key: reviewSkipKey(threadId), value },
+      update: { value },
+    });
+    if (
+      !(await this.state.transition(threadId, 'pendiente')) ||
+      !(await this.state.transition(threadId, 'procesando'))
+    )
+      throw new ConflictException(
+        'El ticket cambió de estado, intenta de nuevo',
+      );
+    const hash = await this.computeThreadHash(threadId);
+    await this.queue.enqueue(
+      JOB_TYPES.synthesizeThread,
+      { threadId, hash },
+      {
+        dedupeKey: `synthesize_thread:${threadId}:${hash}:sin-revision:${Date.now()}`,
+      },
+    );
+    return { threadId, status: 'procesando' as const };
   }
 
   // ---- handlers ----
@@ -497,9 +576,7 @@ export class PipelineService implements OnModuleInit {
     hash: string,
     tieneMensajesNuevos: boolean,
   ) {
-    const review = await this.prisma.attachment.count({
-      where: { message: { threadId }, status: 'necesita_revision' },
-    });
+    const review = await this.pendingReview(threadId);
     await this.state.transition(
       threadId,
       review > 0 ? 'necesita_revision' : 'listo',
@@ -564,6 +641,13 @@ export class PipelineService implements OnModuleInit {
     }
     if (!atts.every((a) => isDone(a.status))) return;
     const hash = await this.computeThreadHash(threadId);
+    // Revisión manual ANTES del resumen: con zonas por corregir no se genera nada todavía.
+    if ((await this.pendingReview(threadId)) > 0) {
+      await this.state.transition(threadId, 'necesita_revision', {
+        contentHash: hash,
+      });
+      return;
+    }
     await this.queue.enqueue(
       JOB_TYPES.synthesizeThread,
       { threadId, hash },

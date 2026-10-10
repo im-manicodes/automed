@@ -26,6 +26,8 @@ export function parseVisionReading(raw: string): VisionReading | null {
   try {
     const o = JSON.parse(m[0]) as { text?: unknown; confidence?: unknown };
     if (typeof o.text !== 'string' || o.text.trim() === '') return null;
+    // Una lectura con partes que el modelo no pudo leer no sirve: la región sigue dudosa.
+    if (/\[ilegible\]/i.test(o.text)) return null;
     const c = Number(o.confidence);
     if (!Number.isFinite(c)) return null;
     return { text: o.text.trim(), confidence: Math.min(1, Math.max(0, c)) };

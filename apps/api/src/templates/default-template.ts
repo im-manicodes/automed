@@ -4,7 +4,7 @@
  */
 export const DEFAULT_TEMPLATE_NAME = 'Plantilla estándar';
 
-export const DEFAULT_TEMPLATE_MARKDOWN = `<!-- Reglas generales (no se copian a la salida): no inventes datos; si un dato falta escribe "No indicado". No copies ruido del OCR o del manuscrito como si fuera un dato: si no se entiende escribe [ilegible] (o conserva la marca [ilegible #n · documento · p.k] tal cual). Usa abreviaturas médicas habituales (APP, PO, SV, TA, FC, FR, SatO2) y fechas dd/mm/aa. -->
+export const DEFAULT_TEMPLATE_MARKDOWN = `<!-- Reglas generales (no se copian a la salida): no inventes datos; si un dato falta escribe "No indicado". No copies ruido del OCR o del manuscrito como si fuera un dato y nunca escribas "ilegible": usa solo lo que se entienda. Usa abreviaturas médicas habituales (APP, PO, SV, TA, FC, FR, SatO2) y fechas dd/mm/aa. -->
 
 # Paciente
 <!-- Tabla de dos columnas. Filas: Nombre (APELLIDOS NOMBRE), Edad, Sexo, Ficha / expediente, Codificación, Hospital / prestador, Región / localidad, Contrato / póliza, Aseguradora, Ubicación (UCI / Hab. / cama). "No indicado" si falta. -->
@@ -76,18 +76,18 @@ export const DEFAULT_TEMPLATE_MARKDOWN = `<!-- Reglas generales (no se copian a 
 <!-- 2 a 3 líneas: tipo de documento, fecha y quién lo emite. -->
 
 #### Datos relevantes
-<!-- Tabla | Sección | Campo | Valor | con UNA FILA por cada campo del formulario, también los vacíos o ilegibles (Valor "—" o [ilegible]). En "Sección" indica la parte del formulario donde está cada dato (encabezado, datos del paciente, nota pre/post operatoria, anestesia, cuentas, indicaciones...). Nunca uses viñetas aquí. -->
+<!-- Tabla | Sección | Campo | Valor | con UNA FILA por cada campo del formulario, también los vacíos (Valor "—"); solo datos que se entiendan. En "Sección" indica la parte del formulario donde está cada dato (encabezado, datos del paciente, nota pre/post operatoria, anestesia, cuentas, indicaciones...). Nunca uses viñetas aquí. -->
 | Sección | Campo | Valor |
 | --- | --- | --- |
 
 #### Datos faltantes
-<!-- Lista de campos vacíos, ilegibles o no indicados en la página. "Ninguno" si no hay. -->
+<!-- Lista de campos vacíos o no indicados en la página. "Ninguno" si no hay. -->
 
 #### Recreación de la página
-<!-- Recrea la página SOLO con tablas markdown (celdas y columnas, sin viñetas): una tabla por cada sección del formulario (encabezado, datos del paciente, nota pre-operatoria, nota post-operatoria, anestesia, cuentas, indicaciones, etc.) con sus columnas reales, que respeten las mismas filas, columnas y orden del formulario original, usando la posición del texto (yNN% | xNN%) para ubicar cada dato. Casillas como [x] / [ ]. Texto largo dentro de la celda. Conserva las marcas [ilegible #n · documento · p.k]. No adivines ni completes lo que no se lee. Si la página es digital y ya viene en markdown, cópiala y ordénala sin inventar nada. -->
+<!-- Recrea la página SOLO con tablas markdown (celdas y columnas, sin viñetas): una tabla por cada sección del formulario (encabezado, datos del paciente, nota pre-operatoria, nota post-operatoria, anestesia, cuentas, indicaciones, etc.) con sus columnas reales, que respeten las mismas filas, columnas y orden del formulario original, usando la posición del texto (yNN% | xNN%) para ubicar cada dato. Casillas como [x] / [ ]. Texto largo dentro de la celda. No adivines ni completes lo que falta (déjalo con "—"). Si la página es digital y ya viene en markdown, cópiala y ordénala sin inventar nada. -->
 
 ## Dudas por aclarar
-<!-- Preguntas abiertas, datos contradictorios o partes ilegibles que requieren confirmación. -->
+<!-- Preguntas abiertas o datos contradictorios que requieren confirmación (nunca problemas de lectura del documento). -->
 `;
 
 export const MAX_TEMPLATE_CHARS = 20000;

@@ -19,4 +19,10 @@ describe('parseVisionReading', () => {
     expect(parseVisionReading('{"text":"","confidence":1}')).toBeNull();
     expect(parseVisionReading('{"text":"a"}')).toBeNull();
   });
+
+  it('descarta una lectura que contiene [ilegible] (la región sigue dudosa)', () => {
+    expect(
+      parseVisionReading('{"text":"Dx: [ilegible] aguda","confidence":0.95}'),
+    ).toBeNull();
+  });
 });

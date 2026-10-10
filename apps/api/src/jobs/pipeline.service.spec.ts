@@ -56,7 +56,11 @@ function fakePrisma() {
   const attMatch = (a: Att, w: any) =>
     (!w.id || (w.id.not ? a.id !== w.id.not : a.id === w.id)) &&
     (!w.sha256 ||
-      (w.sha256.in ? w.sha256.in.includes(a.sha256) : a.sha256 === w.sha256)) &&
+      (w.sha256.in
+        ? w.sha256.in.includes(a.sha256)
+        : w.sha256.notIn
+          ? !w.sha256.notIn.includes(a.sha256)
+          : a.sha256 === w.sha256)) &&
     matchStatus(a.status, w.status) &&
     (!w.message || threadOfAtt(a) === w.message.threadId);
   const prisma = {
@@ -136,6 +140,13 @@ function fakePrisma() {
     ocrPage: {
       findMany: async ({ where }: any) =>
         db.ocrPages.filter((p) => p.sha256 === where.sha256),
+      deleteMany: async ({ where }: any) => {
+        const before = db.ocrPages.length;
+        db.ocrPages = db.ocrPages.filter(
+          (p) => !where.sha256.in.includes(p.sha256),
+        );
+        return { count: before - db.ocrPages.length };
+      },
     },
     ocrRegion: {
       count: async ({ where }: any) =>
@@ -315,16 +326,59 @@ describe('PipelineService', () => {
     );
   });
 
-  it('regiones dudosas: adjunto y hilo quedan en necesita_revision', async () => {
+  it('regiones dudosas: el hilo espera la revisión y NO se genera el resumen', async () => {
     const s = setup();
     s.addThread('t1', [['a1', 'shaA']]);
     s.db.doubtfulShas.add('shaA');
     await s.pipeline.processThread(s.job({ threadId: 't1' }));
     await s.pipeline.processAttachment(s.job({ attachmentId: 'a1' }));
     expect(s.db.atts[0].status).toBe('necesita_revision');
-    const synth = s.queued.find((q) => q.type === 'synthesize_thread')!;
-    await s.pipeline.synthesizeThread(s.job(synth.payload));
     expect(s.db.threads[0].status).toBe('necesita_revision');
+    expect(s.queued.some((q) => q.type === 'synthesize_thread')).toBe(false);
+  });
+
+  it('onRegionsChanged: con dudas pendientes no re-sintetiza; al terminar la revisión sí, una sola vez', async () => {
+    const s = setup();
+    s.addThread('t1', [['a1', 'shaA']]);
+    s.db.threads[0].status = 'necesita_revision';
+    s.db.atts[0].status = 'necesita_revision';
+    s.db.doubtfulShas.add('shaA');
+    expect(await s.pipeline.onRegionsChanged('shaA')).toEqual([]);
+    expect(s.queued).toHaveLength(0);
+    s.db.doubtfulShas.delete('shaA');
+    expect(await s.pipeline.onRegionsChanged('shaA')).toEqual(['t1']);
+    expect(s.queued.filter((q) => q.type === 'synthesize_thread')).toHaveLength(
+      1,
+    );
+    expect(s.db.atts[0].status).toBe('listo');
+  });
+
+  it('continueWithoutReview: omite esos PDFs, encola la síntesis y el hilo termina listo', async () => {
+    const s = setup();
+    s.addThread('t1', [['a1', 'shaA']]);
+    s.db.doubtfulShas.add('shaA');
+    await s.pipeline.processThread(s.job({ threadId: 't1' }));
+    await s.pipeline.processAttachment(s.job({ attachmentId: 'a1' }));
+    expect(s.db.threads[0].status).toBe('necesita_revision');
+    await s.pipeline.continueWithoutReview('t1');
+    expect(s.db.settings.get('review-skip:t1')).toEqual({ shas: ['shaA'] });
+    expect(s.db.threads[0].status).toBe('procesando');
+    const synth = s.queued.find((q) => q.type === 'synthesize_thread')!;
+    expect(synth).toBeDefined();
+    await s.pipeline.synthesizeThread(s.job(synth.payload));
+    expect(s.db.threads[0].status).toBe('listo');
+  });
+
+  it('continueWithoutReview: 409 si el ticket no espera revisión y 404 si no existe', async () => {
+    const s = setup();
+    s.addThread('t1', []);
+    s.db.threads[0].status = 'listo';
+    await expect(s.pipeline.continueWithoutReview('t1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(s.pipeline.continueWithoutReview('x')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('fallo definitivo de un adjunto lleva el hilo a error y no encola síntesis', async () => {
@@ -385,6 +439,20 @@ describe('PipelineService', () => {
     });
     s.db.threads[0].status = 'procesando';
     await expect(s.pipeline.reprocess('t1')).rejects.toThrow();
+  });
+
+  it('reprocess borra el OCR guardado de sus PDFs (para releerlos) y el aviso de revisión omitida', async () => {
+    const s = setup();
+    s.addThread('t1', [['a1', 'shaA']]);
+    s.db.ocrPages.push({ sha256: 'shaA', pageNumber: 1, imageKey: 'k' });
+    s.db.ocrPages.push({ sha256: 'otro', pageNumber: 1, imageKey: 'k2' });
+    s.db.settings.set('review-skip:t1', { shas: ['shaA'] });
+    s.db.threads[0].status = 'listo';
+    s.db.atts[0].status = 'listo';
+    await s.pipeline.reprocess('t1');
+    expect(s.db.ocrPages.map((p) => p.sha256)).toEqual(['otro']);
+    expect(s.db.settings.has('review-skip:t1')).toBe(false);
+    expect(s.db.atts[0].status).toBe('pendiente');
   });
 
   describe('análisis bajo petición', () => {
