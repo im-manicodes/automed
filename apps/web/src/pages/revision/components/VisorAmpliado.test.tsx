@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import VisorAmpliado from './VisorAmpliado';
 import RecorteCanvas from './RecorteCanvas';
+import FormularioDuda from './FormularioDuda';
 
 function imagen(): HTMLImageElement {
   const img = new Image();
@@ -77,5 +78,50 @@ describe('RecorteCanvas con onAbrir', () => {
     b.focus();
     await userEvent.keyboard('{Enter}');
     expect(onAbrir).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('VisorAmpliado con formulario', () => {
+  const formulario = (onGuardar = vi.fn()) => (
+    <FormularioDuda
+      textoInicial=""
+      sugerencia=""
+      esUltima={false}
+      puedeVolver={false}
+      onCambio={() => {}}
+      onGuardar={onGuardar}
+      onOmitir={() => {}}
+      onAnterior={() => {}}
+      enModal
+    />
+  );
+
+  it('muestra el campo dentro del modal y lo enfoca al abrir', () => {
+    render(<VisorAmpliado img={imagen()} bbox={bbox} numero={2} onCerrar={() => {}} formulario={formulario()} />);
+    const campo = screen.getByRole('textbox', { name: '¿Qué dice aquí?' });
+    expect(screen.getByRole('dialog')).toContainElement(campo);
+    expect(campo).toHaveFocus();
+  });
+
+  it('Enter guarda el texto escrito; Mayús+Enter no', async () => {
+    const onGuardar = vi.fn();
+    render(<VisorAmpliado img={imagen()} bbox={bbox} numero={2} onCerrar={() => {}} formulario={formulario(onGuardar)} />);
+    await userEvent.keyboard('sonda de drenaje');
+    await userEvent.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(onGuardar).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    expect(onGuardar).toHaveBeenCalledWith(expect.stringContaining('sonda de drenaje'));
+  });
+
+  it('Tab recorre el campo y los botones sin salir del diálogo, y Esc cierra', async () => {
+    const onCerrar = vi.fn();
+    render(<VisorAmpliado img={imagen()} bbox={bbox} numero={2} onCerrar={onCerrar} formulario={formulario()} />);
+    const d = screen.getByRole('dialog');
+    for (let i = 0; i < 12; i++) {
+      await userEvent.tab();
+      expect(d).toContainElement(document.activeElement as HTMLElement);
+    }
+    await userEvent.keyboard('{Escape}');
+    expect(onCerrar).toHaveBeenCalled();
   });
 });

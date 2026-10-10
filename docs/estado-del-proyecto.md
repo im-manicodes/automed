@@ -384,3 +384,6 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 ## Azure recibe la imagen original (2026-10-09)
 - Hecho: la página se envía SIEMPRE original a Azure (sin recomprimir, para no perder detalle de lectura). Se quitó `shrinkToJpeg`. Un 400 con una página de más de 4 MB (límite del plan Gratis F0; S0 acepta hasta 500 MB) da el mensaje «Cambia el recurso a Standard (S0)»; el log de Azure incluye el código interno (`InvalidRequest/<innererror>`), nunca contenido.
 - Falta (manual): pasar el recurso `automed-ocr` a Standard (S0) en el portal de Azure (Pricing tier).
+
+## Corrección escrita dentro del modal ampliado (2026-10-09)
+- Hecho: el modal ampliado de la revisión (`VisorAmpliado`, escritorio) ahora incluye el formulario «¿Qué dice aquí?» debajo del recorte (`formulario` + `FormularioDuda enModal`): foco inicial en el campo, Enter guarda y pasa a la siguiente sin cerrar el modal (Mayús+Enter = línea nueva), Tab no sale del diálogo, Esc cierra y el borrador se conserva (sessionStorage). Con el modal abierto el formulario vive solo allí (un único campo); al terminar la última duda el modal se cierra.

@@ -12,6 +12,8 @@ interface Props {
   onAnterior: () => void;
   /** Atajos de teclado de escritorio (Enter guarda y pasa a la siguiente). */
   atajos?: boolean;
+  /** Dentro del modal ampliado: Enter en el campo guarda y pasa a la siguiente. */
+  enModal?: boolean;
 }
 
 /** Campo grande + botones de la duda actual. Se remonta (key) en cada duda. */
@@ -25,6 +27,7 @@ export default function FormularioDuda({
   onOmitir,
   onAnterior,
   atajos = false,
+  enModal = false,
 }: Props) {
   const [texto, setTexto] = useState(textoInicial);
   const campo = useRef<HTMLTextAreaElement>(null);
@@ -99,7 +102,7 @@ export default function FormularioDuda({
         id="texto-duda"
         ref={campo}
         value={texto}
-        rows={3}
+        rows={enModal ? 2 : 3}
         maxLength={2000}
         autoComplete="off"
         autoCapitalize="sentences"
@@ -107,12 +110,24 @@ export default function FormularioDuda({
         enterKeyHint="done"
         placeholder="Escribe lo que ves en el recuadro rojo"
         onFocus={centrar}
+        onKeyDown={(e) => {
+          // El atajo global ignora los diálogos: dentro del modal el propio campo guarda con Enter.
+          if (!enModal || e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+          e.preventDefault();
+          const t = textoEnviable(texto);
+          if (t) onGuardar(t);
+        }}
         onChange={(e) => {
           setTexto(e.target.value);
           onCambio(e.target.value);
         }}
-        className="block min-h-28 w-full rounded-xl border-2 border-slate-400 bg-white p-3 text-xl focus:border-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
+        className={`block ${enModal ? 'min-h-20' : 'min-h-28'} w-full rounded-xl border-2 border-slate-400 bg-white p-3 text-xl focus:border-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200`}
       />
+      {enModal && (
+        <p className="text-sm text-slate-600">
+          <kbd className="font-mono">Enter</kbd> guarda y pasa a la siguiente · <kbd className="font-mono">Mayús + Enter</kbd> nueva línea
+        </p>
+      )}
       <button type="submit" className="btn w-full text-lg disabled:opacity-50" disabled={!valido}>
         {esUltima ? 'Guardar y terminar' : 'Guardar y siguiente'}
       </button>

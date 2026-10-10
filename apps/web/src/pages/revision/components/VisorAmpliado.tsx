@@ -17,10 +17,12 @@ interface Props {
   bbox: Bbox;
   numero: number;
   onCerrar: () => void;
+  /** Formulario para escribir la corrección dentro del modal (debajo del recorte). */
+  formulario?: React.ReactNode;
 }
 
 /** Visor ampliado (modal) del recorte con contexto: zoom con rueda/botones, arrastre y doble clic. */
-export default function VisorAmpliado({ img, bbox, numero, onCerrar }: Props) {
+export default function VisorAmpliado({ img, bbox, numero, onCerrar, formulario }: Props) {
   const dialogo = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLDivElement>(null);
   const cerrar = useRef<HTMLButtonElement>(null);
@@ -53,7 +55,9 @@ export default function VisorAmpliado({ img, bbox, numero, onCerrar }: Props) {
   // Foco: entra al diálogo y al cerrar vuelve a quien lo abrió.
   useEffect(() => {
     const previo = document.activeElement as HTMLElement | null;
-    cerrar.current?.focus();
+    // Con formulario el foco va al campo para escribir de inmediato; si no, al botón «Cerrar».
+    const campo = dialogo.current?.querySelector<HTMLElement>('textarea');
+    (campo ?? cerrar.current)?.focus();
     return () => previo?.focus?.();
   }, []);
 
@@ -64,7 +68,7 @@ export default function VisorAmpliado({ img, bbox, numero, onCerrar }: Props) {
       return;
     }
     if (e.key === 'Tab') {
-      const focos = dialogo.current?.querySelectorAll<HTMLElement>('button:not(:disabled)');
+      const focos = dialogo.current?.querySelectorAll<HTMLElement>('button:not(:disabled), textarea:not(:disabled), a[href], input:not(:disabled)');
       if (!focos || focos.length === 0) return;
       const primero = focos[0];
       const ultimo = focos[focos.length - 1];
@@ -185,6 +189,7 @@ export default function VisorAmpliado({ img, bbox, numero, onCerrar }: Props) {
             />
           </div>
         </div>
+        {formulario && <div className="max-h-[42dvh] overflow-y-auto px-1">{formulario}</div>}
         <p className="text-sm text-slate-600">
           Rueda del ratón para acercar, arrastra para mover, doble clic para acercar o alejar. Esc para cerrar.
         </p>

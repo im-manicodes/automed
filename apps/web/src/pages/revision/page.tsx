@@ -104,6 +104,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
       const r = avanzar(f, dudas);
       setFlujo(r.flujo);
       setTerminado(r.terminado);
+      if (r.terminado) setAmpliado(false);
     },
     [actual, flujo, dudas, enviar],
   );
@@ -114,6 +115,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
     const r = avanzar(f, dudas);
     setFlujo(r.flujo);
     setTerminado(r.terminado);
+    if (r.terminado) setAmpliado(false);
   };
 
   // Escritorio: Alt+Izquierda / Alt+Derecha = duda anterior / siguiente.
@@ -219,6 +221,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
       onOmitir={alOmitir}
       onAnterior={() => setFlujo((f) => anterior(f, dudas))}
       atajos={escritorio && !ampliado}
+      enModal={ampliado && !!img}
     />
   );
 
@@ -244,7 +247,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
   );
 
   const visorAmpliado = ampliado && img && (
-    <VisorAmpliado img={img} bbox={actual.bbox} numero={flujo.indice + 1} onCerrar={() => setAmpliado(false)} />
+    <VisorAmpliado img={img} bbox={actual.bbox} numero={flujo.indice + 1} onCerrar={() => setAmpliado(false)} formulario={formulario} />
   );
 
   if (escritorio) {
@@ -275,7 +278,8 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
           <aside className="sticky top-16 space-y-3" aria-label="Duda actual">
             {recorte}
             {img && <p className="text-sm text-slate-600">Haz clic en el recorte para verlo más grande.</p>}
-            {formulario}
+            {/* Con el modal abierto el formulario vive dentro de él (un solo campo a la vez). */}
+            {!(ampliado && img) && formulario}
             <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700" aria-label="Atajos de teclado">
               <p className="font-semibold">Atajos</p>
               <ul className="mt-1 space-y-0.5">
