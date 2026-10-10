@@ -102,6 +102,9 @@ export function formatMessage(m: InputMessage, index: number): string {
   return lines.join('\n');
 }
 
+/** Largo máximo de la lectura dudosa que acompaña a una marca [ilegible]. */
+const MAX_HINT_CHARS = 80;
+
 /** Texto vigente de una región: corrección del usuario > OCR; dudosa sin corregir -> null. */
 export function regionText(r: InputRegion): string | null {
   if (r.userText && r.userText.trim() !== '') return r.userText.trim();
@@ -127,7 +130,13 @@ export function renderPage(
     const t = regionText(r);
     if (t !== null) return t;
     doubtful++;
-    return `[ilegible #${nextIllegible()} · ${docName} · p.${page.pageNumber}]`;
+    // Se conserva lo que el OCR leyó (con poca confianza) como pista, nunca como dato seguro.
+    const hint = r.text
+      .replace(/[[\]«»\r\n]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_HINT_CHARS);
+    return `[ilegible #${nextIllegible()} · ${docName} · p.${page.pageNumber}${hint ? ` · OCR dudoso: «${hint}»` : ''}]`;
   };
   const hasBoxes = ordered.every(
     (r) => typeof r.w === 'number' && typeof r.h === 'number',

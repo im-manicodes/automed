@@ -86,7 +86,9 @@ describe('buildInputBlocks', () => {
     );
     expect(all).toContain('Total $500');
     expect(all).not.toContain('mal');
-    expect(all).toContain('[ilegible #1 · contrato.pdf · p.2]');
+    expect(all).toContain(
+      '[ilegible #1 · contrato.pdf · p.2 · OCR dudoso: «prim?»]',
+    );
     expect(doubtfulCount).toBe(1);
     // páginas en orden (p.1 antes que p.2) y líneas por y
     expect(all.indexOf('página 1')).toBeLessThan(all.indexOf('página 2'));
@@ -154,6 +156,19 @@ describe('renderPage con geometría', () => {
     expect(r.doubtful).toBe(0);
   });
 
+  it('la pista dudosa se limpia y se recorta; sin texto queda la marca simple', () => {
+    const largo = 'a'.repeat(200);
+    const r = run([
+      reg({ x: 0.1, y: 0.1, status: 'dudoso', text: 'Dx: [ap\nendi]«x»' }),
+      reg({ x: 0.1, y: 0.3, status: 'dudoso', text: '' }),
+      reg({ x: 0.1, y: 0.5, status: 'dudoso', text: largo }),
+    ]);
+    expect(r.text).toContain('OCR dudoso: «Dx: ap endi x»]');
+    expect(r.text).toContain('p.2]');
+    expect(r.text).toContain(`«${'a'.repeat(80)}»]`);
+    expect(r.text).not.toContain('a'.repeat(81));
+  });
+
   it('mezcla dudosa/corregida y numera #n de arriba a abajo e izquierda a derecha', () => {
     const r = run([
       reg({ x: 0.6, y: 0.1, status: 'dudoso' }),
@@ -164,8 +179,8 @@ describe('renderPage con geometría', () => {
     expect(r.doubtful).toBe(3);
     expect(r.text).toBe(
       [
-        'y10% | x10% [ilegible #1 · doc.pdf · p.2] | x30% corregido | x60% [ilegible #2 · doc.pdf · p.2]',
-        'y30% | x10% [ilegible #3 · doc.pdf · p.2]',
+        'y10% | x10% [ilegible #1 · doc.pdf · p.2 · OCR dudoso: «t»] | x30% corregido | x60% [ilegible #2 · doc.pdf · p.2 · OCR dudoso: «t»]',
+        'y30% | x10% [ilegible #3 · doc.pdf · p.2 · OCR dudoso: «t»]',
       ].join('\n'),
     );
   });

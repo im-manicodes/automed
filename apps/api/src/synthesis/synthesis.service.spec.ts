@@ -162,7 +162,7 @@ describe('SynthesisService', () => {
     const [system, user] = s.llm.text.mock.calls[0];
     expect(system).toMatch(/NO inventes/);
     expect(user).toContain('## Resumen\n<!-- x -->');
-    expect(user).toContain('[ilegible #1 · doc.pdf · p.1]');
+    expect(user).toContain('[ilegible #1 · doc.pdf · p.1 · OCR dudoso: «??»]');
     expect(user).toContain('ENVIADO POR MÍ');
     expect(s.syntheses[0]).toMatchObject({
       version: 1,
