@@ -3,6 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '../generated/prisma/client';
 import { TokenCryptoService } from '../auth/token-crypto.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  DEFAULT_VISION_AMBITO,
+  MAX_VISION_AMBITO,
+  validateScopeText,
+} from '../templates/template-instructions';
 
 export const OCR_CONFIG_KEY = 'ocr.config';
 
@@ -24,6 +29,8 @@ export interface OcrStoredConfig {
   visionRetry?: boolean;
   visionMaxRegions?: number;
   renderDpi?: number;
+  /** Ámbito de la relectura con visión; ausente = por defecto, '' = sin ámbito. */
+  visionAmbito?: string;
   azureEndpoint?: string;
   /** Clave de Azure AI Document Intelligence, cifrada AES-GCM (jamás se devuelve). */
   azureKeyEnc?: string;
@@ -51,6 +58,7 @@ export interface OcrEffectiveConfig {
   visionRetry: boolean;
   visionMaxRegions: number;
   renderDpi: number;
+  visionAmbito: string;
   origen: 'panel' | 'servidor';
 }
 
@@ -60,6 +68,8 @@ export interface OcrSettingsInput {
   visionRetry?: boolean;
   visionMaxRegions?: number;
   renderDpi?: number;
+  /** string = texto; '' = sin ámbito; null = valor por defecto. */
+  visionAmbito?: string | null;
   azureEndpoint?: string;
   /** string = clave nueva; null = quitarla. */
   claveAzure?: string | null;
@@ -111,6 +121,10 @@ export class OcrSettingsService {
         : intIn(envDpi, MIN_RENDER_DPI, MAX_RENDER_DPI)
           ? envDpi
           : DEFAULT_RENDER_DPI,
+      visionAmbito:
+        typeof stored?.visionAmbito === 'string'
+          ? stored.visionAmbito
+          : DEFAULT_VISION_AMBITO,
       motor:
         stored?.motor && OCR_MOTORS.includes(stored.motor)
           ? stored.motor
@@ -187,6 +201,7 @@ export class OcrSettingsService {
       visionRetry: raw.visionRetry,
       visionMaxRegions: raw.visionMaxRegions,
       renderDpi: raw.renderDpi,
+      visionAmbito: raw.visionAmbito,
       azureEndpoint: raw.azureEndpoint,
       claveAzure: raw.claveAzure,
     };
@@ -254,12 +269,21 @@ export class OcrSettingsService {
         `La calidad de lectura debe ser un número entero entre ${MIN_RENDER_DPI} y ${MAX_RENDER_DPI} DPI`,
       );
     }
+    if (input.visionAmbito !== undefined && input.visionAmbito !== null) {
+      const err = validateScopeText(
+        input.visionAmbito,
+        MAX_VISION_AMBITO,
+        'El tipo de documentos',
+      );
+      if (err) throw new BadRequestException(err);
+    }
     if (
       input.motor !== undefined ||
       input.textractMode !== undefined ||
       input.visionRetry !== undefined ||
       input.visionMaxRegions !== undefined ||
       input.renderDpi !== undefined ||
+      input.visionAmbito !== undefined ||
       input.azureEndpoint !== undefined ||
       input.claveAzure !== undefined
     ) {
@@ -272,6 +296,9 @@ export class OcrSettingsService {
       if (input.visionMaxRegions !== undefined)
         next.visionMaxRegions = input.visionMaxRegions;
       if (input.renderDpi !== undefined) next.renderDpi = input.renderDpi;
+      if (input.visionAmbito === null) delete next.visionAmbito;
+      else if (typeof input.visionAmbito === 'string')
+        next.visionAmbito = input.visionAmbito.trim();
       if (input.azureEndpoint !== undefined)
         next.azureEndpoint = String(input.azureEndpoint)
           .trim()

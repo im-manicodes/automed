@@ -20,6 +20,7 @@ import { AuthService } from '../src/auth/auth.service';
 import { ThreadsController } from '../src/threads/threads.controller';
 import { TemplatesController } from '../src/templates/templates.controller';
 import { TemplatesService } from '../src/templates/templates.service';
+import { TemplateInstructionsService } from '../src/templates/template-instructions.service';
 import { MailController } from '../src/mail/mail.controller';
 import { JobsController } from '../src/jobs/jobs.controller';
 import { AttachmentsController } from '../src/attachments/attachments.controller';
@@ -68,6 +69,13 @@ describe('API (e2e, sin BD)', () => {
         { provide: ConfigService, useValue: config },
         { provide: PrismaService, useValue: {} },
         { provide: MicrosoftService, useValue: {} },
+        {
+          provide: TemplateInstructionsService,
+          useValue: {
+            get: () => Promise.resolve('instr'),
+            defaultFor: () => 'instr',
+          },
+        },
         {
           provide: TemplatesService,
           useValue: { getActive: () => Promise.resolve({ name: 'x' }) },

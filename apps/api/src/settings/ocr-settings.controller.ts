@@ -12,6 +12,7 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { SessionGuard } from '../auth/session.guard';
 import { OcrProbeService } from '../ocr/ocr-probe.service';
 import { OcrInstallerService } from '../ocr/ocr-installer.service';
+import { DEFAULT_VISION_AMBITO } from '../templates/template-instructions';
 import { OcrSettingsService } from './ocr-settings.service';
 import type { OcrSettingsInput } from './ocr-settings.service';
 
@@ -33,6 +34,8 @@ export class OcrSettingsController {
       visionRetry: eff.visionRetry,
       visionMaxRegions: eff.visionMaxRegions,
       renderDpi: eff.renderDpi,
+      visionAmbito: eff.visionAmbito,
+      visionAmbitoPorDefecto: DEFAULT_VISION_AMBITO,
       ...(await this.settings.getAzurePublic()),
       entorno: { servidor: true },
       servicioLocal: await this.probeService.serverLocalStatus(),

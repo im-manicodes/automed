@@ -387,3 +387,9 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 
 ## Corrección escrita dentro del modal ampliado (2026-10-09)
 - Hecho: el modal ampliado de la revisión (`VisorAmpliado`, escritorio) ahora incluye el formulario «¿Qué dice aquí?» debajo del recorte (`formulario` + `FormularioDuda enModal`): foco inicial en el campo, Enter guarda y pasa a la siguiente sin cerrar el modal (Mayús+Enter = línea nueva), Tab no sale del diálogo, Esc cierra y el borrador se conserva (sessionStorage). Con el modal abierto el formulario vive solo allí (un único campo); al terminar la última duda el modal se cierra.
+
+## Instrucciones de ámbito por plantilla y ámbito del OCR (2026-10-09)
+- Hecho: reemplaza al vocabulario por lista de términos (retirado: página `/ajustes/vocabulario`, `Setting` `vocabulario` y su API; el `Setting` huérfano en BD es inocuo). Cada plantilla tiene «Instrucciones para la IA» (`Setting` `plantilla.instrucciones`, texto médico por defecto, máx. 4000) añadidas al final del system prompt del resumen (completo, incremental, map, reduce), WhatsApp y reporte/evento (`withScope`, `TemplateInstructionsService`). La relectura de visión usa `visionAmbito` (`ocr.config`, máx. 2000) con la regla fija de respaldo en la imagen (si no, `[ilegible]`).
+- Hecho (web): campo + «Restablecer instrucciones» en Plantillas (también en la vista previa sin guardar) y «Tipo de documentos» en Ajustes -> OCR -> Opciones avanzadas (solo se envía si cambió).
+- Regla: no crea versión de plantilla, no regenera resúmenes, no entra en el hash. Lint, build y tests en verde (API 509 unit + 94 e2e; web 266).
+- Falta: probar con el manuscrito real si el ámbito mejora las relecturas; `test:e2e-flow` no se corrió (solo lint/tipos para `e2e-flow.integration.spec.ts`).

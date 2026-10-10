@@ -31,11 +31,14 @@ function setup(markdown: string | null = '## Resumen\nPaciente estable') {
     modelFor: jest.fn().mockResolvedValue('m'),
     text: jest.fn().mockResolvedValue('## Hola\n- **Pide** pago'),
   };
+  const instructions: any = {
+    get: jest.fn().mockResolvedValue('AMBITO_WA_XYZ'),
+  };
   const aiSettings: any = {
     getEffective: jest.fn().mockResolvedValue({ maxInputTokens: 60000 }),
   };
   return {
-    svc: new SynthesisService(prisma, templates, llm, aiSettings),
+    svc: new SynthesisService(prisma, templates, llm, aiSettings, instructions),
     templates,
     prisma,
     llm,
@@ -46,7 +49,9 @@ describe('SynthesisService.whatsappLast', () => {
   it('el prompt lleva solo la síntesis vigente y no guarda nada', async () => {
     const s = setup('## Evolución\nRESUMEN_VIGENTE_XYZ');
     const r = await s.svc.whatsappLast('t1');
-    const [, user] = s.llm.text.mock.calls[0];
+    const [system, user] = s.llm.text.mock.calls[0];
+    expect(system).toContain('ÁMBITO Y CONTEXTO (indicado por el usuario)');
+    expect(system).toContain('AMBITO_WA_XYZ');
     expect(s.prisma.synthesis.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { threadId: 't1' },
@@ -64,7 +69,14 @@ describe('SynthesisService.whatsappLast', () => {
     const aiSettings: any = {
       getEffective: jest.fn().mockResolvedValue({ maxInputTokens: 2000 }),
     };
-    const svc = new SynthesisService(s.prisma, s.templates, s.llm, aiSettings);
+    const instructions: any = { get: jest.fn().mockResolvedValue('') };
+    const svc = new SynthesisService(
+      s.prisma,
+      s.templates,
+      s.llm,
+      aiSettings,
+      instructions,
+    );
     await svc.whatsappLast('t1');
     const [, user] = s.llm.text.mock.calls[0];
     expect(user).toContain('[... recortado ...]');

@@ -3,7 +3,7 @@ import { LuInfo, LuTriangleAlert } from 'react-icons/lu'
 import { useToast } from '../../../context/toasts-context'
 import type { ColumnaReporte, Template } from '../../../lib/api'
 import { errorMessage, formatDate } from '../../../lib/format'
-import type { PlantillaTipo } from '../lib/plantillas'
+import { maxInstrucciones, type PlantillaTipo } from '../lib/plantillas'
 import { usePreviewTemplate, useResetTemplate, useSaveTemplate, useTemplate } from '../hooks/useTemplates'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import ErrorBox from '../../../components/ErrorBox'
@@ -16,6 +16,7 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
   const kind = tipo.id
   const [tpl, setTpl] = useState<Template | null>(null)
   const [text, setText] = useState('')
+  const [instr, setInstr] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
@@ -26,6 +27,7 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
   const { error, refetch: load } = useTemplate(kind, (t) => {
     setTpl(t)
     setText(t.markdown)
+    setInstr(t.instrucciones ?? '')
   })
   const saveTpl = useSaveTemplate(kind)
   const resetTpl = useResetTemplate(kind)
@@ -34,23 +36,32 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
   if (error) return <ErrorBox message={error} onRetry={() => void load()} />
   if (!tpl) return <Spinner text="Cargando la plantilla…" />
 
-  const changed = text !== tpl.markdown
+  const textChanged = text !== tpl.markdown
+  const instrChanged = instr !== (tpl.instrucciones ?? '')
+  const changed = textChanged || instrChanged
+  const instrTooLong = instr.length > maxInstrucciones
+  const instrProblem = instrTooLong ? `Las instrucciones son demasiado largas (máximo ${maxInstrucciones.toLocaleString('es')} letras).` : null
   const tooLong = text.length > tipo.max
   const hasTitle = /^#{1,3}\s+\S/m.test(text)
-  const problem = tooLong
+  const textProblem = tooLong
     ? `La plantilla es demasiado larga (máximo ${tipo.max.toLocaleString('es')} letras).`
     : text.trim().length < tipo.min
       ? 'La plantilla es demasiado corta.'
       : tipo.exigeTitulos && !hasTitle
         ? 'Escribe al menos un título de sección, por ejemplo: ## Resumen'
         : null
+  // El formato solo se valida si lo cambiaste; las instrucciones siempre.
+  const problem = (textChanged ? textProblem : null) ?? instrProblem
 
   const save = async () => {
     setBusy(true)
     try {
-      const t = await saveTpl.mutate({ body_params: { markdown: text } })
+      const t = await saveTpl.mutate({
+        body_params: { ...(textChanged ? { markdown: text } : {}), ...(instrChanged ? { instrucciones: instr } : {}) },
+      })
       setTpl(t)
       setText(t.markdown)
+      setInstr(t.instrucciones ?? '')
       toast('Plantilla guardada.', 'ok')
     } catch (e) {
       toast(errorMessage(e), 'error')
@@ -80,7 +91,7 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
   const makePreview = async () => {
     setPreviewing(true)
     try {
-      const r = await previewTpl.mutate({ body_params: text ? { markdown: text, kind } : { kind } })
+      const r = await previewTpl.mutate({ body_params: { ...(text ? { markdown: text } : {}), kind, instrucciones: instr } })
       setPreview(r.markdown)
       setColumnas(r.columnas ?? null)
       setErrorColumnas(r.error ?? null)
@@ -115,6 +126,27 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
       <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
         <div className="space-y-4">
           <div className="space-y-1">
+            <label htmlFor={`plantilla-instrucciones-${kind}`} className="font-semibold">Instrucciones para la IA</label>
+            <p id={`plantilla-instrucciones-ayuda-${kind}`} className="text-sm text-slate-700">{tipo.ayudaInstrucciones}</p>
+            <textarea
+              id={`plantilla-instrucciones-${kind}`}
+              aria-describedby={`plantilla-instrucciones-ayuda-${kind}`}
+              value={instr}
+              onChange={(e) => setInstr(e.target.value)}
+              rows={6}
+              aria-invalid={instrTooLong}
+              className="block min-h-32 w-full rounded-xl border border-slate-400 bg-white p-3 text-sm"
+            />
+            <div className="flex justify-between text-sm">
+              <span className={instrTooLong ? 'font-semibold text-red-800' : 'text-slate-700'}>{instr.length.toLocaleString('es')} / {maxInstrucciones.toLocaleString('es')} letras</span>
+            </div>
+            {instrProblem && <p role="alert" className="text-red-800"><LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />{instrProblem}</p>}
+            <button type="button" className="btn btn-secondary w-full sm:w-auto" disabled={busy || instr === tpl.instruccionesPorDefecto} onClick={() => setInstr(tpl.instruccionesPorDefecto)}>
+              Restablecer instrucciones
+            </button>
+          </div>
+
+          <div className="space-y-1">
             <label htmlFor={`plantilla-texto-${kind}`} className="font-semibold">Texto de la plantilla</label>
             <textarea
               id={`plantilla-texto-${kind}`}
@@ -128,7 +160,7 @@ export default function PlantillaEditor({ tipo }: { tipo: PlantillaTipo }) {
               <span className={tooLong ? 'font-semibold text-red-800' : 'text-slate-700'}>{text.length.toLocaleString('es')} / {tipo.max.toLocaleString('es')} letras</span>
               <span className="text-slate-700">Versión {tpl.version} · {formatDate(tpl.updatedAt)}</span>
             </div>
-            {problem && changed && <p role="alert" className="text-red-800"><LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />{problem}</p>}
+            {textProblem && textChanged && <p role="alert" className="text-red-800"><LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />{textProblem}</p>}
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">

@@ -15,7 +15,11 @@ export interface PlantillaTipo {
   min: number
   /** La vista previa llama a la IA (consume) o es solo local. */
   usaIA: boolean
+  /** Ayuda del campo «Instrucciones para la IA». */
+  ayudaInstrucciones: string
 }
+
+export const maxInstrucciones = 4000
 
 export const TIPOS_PLANTILLA: PlantillaTipo[] = [
   {
@@ -30,6 +34,8 @@ export const TIPOS_PLANTILLA: PlantillaTipo[] = [
     vistaPreviaComoMarkdown: true,
     min: 20,
     usaIA: true,
+    ayudaInstrucciones:
+      'Cuéntale de qué trata y qué vocabulario usar; el formato va abajo. Por ejemplo: quién escribe los correos y qué términos médicos esperar en el resumen.',
   },
   {
     id: 'whatsapp',
@@ -43,6 +49,8 @@ export const TIPOS_PLANTILLA: PlantillaTipo[] = [
     vistaPreviaComoMarkdown: false,
     min: 20,
     usaIA: true,
+    ayudaInstrucciones:
+      'Cuéntale de qué trata y qué vocabulario usar; el formato va abajo. Por ejemplo: a quién va dirigido el mensaje y el tono que debe tener.',
   },
   {
     id: 'reporte',
@@ -56,6 +64,8 @@ export const TIPOS_PLANTILLA: PlantillaTipo[] = [
     vistaPreviaComoMarkdown: false,
     min: 5,
     usaIA: false,
+    ayudaInstrucciones:
+      'Cuéntale de qué trata y qué vocabulario usar; el formato va abajo. Por ejemplo: qué significa cada dato en tu trabajo. También se usa al preparar los eventos del Excel.',
   },
 ]
 

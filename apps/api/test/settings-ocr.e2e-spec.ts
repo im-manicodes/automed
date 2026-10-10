@@ -163,6 +163,28 @@ describe('Ajustes de OCR (e2e, sin BD ni red)', () => {
       });
     });
 
+    it('visionAmbito: GET trae efectivo y por defecto; PUT lo guarda, null restablece, >2000 da 400', async () => {
+      const g = await authed(http().get('/api/settings/ocr')).expect(200);
+      expect(g.body.visionAmbito).toBe(g.body.visionAmbitoPorDefecto);
+      expect(g.body.visionAmbitoPorDefecto.length).toBeGreaterThan(0);
+      const p = await authed(
+        http()
+          .put('/api/settings/ocr')
+          .send({ visionAmbito: 'Notas de cardiología' }),
+      ).expect(200);
+      expect(p.body.visionAmbito).toBe('Notas de cardiología');
+      const r = await authed(
+        http().put('/api/settings/ocr').send({ visionAmbito: null }),
+      ).expect(200);
+      expect(r.body.visionAmbito).toBe(r.body.visionAmbitoPorDefecto);
+      const bad = await authed(
+        http()
+          .put('/api/settings/ocr')
+          .send({ visionAmbito: 'x'.repeat(2001) }),
+      );
+      expect(bad.status).toBe(400);
+    });
+
     it('GET: servicioLocal listo cuando el health del servidor responde', async () => {
       probe.serverLocalStatus.mockResolvedValue({
         estado: 'listo',

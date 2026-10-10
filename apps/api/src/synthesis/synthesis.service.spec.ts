@@ -10,6 +10,7 @@ interface SetupOpts {
   maxTokens?: string;
   body?: string;
   regions?: any[];
+  ambito?: string;
 }
 
 function setup(opts: SetupOpts = {}) {
@@ -107,6 +108,9 @@ function setup(opts: SetupOpts = {}) {
       .fn()
       .mockResolvedValue({ maxInputTokens: Number(opts.maxTokens ?? 60000) }),
   };
+  const instructions: any = {
+    get: jest.fn().mockResolvedValue(opts.ambito ?? ''),
+  };
   const addMessage = (id: string, body: string, sha?: string) =>
     messages.push({
       id,
@@ -127,7 +131,7 @@ function setup(opts: SetupOpts = {}) {
       regions: [{ x: 0, y: 0, text, status: 'ok', userText: null }],
     });
   return {
-    svc: new SynthesisService(prisma, templates, llm, aiSettings),
+    svc: new SynthesisService(prisma, templates, llm, aiSettings, instructions),
     prisma,
     llm,
     templates,
@@ -136,6 +140,7 @@ function setup(opts: SetupOpts = {}) {
     pagesDb,
     addMessage,
     addPage,
+    instructions,
   };
 }
 
@@ -457,6 +462,69 @@ describe('SynthesisService', () => {
     expect(last[1]).toContain('NOTAS CONSOLIDADAS');
     expect(last[1]).toContain('NOTAS');
     expect(s.syntheses[0].markdown).toBe('## Resumen\nfinal');
+  });
+
+  describe('instrucciones de ámbito', () => {
+    const HEAD = 'ÁMBITO Y CONTEXTO (indicado por el usuario)';
+
+    it('sin ámbito el system queda intacto', async () => {
+      const s = setup();
+      await s.svc.generate('t1');
+      expect(s.llm.text.mock.calls[0][0]).not.toContain(HEAD);
+    });
+
+    it('completo e incremental: el system lleva el ámbito al final', async () => {
+      const s = setup({ ambito: 'AMBITO_XYZ' });
+      await s.svc.generate('t1');
+      const first = s.llm.text.mock.calls[0][0] as string;
+      expect(first).toContain(HEAD);
+      expect(first).toContain('AMBITO_XYZ');
+      expect(first.indexOf(HEAD)).toBeGreaterThan(first.indexOf('NO inventes'));
+      s.addMessage('m3', 'Mensaje NUEVO');
+      await s.svc.generate('t1');
+      const last = s.llm.text.mock.calls[s.llm.text.mock.calls.length - 1];
+      expect(last[1]).toContain('SÍNTESIS ANTERIOR');
+      expect(last[0]).toContain('AMBITO_XYZ');
+      expect(s.instructions.get).toHaveBeenCalledWith('resumen');
+    });
+
+    it('map-reduce: el ámbito llega al system del map', async () => {
+      const s = setup({
+        maxTokens: '2000',
+        body: 'palabra '.repeat(6000),
+        ambito: 'AMBITO_XYZ',
+      });
+      s.llm.text.mockImplementation((system: string) =>
+        Promise.resolve(
+          system.includes('condensa un fragmento') ? 'NOTAS' : '## R\nfinal',
+        ),
+      );
+      await s.svc.generate('t1');
+      const map = s.llm.text.mock.calls.find((c: string[]) =>
+        c[0].includes('condensa un fragmento'),
+      );
+      expect(map[0]).toContain('AMBITO_XYZ');
+    });
+
+    it('cambiar el ámbito no cambia el hash: no regenera', async () => {
+      const s = setup({ ambito: 'A' });
+      await s.svc.generate('t1');
+      const hash = s.syntheses[0].inputHash;
+      const calls = s.llm.text.mock.calls.length;
+      s.instructions.get.mockResolvedValue('OTRO');
+      await s.svc.generate('t1');
+      expect(s.llm.text.mock.calls.length).toBe(calls);
+      expect(s.syntheses).toHaveLength(1);
+      expect(s.syntheses[0].inputHash).toBe(hash);
+    });
+
+    it('preview usa las instrucciones sin guardar si vienen', async () => {
+      const s = setup({ ambito: 'GUARDADO' });
+      await s.svc.preview(undefined, 'resumen', 'SIN_GUARDAR');
+      const system = s.llm.text.mock.calls[0][0] as string;
+      expect(system).toContain('SIN_GUARDAR');
+      expect(system).not.toContain('GUARDADO');
+    });
   });
 
   it('stripFences quita el envoltorio de código', () => {

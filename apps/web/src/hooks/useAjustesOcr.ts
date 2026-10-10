@@ -78,7 +78,10 @@ export function useAplicarOcr() {
       const avanzadoCambio = !!avanzado && (Object.keys(avanzado) as (keyof AvanzadoOcr)[]).some((k) => avanzado[k] !== o.actual[k])
       const azure = o.motor === 'azure' ? cambiosAzure(o.azure ?? {}, o.actual) : null
       if (o.forzar || avanzadoCambio || azure || o.motor !== o.actual.motor) {
-        nuevoOcr = await guardarOcr({ body_params: { motor: o.motor, ...(avanzado ?? {}), ...(azure ?? {}) } })
+        // El ámbito solo se envía si el usuario lo cambió: si no, el valor por defecto quedaría guardado como propio.
+        const { visionAmbito, ...resto } = avanzado ?? {}
+        const ambito = visionAmbito !== undefined && visionAmbito !== o.actual.visionAmbito ? { visionAmbito } : {}
+        nuevoOcr = await guardarOcr({ body_params: { motor: o.motor, ...resto, ...ambito, ...(azure ?? {}) } })
       }
       return { ocr: nuevoOcr, ia: nuevoIa }
     },

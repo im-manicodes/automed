@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider } from '../../context/toasts'
@@ -13,6 +13,8 @@ const tpl = (kind: TemplateKind, markdown: string, version = 1): Template => ({
   version,
   markdown,
   updatedAt: '2026-03-01T10:00:00Z',
+  instrucciones: `Instrucciones de ${kind}`,
+  instruccionesPorDefecto: `Por defecto de ${kind}`,
 })
 
 function renderPage(url = '/plantilla') {
@@ -93,11 +95,79 @@ describe('Plantillas', () => {
     const user = userEvent.setup()
     await screen.findByLabelText('Texto de la plantilla')
     await user.click(screen.getByRole('button', { name: 'Ver vista previa' }))
-    expect(cuerpo(f, 'POST', '/api/templates/preview')).toEqual({ markdown: '*Formato WA* con instrucciones', kind: 'whatsapp' })
+    expect(cuerpo(f, 'POST', '/api/templates/preview')).toEqual({ markdown: '*Formato WA* con instrucciones', kind: 'whatsapp', instrucciones: 'Instrucciones de whatsapp' })
     expect(await screen.findByText('*Hola* mensaje')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Restaurar la original' }))
     await user.click(screen.getByRole('button', { name: 'Sí, restaurar' }))
     await waitFor(() => expect(llamadas(f, 'POST', '/api/templates/reset?kind=whatsapp')).toHaveLength(1))
+  })
+})
+
+describe('Instrucciones para la IA', () => {
+  it('el campo se ve en cada pestaña con su texto', async () => {
+    mockFetch({ 'GET /api/templates/active': { body: tpl('reporte', '- Paciente: nombre') } })
+    renderPage('/plantilla?tipo=reporte')
+    expect(await screen.findByLabelText('Instrucciones para la IA')).toHaveValue('Instrucciones de reporte')
+    expect(screen.getByText(/el formato va abajo/)).toBeInTheDocument()
+  })
+
+  it('el campo aparece en Resumen y en WhatsApp', async () => {
+    mockFetch({ 'GET /api/templates/active': activeDefault })
+    renderPage()
+    const user = userEvent.setup()
+    expect(await screen.findByLabelText('Instrucciones para la IA')).toHaveValue('Instrucciones de resumen')
+    await user.click(screen.getByRole('tab', { name: 'Mensaje de WhatsApp' }))
+    await waitFor(() => expect(screen.getByLabelText('Instrucciones para la IA')).toHaveValue('Instrucciones de whatsapp'))
+  })
+
+  it('guardar solo las instrucciones envía solo instrucciones', async () => {
+    const f = mockFetch({
+      'GET /api/templates/active': activeDefault,
+      'PUT /api/templates/active': { body: { ...tpl('resumen', '## Resumen de ejemplo\n<!-- x -->', 1), instrucciones: 'Nuevas' } },
+    })
+    renderPage()
+    const user = userEvent.setup()
+    const ta = await screen.findByLabelText('Instrucciones para la IA')
+    await user.clear(ta)
+    await user.type(ta, 'Nuevas')
+    await user.click(screen.getByRole('button', { name: 'Guardar plantilla' }))
+    await waitFor(() => expect(llamadas(f, 'PUT', '/api/templates/active?kind=resumen')).toHaveLength(1))
+    expect(cuerpo(f, 'PUT', '/api/templates/active?kind=resumen')).toEqual({ instrucciones: 'Nuevas' })
+  })
+
+  it('la vista previa usa las instrucciones sin guardar', async () => {
+    const f = mockFetch({
+      'GET /api/templates/active': activeDefault,
+      'POST /api/templates/preview': { body: { markdown: 'ok' } },
+    })
+    renderPage('/plantilla?tipo=whatsapp')
+    const user = userEvent.setup()
+    const ta = await screen.findByLabelText('Instrucciones para la IA')
+    await user.clear(ta)
+    await user.type(ta, 'Sin guardar')
+    await user.click(screen.getByRole('button', { name: 'Ver vista previa' }))
+    await waitFor(() => expect(llamadas(f, 'POST', '/api/templates/preview')).toHaveLength(1))
+    expect(cuerpo(f, 'POST', '/api/templates/preview').instrucciones).toBe('Sin guardar')
+    expect(llamadas(f, 'PUT', '/api/templates/active?kind=whatsapp')).toHaveLength(0)
+  })
+
+  it('Restablecer instrucciones vuelve al valor por defecto', async () => {
+    mockFetch({ 'GET /api/templates/active': activeDefault })
+    renderPage()
+    const user = userEvent.setup()
+    const ta = await screen.findByLabelText('Instrucciones para la IA')
+    await user.type(ta, ' extra')
+    await user.click(screen.getByRole('button', { name: 'Restablecer instrucciones' }))
+    expect(ta).toHaveValue('Por defecto de resumen')
+  })
+
+  it('avisa si las instrucciones son demasiado largas y bloquea guardar', async () => {
+    mockFetch({ 'GET /api/templates/active': activeDefault })
+    renderPage()
+    const ta = await screen.findByLabelText('Instrucciones para la IA')
+    fireEvent.change(ta, { target: { value: 'a'.repeat(4001) } })
+    expect(screen.getByRole('alert')).toHaveTextContent('demasiado largas')
+    expect(screen.getByRole('button', { name: 'Guardar plantilla' })).toBeDisabled()
   })
 })
 
@@ -120,7 +190,7 @@ describe('Plantilla de reporte Excel', () => {
     expect(screen.getByText(/en cada reporte nuevo/)).toBeInTheDocument()
     expect(screen.queryByText(/consume un poco/)).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Ver vista previa' }))
-    expect(cuerpo(f, 'POST', '/api/templates/preview')).toEqual({ markdown: '- Paciente: nombre\n- Hospital: nombre del hospital', kind: 'reporte' })
+    expect(cuerpo(f, 'POST', '/api/templates/preview')).toEqual({ markdown: '- Paciente: nombre\n- Hospital: nombre del hospital', kind: 'reporte', instrucciones: 'Instrucciones de reporte' })
     expect(await screen.findByText('2 columnas en el Excel')).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'Hospital' })).toBeInTheDocument()
   })

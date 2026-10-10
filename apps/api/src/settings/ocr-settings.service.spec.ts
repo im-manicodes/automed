@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { OcrSettingsService } from './ocr-settings.service';
+import { DEFAULT_VISION_AMBITO } from '../templates/template-instructions';
 import { fakePrisma } from '../../test/helpers/fake-prisma';
 
 function make(env: Record<string, string> = {}) {
@@ -24,6 +25,7 @@ describe('OcrSettingsService', () => {
       visionRetry: false,
       visionMaxRegions: 30,
       renderDpi: 250,
+      visionAmbito: DEFAULT_VISION_AMBITO,
       origen: 'servidor',
     });
   });
@@ -142,6 +144,19 @@ describe('OcrSettingsService', () => {
       BadRequestException,
     );
     await expect(svc.save({ claveAzure: '  ' })).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('visionAmbito: por defecto, texto propio, vacío y null restablece; valida el máximo', async () => {
+    const { svc } = make();
+    await svc.save({ visionAmbito: 'Radiología' });
+    expect((await svc.getEffective()).visionAmbito).toBe('Radiología');
+    await svc.save({ visionAmbito: '' });
+    expect((await svc.getEffective()).visionAmbito).toBe('');
+    await svc.save({ visionAmbito: null });
+    expect((await svc.getEffective()).visionAmbito).toBe(DEFAULT_VISION_AMBITO);
+    await expect(svc.save({ visionAmbito: 'x'.repeat(2001) })).rejects.toThrow(
       BadRequestException,
     );
   });

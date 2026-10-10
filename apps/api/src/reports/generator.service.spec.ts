@@ -123,10 +123,20 @@ function setup(threads: T[], llmReplies: (prompt: string) => string | Error) {
         markdown: DEFAULT_REPORT_TEMPLATE_MARKDOWN,
       }),
   };
+  const instructions: any = {
+    get: jest.fn().mockResolvedValue('AMBITO_REP_XYZ'),
+  };
   const config: any = {
     get: (k: string) => (k === 'WEB_ORIGIN' ? 'http://web' : undefined),
   };
-  const svc = new GeneratorService(prisma, storage, templates, config, llm);
+  const svc = new GeneratorService(
+    prisma,
+    storage,
+    templates,
+    instructions,
+    config,
+    llm,
+  );
   const newReport = (fecha: string): any => {
     const r = {
       id: `rep${reports.length}`,
@@ -248,6 +258,14 @@ describe('GeneratorService', () => {
     expect(h.prompts[0]).toContain(`Resumen ${SECRET} t1`);
     expect(h.prisma.thread.update).not.toHaveBeenCalled();
     expect(h.prisma.thread.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('el system del reporte lleva el ámbito del tipo reporte', async () => {
+    const h = setup([thread('t1', 's1')], () => reply('hospitalizado'));
+    await h.svc.generate(h.newReport('2026-10-06').id, NOW);
+    const system = h.llm.text.mock.calls[0][0] as string;
+    expect(system).toContain('ÁMBITO Y CONTEXTO (indicado por el usuario)');
+    expect(system).toContain('AMBITO_REP_XYZ');
   });
 
   it('caché: misma síntesis y versión de columnas no repite la llamada al LLM; síntesis nueva sí', async () => {

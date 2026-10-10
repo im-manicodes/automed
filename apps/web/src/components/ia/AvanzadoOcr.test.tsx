@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import AvanzadoOcr from './AvanzadoOcr'
 
-const valor = { visionRetry: true, visionMaxRegions: 40, renderDpi: 200, textractMode: 'detect' as const }
+const valor = { visionRetry: true, visionMaxRegions: 40, renderDpi: 200, textractMode: 'detect' as const, visionAmbito: 'Documentos clínicos' }
 
 describe('AvanzadoOcr', () => {
   it('muestra los controles y emite los cambios', () => {
@@ -15,6 +15,23 @@ describe('AvanzadoOcr', () => {
     expect(onChange).toHaveBeenLastCalledWith({ ...valor, visionMaxRegions: 80 })
     fireEvent.change(screen.getByLabelText('Calidad de lectura'), { target: { value: '300' } })
     expect(onChange).toHaveBeenLastCalledWith({ ...valor, renderDpi: 300 })
+  })
+
+  it('edita el tipo de documentos y lo restablece', () => {
+    const onChange = vi.fn()
+    render(<AvanzadoOcr motor="local" valor={valor} ambitoPorDefecto="Texto original" onChange={onChange} />)
+    const campo = screen.getByLabelText('Tipo de documentos (ayuda para leer lo dudoso)')
+    expect(campo).toHaveValue('Documentos clínicos')
+    fireEvent.change(campo, { target: { value: 'Otros' } })
+    expect(onChange).toHaveBeenLastCalledWith({ ...valor, visionAmbito: 'Otros' })
+    fireEvent.click(screen.getByRole('button', { name: 'Restablecer' }))
+    expect(onChange).toHaveBeenLastCalledWith({ ...valor, visionAmbito: 'Texto original' })
+  })
+
+  it('deshabilita el tipo de documentos si no se relee con IA', () => {
+    render(<AvanzadoOcr motor="local" valor={{ ...valor, visionRetry: false }} ambitoPorDefecto="x" onChange={() => {}} />)
+    expect(screen.getByLabelText('Tipo de documentos (ayuda para leer lo dudoso)')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Restablecer' })).toBeDisabled()
   })
 
   it('con Textract permite elegir el modo', () => {

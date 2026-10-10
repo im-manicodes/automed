@@ -1,19 +1,22 @@
 import { LuInfo } from 'react-icons/lu'
 import type { MotorOcr } from '../../lib/api'
-import type { AvanzadoOcr as Valor } from '../../lib/ocr'
+import { MAX_VISION_AMBITO, type AvanzadoOcr as Valor } from '../../lib/ocr'
 
 interface Props {
   motor: MotorOcr
   valor: Valor
+  /** Texto por defecto del tipo de documentos (para «Restablecer»). */
+  ambitoPorDefecto?: string
   onChange: (v: Valor) => void
 }
 
 const CAMPO = 'min-h-12 w-full rounded-xl border border-slate-300 px-3'
 
 /** Opciones avanzadas de la lectura de PDFs escaneados. */
-export default function AvanzadoOcr({ motor, valor, onChange }: Props) {
+export default function AvanzadoOcr({ motor, valor, onChange, ambitoPorDefecto = '' }: Props) {
   const cambia = (c: Partial<Valor>) => onChange({ ...valor, ...c })
   const regionesMal = !Number.isInteger(valor.visionMaxRegions) || valor.visionMaxRegions < 1 || valor.visionMaxRegions > 200
+  const ambitoMal = valor.visionAmbito.length > MAX_VISION_AMBITO
   return (
     <details className="rounded-xl border border-slate-200 p-3">
       <summary className="min-h-11 cursor-pointer font-semibold">Opciones avanzadas de lectura</summary>
@@ -32,6 +35,29 @@ export default function AvanzadoOcr({ motor, valor, onChange }: Props) {
           <p className="text-sm text-slate-700">
             <LuInfo className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Usa un modelo con visión (Ajustes → IA) y hace una llamada por parte dudosa; con AWS o Azure el contenido va a ese servicio.
           </p>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="vision-ambito" className="block font-semibold">Tipo de documentos (ayuda para leer lo dudoso)</label>
+          <textarea
+            id="vision-ambito"
+            rows={4}
+            className="w-full rounded-xl border border-slate-300 p-3"
+            value={valor.visionAmbito}
+            disabled={!valor.visionRetry}
+            aria-invalid={ambitoMal}
+            onChange={(e) => cambia({ visionAmbito: e.target.value })}
+          />
+          <div className="flex justify-between text-sm">
+            <span className={ambitoMal ? 'font-semibold text-red-700' : 'text-slate-700'}>{valor.visionAmbito.length.toLocaleString('es')} / {MAX_VISION_AMBITO.toLocaleString('es')} letras</span>
+          </div>
+          <p className="text-sm text-slate-700">
+            Cuéntale a la IA qué tipo de documentos son para que acierte mejor las palabras dudosas. Solo orienta: si no se ve en la imagen, la parte queda para que la corrijas tú.
+          </p>
+          {ambitoMal && <p role="alert" className="text-sm text-red-700">El texto es demasiado largo (máximo {MAX_VISION_AMBITO.toLocaleString('es')} letras).</p>}
+          <button type="button" className="btn btn-secondary w-full sm:w-auto" disabled={!valor.visionRetry || valor.visionAmbito === ambitoPorDefecto} onClick={() => cambia({ visionAmbito: ambitoPorDefecto })}>
+            Restablecer
+          </button>
         </div>
 
         <div className="space-y-2">

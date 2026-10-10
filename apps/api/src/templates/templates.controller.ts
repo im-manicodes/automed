@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { SessionGuard } from '../auth/session.guard';
 import { TemplatesService } from './templates.service';
+import { TemplateInstructionsService } from './template-instructions.service';
+import { MAX_INSTRUCCIONES, validateScopeText } from './template-instructions';
 import { parseTemplateKind, type TemplateKind } from './template-kinds';
 
 /** `?kind=` (por defecto 'resumen'); un tipo desconocido responde 400. */
@@ -23,23 +25,56 @@ function kindOf(raw: unknown): TemplateKind {
 @Controller('templates')
 @UseGuards(SessionGuard)
 export class TemplatesController {
-  constructor(private readonly templates: TemplatesService) {}
+  constructor(
+    private readonly templates: TemplatesService,
+    private readonly instructions: TemplateInstructionsService,
+  ) {}
+
+  /** Plantilla + instrucciones efectivas y las de por defecto. */
+  private async view(kind: TemplateKind, tpl?: unknown) {
+    return {
+      ...(tpl ?? (await this.templates.getActive(kind))),
+      instrucciones: await this.instructions.get(kind),
+      instruccionesPorDefecto: this.instructions.defaultFor(kind),
+    };
+  }
 
   @Get('active')
   active(@Query('kind') kind?: string) {
-    return this.templates.getActive(kindOf(kind));
+    return this.view(kindOf(kind));
   }
 
+  /**
+   * `markdown` crea versión nueva; `instrucciones` (texto, '' o null = restablecer) solo se guarda
+   * en Ajustes y NO crea versión.
+   */
   @Put('active')
-  update(
+  async update(
     @Query('kind') kind: string | undefined,
-    @Body() body: { markdown?: unknown; name?: unknown },
+    @Body()
+    body: { markdown?: unknown; name?: unknown; instrucciones?: unknown },
   ) {
-    return this.templates.updateActive(
-      kindOf(kind),
-      body?.markdown,
-      body?.name,
-    );
+    const k = kindOf(kind);
+    const hasMd = body?.markdown !== undefined;
+    const hasIns = body?.instrucciones !== undefined;
+    if (!hasMd && !hasIns)
+      throw new BadRequestException(
+        'Envía el formato (markdown) o las instrucciones',
+      );
+    if (hasIns && body.instrucciones !== null) {
+      const err = validateScopeText(
+        body.instrucciones,
+        MAX_INSTRUCCIONES,
+        'Las instrucciones',
+      );
+      if (err) throw new BadRequestException(err);
+    }
+    let tpl: unknown;
+    if (hasMd)
+      tpl = await this.templates.updateActive(k, body.markdown, body.name);
+    if (hasIns)
+      await this.instructions.save(k, body.instrucciones as string | null);
+    return this.view(k, tpl);
   }
 
   @Post('reset')

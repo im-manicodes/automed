@@ -14,7 +14,7 @@ export function useTemplate(kind: TemplateKind, onSuccess?: (t: Template) => voi
 }
 
 export function useSaveTemplate(kind: TemplateKind) {
-  return useMutation<Template, { markdown: string }>({ url: `/templates/active?kind=${kind}`, method: 'PUT' })
+  return useMutation<Template, { markdown?: string; instrucciones?: string | null }>({ url: `/templates/active?kind=${kind}`, method: 'PUT' })
 }
 
 export function useResetTemplate(kind: TemplateKind) {
@@ -22,5 +22,5 @@ export function useResetTemplate(kind: TemplateKind) {
 }
 
 export function usePreviewTemplate() {
-  return useMutation<PreviewResult, { markdown?: string; kind: TemplateKind }>({ url: '/templates/preview' })
+  return useMutation<PreviewResult, { markdown?: string; kind: TemplateKind; instrucciones?: string }>({ url: '/templates/preview' })
 }

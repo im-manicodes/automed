@@ -45,7 +45,7 @@ export default function ConfigOcr({ ajustes, motor, onMotor, awsGuardada, claves
           <BotonProbarOcr antes={antesDeProbar} etiqueta="Probar Azure" />
         </div>
       )}
-      {motor !== 'ninguno' && avanzado && onAvanzado && <AvanzadoOcr motor={motor} valor={avanzado} onChange={onAvanzado} />}
+      {motor !== 'ninguno' && avanzado && onAvanzado && <AvanzadoOcr motor={motor} valor={avanzado} ambitoPorDefecto={ajustes.visionAmbitoPorDefecto} onChange={onAvanzado} />}
       {motor === 'ninguno' && (
         <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
           <LuInfo className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Puedes elegirlo después en Ajustes. Mientras tanto, los PDF digitales se leen sin problema.

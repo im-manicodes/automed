@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { TemplatesService } from '../templates/templates.service';
+import { TemplateInstructionsService } from '../templates/template-instructions.service';
+import { withScope } from '../templates/template-instructions';
 import { parseReportColumns } from '../templates/report-columns';
 import type { ReportColumn } from '../templates/report-columns';
 import { LLM_PROVIDER } from '../llm/llm-provider.interface';
@@ -42,6 +44,7 @@ export class GeneratorService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly templates: TemplatesService,
+    private readonly instructions: TemplateInstructionsService,
     private readonly config: ConfigService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
   ) {}
@@ -56,7 +59,10 @@ export class GeneratorService {
     for (const retry of [false, true]) {
       try {
         const raw = await this.llm.text(
-          REPORT_SYSTEM_PROMPT,
+          withScope(
+            REPORT_SYSTEM_PROMPT,
+            await this.instructions.get('reporte'),
+          ),
           buildReportPrompt(synthesisMarkdown, columnas, retry, previous),
           { maxTokens: 1800, task },
         );

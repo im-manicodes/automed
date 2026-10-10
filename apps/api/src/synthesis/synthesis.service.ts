@@ -15,6 +15,8 @@ import type { LlmProvider } from '../llm/llm-provider.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { sanearParaWhatsApp } from './whatsapp-format';
 import { TemplatesService } from '../templates/templates.service';
+import { TemplateInstructionsService } from '../templates/template-instructions.service';
+import { withScope } from '../templates/template-instructions';
 import type { TemplateKind } from '../templates/template-kinds';
 import {
   buildInputBlocks,
@@ -103,7 +105,13 @@ export class SynthesisService implements ThreadSynthesizer {
     private readonly templates: TemplatesService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
     private readonly aiSettings: AiSettingsService,
+    private readonly instructions: TemplateInstructionsService,
   ) {}
+
+  /** System del resumen con el ámbito vigente (leído por llamada; NO entra en ningún hash). */
+  private async scoped(system: string, kind: TemplateKind): Promise<string> {
+    return withScope(system, await this.instructions.get(kind));
+  }
 
   /** Máximo de tokens de entrada vigente (panel > SYNTH_MAX_INPUT_TOKENS), leído por llamada. */
   private async maxInputTokens(): Promise<number> {
@@ -295,7 +303,18 @@ export class SynthesisService implements ThreadSynthesizer {
    * Vista previa de una plantilla (activa o una propuesta) del tipo dado con un ejemplo:
    * 'resumen' con un hilo de ejemplo; 'whatsapp' con un correo de ejemplo.
    */
-  async preview(markdown?: string, kind: TemplateKind = 'resumen') {
+  async preview(
+    markdown?: string,
+    kind: TemplateKind = 'resumen',
+    instrucciones?: string,
+  ) {
+    const scope = async (system: string) =>
+      withScope(
+        system,
+        instrucciones !== undefined
+          ? instrucciones
+          : await this.instructions.get(kind),
+      );
     const tpl =
       markdown?.trim() || (await this.templates.getActive(kind)).markdown;
     if (kind === 'reporte') {
@@ -311,14 +330,14 @@ export class SynthesisService implements ThreadSynthesizer {
     }
     if (kind === 'whatsapp') {
       const out = await this.llm.text(
-        WHATSAPP_SYSTEM_PROMPT,
+        await scope(WHATSAPP_SYSTEM_PROMPT),
         buildWhatsappPrompt(tpl, SAMPLE_WHATSAPP_SUMMARY_TEXT),
         { maxTokens: 2000, task: 'whatsapp' },
       );
       return { markdown: sanearParaWhatsApp(stripFences(out)) };
     }
     const out = await this.llm.text(
-      SYSTEM_PROMPT,
+      await scope(SYSTEM_PROMPT),
       buildFinalPrompt(tpl, SAMPLE_THREAD_TEXT, false),
       { task: 'resumen' },
     );
@@ -352,7 +371,7 @@ export class SynthesisService implements ThreadSynthesizer {
     let out: string;
     try {
       out = await this.llm.text(
-        WHATSAPP_SYSTEM_PROMPT,
+        await this.scoped(WHATSAPP_SYSTEM_PROMPT, 'whatsapp'),
         buildWhatsappPrompt(tpl.markdown, body),
         { maxTokens: 2000, task: 'whatsapp' },
       );
@@ -526,7 +545,7 @@ export class SynthesisService implements ThreadSynthesizer {
       notes.push(
         await this.ask(
           meter,
-          MAP_SYSTEM_PROMPT,
+          await this.scoped(MAP_SYSTEM_PROMPT, 'resumen'),
           buildMapPrompt(chunks[i], i + 1, chunks.length),
           { maxTokens: MAP_MAX_TOKENS },
         ),
@@ -544,9 +563,12 @@ export class SynthesisService implements ThreadSynthesizer {
       const reduced: string[] = [];
       for (const g of groups) {
         reduced.push(
-          await this.ask(meter, REDUCE_SYSTEM_PROMPT, buildReducePrompt([g]), {
-            maxTokens: MAP_MAX_TOKENS,
-          }),
+          await this.ask(
+            meter,
+            await this.scoped(REDUCE_SYSTEM_PROMPT, 'resumen'),
+            buildReducePrompt([g]),
+            { maxTokens: MAP_MAX_TOKENS },
+          ),
         );
       }
       notes = reduced;
@@ -572,7 +594,7 @@ export class SynthesisService implements ThreadSynthesizer {
     return cleanSynthesis(
       await this.ask(
         meter,
-        SYSTEM_PROMPT,
+        await this.scoped(SYSTEM_PROMPT, 'resumen'),
         buildFinalPrompt(template, text, mapped),
       ),
     );
@@ -602,7 +624,7 @@ export class SynthesisService implements ThreadSynthesizer {
     return cleanSynthesis(
       await this.ask(
         meter,
-        INCREMENTAL_SYSTEM_PROMPT,
+        await this.scoped(INCREMENTAL_SYSTEM_PROMPT, 'resumen'),
         buildIncrementalPrompt(template, previousMarkdown, text, {
           mapped,
           correction,

@@ -18,6 +18,7 @@ import { OcrService } from './ocr/ocr.service';
 import { PdfExtractClientService } from './ocr/pdf-extract-client.service';
 import { PdfRasterizerService } from './ocr/pdf-rasterizer.service';
 import { OcrSettingsService } from './settings/ocr-settings.service';
+import { TemplateInstructionsService } from './templates/template-instructions.service';
 import { VisionRetryService } from './ocr/vision-retry.service';
 import { OCR_ENGINE } from './ocr/ocr-engine.interface';
 import type { OcrEngine } from './ocr/ocr-engine.interface';
@@ -193,6 +194,7 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
         ThreadStateService,
         PipelineService,
         PdfRasterizerService,
+        TemplateInstructionsService,
         VisionRetryService,
         PdfExtractClientService,
         OcrService,

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
+import { withScope } from '../templates/template-instructions';
 import { LLM_PROVIDER } from '../llm/llm-provider.interface';
 import type { LlmProvider } from '../llm/llm-provider.interface';
 import { cropRegionPng } from './image-crop';
@@ -12,12 +13,14 @@ export interface VisionReading {
   confidence: number;
 }
 
-const SYSTEM =
+export const VISION_SYSTEM =
   'Eres un transcriptor de documentos. Recibes el recorte de una línea de un documento ' +
   'escaneado (puede ser manuscrito). Transcribe EXACTAMENTE lo que ves, de forma literal, sin ' +
   'interpretar, resumir ni corregir y sin añadir nada que no esté en la imagen. Escribe ' +
   '[ilegible] donde no puedas leer. Responde solo con JSON: {"text": "...", "confidence": 0.0-1.0}. ' +
-  'Usa confidence baja si hay partes ilegibles.';
+  'Usa confidence baja si hay partes ilegibles. Si se te indica el ámbito o tipo de documentos, ' +
+  'úsalo solo como contexto para leer bien lo que la imagen respalda claramente; si la imagen ' +
+  'no lo respalda, no lo uses y escribe [ilegible].';
 
 /** Extrae {text, confidence} de la respuesta del modelo (tolera texto/markdown alrededor). */
 export function parseVisionReading(raw: string): VisionReading | null {
@@ -69,10 +72,16 @@ export class VisionRetryService {
     ocrText: string,
   ): Promise<VisionReading | null> {
     const crop = await cropRegionPng(pagePng, box);
+    const ambito = (await this.ocrSettings.getEffective()).visionAmbito;
     const raw = await this.llm.vision(
       { mediaType: 'image/png', data: crop },
       `Lectura automática previa (puede estar mal): "${ocrText}". Transcribe el recorte.`,
-      { system: SYSTEM, maxTokens: 300, temperature: 0, task: 'vision' },
+      {
+        system: withScope(VISION_SYSTEM, ambito),
+        maxTokens: 300,
+        temperature: 0,
+        task: 'vision',
+      },
     );
     return parseVisionReading(raw);
   }

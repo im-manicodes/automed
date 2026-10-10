@@ -117,6 +117,9 @@ export interface Template {
   version: number
   markdown: string
   updatedAt: string
+  /** Instrucciones de ámbito para la IA (system prompt). */
+  instrucciones: string
+  instruccionesPorDefecto: string
 }
 
 export interface SyncResult {
@@ -494,6 +497,9 @@ export interface AjustesOcr {
   visionMaxRegions: number
   /** Calidad de lectura al rasterizar (150..400). */
   renderDpi: number
+  /** Tipo de documentos: ayuda a la IA a leer lo dudoso. */
+  visionAmbito: string
+  visionAmbitoPorDefecto: string
   /** Dirección del recurso de Azure Document Intelligence ('' si no hay). */
   azureEndpoint: string
   /** ¿Hay una clave de Azure guardada? (nunca se devuelve la clave). */
@@ -526,6 +532,8 @@ export interface CambiosAjustesOcr {
   visionRetry?: boolean
   visionMaxRegions?: number
   renderDpi?: number
+  /** Texto nuevo, o null para volver al valor por defecto. */
+  visionAmbito?: string | null
   azureEndpoint?: string
   /** Clave nueva, o null para quitarla. */
   claveAzure?: string | null
