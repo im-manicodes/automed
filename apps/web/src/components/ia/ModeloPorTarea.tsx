@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { LlmTask, ProveedorIa } from '../../lib/api'
-import { TAREAS } from '../../lib/ia'
+import { TAREAS, esVision } from '../../lib/ia'
 
 const OTRO = '__otro__'
 
@@ -11,12 +11,13 @@ interface Props {
   onChange: (tarea: LlmTask, modelo: string) => void
 }
 
-function Fila({ id, etiqueta, valor, lista, recomendado, onChange }: { id: LlmTask; etiqueta: string; valor: string; lista: string[]; recomendado?: string; onChange: (m: string) => void }) {
+function Fila({ id, etiqueta, ayuda, valor, lista, recomendado, onChange }: { id: LlmTask; etiqueta: string; ayuda?: string; valor: string; lista: string[]; recomendado?: string; onChange: (m: string) => void }) {
   const [otroForzado, setOtroForzado] = useState(false)
   const esOtro = otroForzado || !lista.includes(valor)
   return (
     <div className="space-y-2">
       <label htmlFor={`modelo-${id}`} className="block font-semibold">{etiqueta}</label>
+      {ayuda && <p className="text-sm text-slate-600">{ayuda}</p>}
       <select
         id={`modelo-${id}`}
         className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3"
@@ -54,9 +55,10 @@ export default function ModeloPorTarea({ proveedor, modelos, sugeridos, onChange
           key={`${proveedor}-${t.id}`}
           id={t.id}
           etiqueta={t.etiqueta}
+          ayuda={t.ayuda}
           valor={modelos[t.id]}
-          lista={t.id === 'vision' ? sugeridos.vision : sugeridos.texto}
-          recomendado={proveedor === 'ollama' ? (t.id === 'vision' ? sugeridos.vision : sugeridos.texto)[0] : undefined}
+          lista={esVision(t.id) ? sugeridos.vision : sugeridos.texto}
+          recomendado={proveedor === 'ollama' ? (esVision(t.id) ? sugeridos.vision : sugeridos.texto)[0] : undefined}
           onChange={(m) => onChange(t.id, m)}
         />
       ))}

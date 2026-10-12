@@ -397,3 +397,15 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 ## Animación por etapas del análisis (2026-10-12)
 - Hecho: el tab «Resumen» del ticket muestra `EtapasAnalisis` (escaneando PDF con OCR -> pasando a la IA las partes dudosas -> procesando las partes dudosas (opcional) -> revisión manual (si quedan dudosas) -> generando resumen -> resumen generado). La API guarda la sub-etapa transitoria en `Setting` `progress:<threadId>` (sin migración, sin contenido de correos) y `computeProgress` devuelve las 7 etapas (`resumen_listo` ~60 s tras terminar). Polling de 2 s mientras el hilo está en marcha.
 - Falta: probar manualmente con un PDF escaneado real.
+
+## Relectura con visión en lote por página (2026-10-12)
+- Hecho: `OcrService.retryWithVision` manda las zonas `dudoso` de cada página (tope `visionMaxRegions`) en lotes de `VISION_BATCH_SIZE`=6 recortes por llamada (`VisionRetryService.rereadBatch`, `VISION_BATCH_SYSTEM`, `parseVisionBatch`); lo no resuelto (omitido, `[ilegible]`, confianza baja o lote fallido) se reintentaba una vez con `reread` individual (reemplazado el 2026-10-12 por un segundo lote). Progreso `vision_enviando`/`vision_procesando` conservado (el contador avanza por lote y luego por respaldo). Logs solo con conteos. Sin migraciones ni cambios en la web.
+- Falta: probar con un PDF manuscrito real y comparar costo/calidad (llamadas por página) frente a la relectura una por una.
+
+## Modelo propio para el segundo intento de visión (2026-10-12)
+- Hecho: nueva tarea LLM `vision_respaldo` (modelo del segundo intento en lote; la primera pasada usa `vision`; vacío = el de `vision`). Web: fila «Segundo intento de zonas dudosas (visión)» en Ajustes -> IA y en el asistente `/bienvenida` (con ayuda y lista de modelos de visión), fixture y tests actualizados. Sin migración (Setting `ia.config`).
+- Falta: probar con `chat-gpt-6-luna` real en un PDF manuscrito.
+
+## Visión: ambas pasadas en lote (2026-10-12)
+- Hecho: la relectura con visión usa dos pasadas en lote (modelo `vision`, luego `vision_respaldo` con todas las zonas no resueltas juntas; tope `VISION_BATCH_SIZE` por llamada), sin envío individual. Web: etiqueta «Segundo intento de zonas dudosas (visión)» en Ajustes -> IA y bienvenida; CLAUDE.md actualizado.
+- Falta: probar con un PDF manuscrito real y con `chat-gpt-6-luna`.

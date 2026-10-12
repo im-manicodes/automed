@@ -20,7 +20,9 @@ export abstract class BaseLlmProvider implements LlmProvider {
 
   modelFor(task: LlmTask): Promise<string> {
     return Promise.resolve(
-      task === 'vision' ? this.cfg.modelVision : this.cfg.modelText,
+      task === 'vision' || task === 'vision_respaldo'
+        ? this.cfg.modelVision
+        : this.cfg.modelText,
     );
   }
 

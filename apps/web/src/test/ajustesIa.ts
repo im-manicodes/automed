@@ -4,7 +4,7 @@ export const ajustesIa = (o: Partial<AjustesIa> = {}): AjustesIa => ({
   necesitaBienvenida: true,
   proveedor: 'ollama',
   origen: 'servidor',
-  modelos: { resumen: 'qwen3-vl:4b-instruct', whatsapp: 'qwen3-vl:4b-instruct', evento: 'qwen3-vl:4b-instruct', reporte: 'qwen3-vl:4b-instruct', vision: 'qwen3-vl:4b-instruct' },
+  modelos: { resumen: 'qwen3-vl:4b-instruct', whatsapp: 'qwen3-vl:4b-instruct', evento: 'qwen3-vl:4b-instruct', reporte: 'qwen3-vl:4b-instruct', vision: 'qwen3-vl:4b-instruct', vision_respaldo: 'qwen3-vl:4b-instruct' },
   ollamaUrl: 'http://localhost:11434/v1',
   foundryEndpoint: '',
   awsRegion: 'us-east-1',

@@ -198,12 +198,14 @@ export class AiSettingsService {
     const baseVision = sameAsEnv ? env.modelVision : undefined;
     const m = stored?.modelos ?? {};
     const resumen = m.resumen || baseText;
+    const visionPrincipal = m.vision || baseVision || resumen;
     const modelos: Record<LlmTask, string> = {
       resumen,
       whatsapp: m.whatsapp || (sameAsEnv ? baseText : resumen),
       evento: m.evento || (sameAsEnv ? baseText : resumen),
       reporte: m.reporte || (sameAsEnv ? baseText : resumen),
-      vision: m.vision || baseVision || resumen,
+      vision: visionPrincipal,
+      vision_respaldo: m.vision_respaldo || visionPrincipal,
     };
     const ollamaUrl = stored?.ollamaUrl || env.ollamaBaseUrl;
     const foundryEndpoint =

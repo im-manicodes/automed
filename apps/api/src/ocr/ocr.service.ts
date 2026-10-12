@@ -12,7 +12,8 @@ import { OCR_ENGINE } from './ocr-engine.interface';
 import type { OcrEngine } from './ocr-engine.interface';
 import { PdfExtractClientService } from './pdf-extract-client.service';
 import { PdfRasterizerService } from './pdf-rasterizer.service';
-import { VisionRetryService } from './vision-retry.service';
+import { VISION_BATCH_SIZE, VisionRetryService } from './vision-retry.service';
+import type { VisionReading } from './vision-retry.service';
 
 /** Valor de OcrPage.engine para páginas digitales (texto del PDF -> markdown, sin OCR). */
 export const PDF_TEXT_ENGINE = 'pdf-text';
@@ -147,53 +148,89 @@ export class OcrService implements AttachmentProcessor {
     );
   }
 
-  /** Relee con visión las regiones dudosas (si está habilitado); alta confianza -> ok. */
+  /**
+   * Relee con visión las regiones dudosas (si está habilitado); alta confianza -> ok.
+   * Las zonas dudosas (hasta `getMaxRegions()` por página) van juntas en lotes de
+   * `VISION_BATCH_SIZE` recortes por llamada; las que el lote no resuelve (omitidas,
+   * `[ilegible]`, baja confianza o lote fallido) se reintentan UNA vez, también en lote, con el modelo `vision_respaldo`
+   * (nunca recortes sueltos).
+   * Lo que siga sin resolverse queda `dudoso`. Las regiones `ok` nunca se envían.
+   */
   async retryWithVision(
     png: Uint8Array,
     regions: StoredRegion[],
     threadId?: string | null,
   ): Promise<StoredRegion[]> {
     if (!(await this.vision.isEnabled())) return regions;
-    let budget = await this.vision.getMaxRegions();
-    const total = Math.min(
-      regions.filter((r) => r.status === 'dudoso').length,
-      Math.max(budget, 0),
-    );
-    if (total > 0) {
-      await this.writeProgress(threadId, {
-        etapa: 'vision_enviando',
-        regiones: { total, hechas: 0 },
-      });
-    }
+    const budget = Math.max(await this.vision.getMaxRegions(), 0);
+    const idx: number[] = [];
+    regions.forEach((r, i) => {
+      if (r.status === 'dudoso' && idx.length < budget) idx.push(i);
+    });
+    const total = idx.length;
+    if (total === 0) return regions;
+
+    await this.writeProgress(threadId, {
+      etapa: 'vision_enviando',
+      regiones: { total, hechas: 0 },
+    });
+    const out = [...regions];
+    const threshold = this.vision.acceptThreshold;
+    const accept = (i: number, reading: VisionReading | null): boolean => {
+      if (!reading || reading.confidence < threshold) return false;
+      out[i] = {
+        ...regions[i],
+        text: reading.text,
+        confidence: reading.confidence,
+        status: 'ok',
+        source: 'vision',
+      };
+      return true;
+    };
+
     let hechas = 0;
-    const out: StoredRegion[] = [];
-    for (const r of regions) {
-      if (r.status !== 'dudoso' || budget <= 0) {
-        out.push(r);
-        continue;
-      }
-      budget--;
-      await this.writeProgress(threadId, {
-        etapa: 'vision_procesando',
-        regiones: { total, hechas },
-      });
-      hechas++;
-      try {
-        const reading = await this.vision.reread(png, r.box, r.text);
-        if (reading && reading.confidence >= this.vision.acceptThreshold) {
-          out.push({
-            ...r,
-            text: reading.text,
-            confidence: reading.confidence,
-            status: 'ok',
-            source: 'vision',
-          });
-          continue;
+    // Una pasada en lote (trozos de VISION_BATCH_SIZE); devuelve las zonas no resueltas.
+    const lote = async (
+      indices: number[],
+      task: 'vision' | 'vision_respaldo',
+    ): Promise<number[]> => {
+      const unresolved: number[] = [];
+      for (let k = 0; k < indices.length; k += VISION_BATCH_SIZE) {
+        const chunk = indices.slice(k, k + VISION_BATCH_SIZE);
+        await this.writeProgress(threadId, {
+          etapa: 'vision_procesando',
+          regiones: { total, hechas },
+        });
+        let readings: (VisionReading | null)[] = [];
+        try {
+          readings = await this.vision.rereadBatch(
+            png,
+            chunk.map((i) => ({
+              box: regions[i].box,
+              ocrText: regions[i].text,
+            })),
+            task,
+          );
+        } catch {
+          this.logger.warn(
+            `Falló la relectura con visión en lote (${task}, ${chunk.length} zonas)`,
+          );
         }
-      } catch {
-        this.logger.warn('Falló la relectura con visión de una región');
+        chunk.forEach((i, j) => {
+          if (!accept(i, readings[j] ?? null)) unresolved.push(i);
+        });
+        hechas += chunk.length;
       }
-      out.push(r);
+      return unresolved;
+    };
+
+    const pending = await lote(idx, 'vision');
+    if (pending.length > 0) {
+      this.logger.log(
+        `Visión: ${pending.length} de ${total} zonas sin resolver; segundo intento en lote con el modelo de respaldo`,
+      );
+      hechas = total - pending.length;
+      await lote(pending, 'vision_respaldo');
     }
     return out;
   }

@@ -1,13 +1,16 @@
 import type { AjustesIa, CambiosAjustesIa, LlmTask, ProveedorIa } from './api'
 import { awsIncompleta, cambiosAws, type ClavesAws } from './ocr'
 
-export const TAREAS: { id: LlmTask; etiqueta: string }[] = [
+export const TAREAS: { id: LlmTask; etiqueta: string; ayuda?: string }[] = [
   { id: 'resumen', etiqueta: 'Resúmenes de tickets' },
   { id: 'whatsapp', etiqueta: 'Mensaje de WhatsApp' },
   { id: 'evento', etiqueta: 'Borrador de evento' },
   { id: 'reporte', etiqueta: 'Reporte de Excel' },
   { id: 'vision', etiqueta: 'Lectura de zonas dudosas (visión)' },
+  { id: 'vision_respaldo', etiqueta: 'Segundo intento de zonas dudosas (visión)', ayuda: 'Si lo dejas vacío usa el mismo modelo de lectura de zonas' },
 ]
+
+export const esVision = (id: LlmTask) => id === 'vision' || id === 'vision_respaldo'
 
 export const PROVEEDORES: { id: ProveedorIa; nombre: string; descripcion: string }[] = [
   { id: 'ollama', nombre: 'Ollama (en este equipo)', descripcion: 'Gratis y privado: la IA corre aquí, sin enviar datos a internet.' },
@@ -54,7 +57,7 @@ export function conProveedor(b: BorradorIa, a: AjustesIa, proveedor: ProveedorIa
   const sug = a.sugeridos[proveedor]
   const modelos = { ...b.modelos }
   for (const t of TAREAS) {
-    const lista = t.id === 'vision' ? sug?.vision : sug?.texto
+    const lista = esVision(t.id) ? sug?.vision : sug?.texto
     if (lista?.[0]) modelos[t.id] = lista[0]
   }
   return { ...b, proveedor, modelos }

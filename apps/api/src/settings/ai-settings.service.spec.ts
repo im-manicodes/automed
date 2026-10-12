@@ -64,6 +64,7 @@ describe('AiSettingsService', () => {
     expect(e.maxInputTokens).toBe(5000);
     expect(e.llm.openaiApiKey).toBe('sk-panel');
     expect(await svc.modelFor('vision')).toBe('gpt-vis');
+    expect(await svc.modelFor('vision_respaldo')).toBe('gpt-vis');
   });
 
   it('cambiar de proveedor usa los modelos por defecto de ese proveedor y vision cae al de texto', async () => {
@@ -71,11 +72,12 @@ describe('AiSettingsService', () => {
     await svc.save({ proveedor: 'ollama' });
     const e = await svc.getEffective();
     expect(Object.values(e.modelos)).toEqual(
-      Array(5).fill('qwen3-vl:4b-instruct'),
+      Array(6).fill('qwen3-vl:4b-instruct'),
     );
     await svc.save({ modelos: { resumen: 'otro' } });
     const e2 = await svc.getEffective();
     expect(e2.modelos.vision).toBe('otro');
+    expect(e2.modelos.vision_respaldo).toBe('otro');
   });
 
   it('cifra las claves en reposo y las descifra al usarlas', async () => {

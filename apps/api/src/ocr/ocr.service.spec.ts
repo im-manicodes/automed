@@ -64,7 +64,15 @@ function setup(
     isEnabled: jest.fn().mockResolvedValue(opts.visionEnabled ?? false),
     acceptThreshold: 0.9,
     getMaxRegions: jest.fn().mockResolvedValue(10),
-    reread: jest.fn().mockResolvedValue(opts.visionReading ?? null),
+    // Por defecto la 1ª pasada no resuelve nada; el respaldo (en lote) devuelve `visionReading`.
+    rereadBatch: jest.fn(
+      (_png: unknown, items: unknown[], task: string = 'vision') =>
+        Promise.resolve(
+          items.map(() =>
+            task === 'vision_respaldo' ? (opts.visionReading ?? null) : null,
+          ),
+        ),
+    ),
   };
   const pdfText: any = {
     extract: jest.fn().mockResolvedValue(opts.textPages ?? null),
@@ -155,7 +163,7 @@ describe('OcrService (procesador de adjuntos)', () => {
       visionReading: { text: 'borrosa leída', confidence: 0.95 },
     });
     await svc.process('att1');
-    expect(vision.reread).toHaveBeenCalledTimes(2);
+    expect(vision.rereadBatch).toHaveBeenCalledTimes(4); // 2 páginas x 2 pasadas
     const r = created[0].regions.create[1];
     expect(r).toMatchObject({
       status: 'ok',
@@ -180,7 +188,7 @@ describe('OcrService (procesador de adjuntos)', () => {
   it('sin visión no llama al LLM', async () => {
     const { svc, vision } = setup({ visionEnabled: false });
     await svc.process('att1');
-    expect(vision.reread).not.toHaveBeenCalled();
+    expect(vision.rereadBatch).not.toHaveBeenCalled();
   });
 
   it('ignora el error de unicidad (otro worker ya guardó ese sha256)', async () => {
@@ -208,7 +216,7 @@ describe('OcrService (procesador de adjuntos)', () => {
       });
       await svc.process('att1');
       expect(engine.recognize).not.toHaveBeenCalled();
-      expect(vision.reread).not.toHaveBeenCalled();
+      expect(vision.rereadBatch).not.toHaveBeenCalled();
       expect(storage.put).toHaveBeenCalledTimes(2); // sigue guardando pagina_<k>.png
       expect(created).toHaveLength(2);
       expect(created[0]).toMatchObject({
@@ -257,6 +265,109 @@ describe('OcrService (procesador de adjuntos)', () => {
       await svc.process('att1');
       expect(pdfText.extract).not.toHaveBeenCalled();
       expect(engine.recognize).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('retryWithVision en lote', () => {
+    const dudosas = (n: number, okCount = 0) => [
+      ...Array.from({ length: okCount }, (_, i) => ({
+        box: { x: 0, y: 0, w: 0.1, h: 0.1 },
+        text: `ok${i}`,
+        confidence: 0.99,
+        status: 'ok' as const,
+        source: 'ocr' as const,
+      })),
+      ...Array.from({ length: n }, (_, i) => ({
+        box: { x: 0, y: i / 20, w: 0.1, h: 0.05 },
+        text: `d${i}`,
+        confidence: 0.4,
+        status: 'dudoso' as const,
+        source: 'ocr' as const,
+      })),
+    ];
+    const good = (t: string) => ({ text: t, confidence: 0.95 });
+
+    it('8 dudosas -> 2 lotes (6+2) y sin 2ª pasada si el lote resuelve', async () => {
+      const { svc, vision } = setup({ visionEnabled: true });
+      vision.rereadBatch.mockImplementation((_p: unknown, items: any[]) =>
+        Promise.resolve(items.map((it) => good('L' + it.ocrText))),
+      );
+      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(8, 2));
+      expect(vision.rereadBatch).toHaveBeenCalledTimes(2);
+      expect(vision.rereadBatch.mock.calls[0][1]).toHaveLength(6);
+      expect(vision.rereadBatch.mock.calls[1][1]).toHaveLength(2);
+      expect(out.filter((r) => r.source === 'vision')).toHaveLength(8);
+      expect(out.slice(0, 2).every((r) => r.source === 'ocr')).toBe(true);
+    });
+
+    it('lo que el lote no resuelve va JUNTO al respaldo en una sola llamada', async () => {
+      const { svc, vision } = setup({ visionEnabled: true });
+      vision.rereadBatch.mockImplementation(
+        (_p: unknown, items: any[], task: string) =>
+          Promise.resolve(
+            task === 'vision_respaldo'
+              ? items.map(() => good('respaldo'))
+              : [good('a'), null, { text: 'b', confidence: 0.3 }],
+          ),
+      );
+      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
+      expect(vision.rereadBatch).toHaveBeenCalledTimes(2);
+      const [, items, task] = vision.rereadBatch.mock.calls[1];
+      expect(task).toBe('vision_respaldo');
+      expect(items).toHaveLength(2); // nunca recortes sueltos
+      expect(out.map((r) => r.text)).toEqual(['a', 'respaldo', 'respaldo']);
+      expect(out.every((r) => r.status === 'ok')).toBe(true);
+    });
+
+    it('si el lote lanza excepción, todo el trozo va al respaldo en lote', async () => {
+      const { svc, vision } = setup({ visionEnabled: true });
+      vision.rereadBatch.mockImplementation(
+        (_p: unknown, items: any[], task: string) =>
+          task === 'vision'
+            ? Promise.reject(new Error('boom'))
+            : Promise.resolve(items.map(() => good('r'))),
+      );
+      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
+      expect(vision.rereadBatch).toHaveBeenCalledTimes(2);
+      expect(vision.rereadBatch.mock.calls[1][1]).toHaveLength(3);
+      expect(vision.rereadBatch.mock.calls[1][2]).toBe('vision_respaldo');
+      expect(out.every((r) => r.status === 'ok')).toBe(true);
+    });
+
+    it('sin pendientes tras la 1ª pasada no hay 2ª pasada', async () => {
+      const { svc, vision } = setup({ visionEnabled: true });
+      vision.rereadBatch.mockImplementation((_p: unknown, items: any[]) =>
+        Promise.resolve(items.map(() => good('x'))),
+      );
+      await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
+      expect(vision.rereadBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('respeta getMaxRegions por página', async () => {
+      const { svc, vision } = setup({ visionEnabled: true });
+      vision.getMaxRegions.mockResolvedValue(4);
+      vision.rereadBatch.mockImplementation((_p: unknown, items: any[]) =>
+        Promise.resolve(items.map(() => good('x'))),
+      );
+      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(8));
+      expect(vision.rereadBatch.mock.calls[0][1]).toHaveLength(4);
+      expect(out.filter((r) => r.status === 'ok')).toHaveLength(4);
+      expect(out.filter((r) => r.status === 'dudoso')).toHaveLength(4);
+    });
+
+    it('sin dudosas o con visión apagada no hay llamadas; las ok nunca se envían', async () => {
+      const a = setup({ visionEnabled: true });
+      await a.svc.retryWithVision(new Uint8Array([1]), dudosas(0, 3));
+      expect(a.vision.rereadBatch).not.toHaveBeenCalled();
+      const b = setup({ visionEnabled: false });
+      await b.svc.retryWithVision(new Uint8Array([1]), dudosas(3));
+      expect(b.vision.rereadBatch).not.toHaveBeenCalled();
+      const c = setup({ visionEnabled: true });
+      await c.svc.retryWithVision(new Uint8Array([1]), dudosas(2, 3));
+      const sent = c.vision.rereadBatch.mock.calls[0][1].map(
+        (i: any) => i.ocrText,
+      );
+      expect(sent).toEqual(['d0', 'd1']);
     });
   });
 });
