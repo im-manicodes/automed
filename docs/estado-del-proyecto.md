@@ -409,3 +409,7 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 ## Visión: ambas pasadas en lote (2026-10-12)
 - Hecho: la relectura con visión usa dos pasadas en lote (modelo `vision`, luego `vision_respaldo` con todas las zonas no resueltas juntas; tope `VISION_BATCH_SIZE` por llamada), sin envío individual. Web: etiqueta «Segundo intento de zonas dudosas (visión)» en Ajustes -> IA y bienvenida; CLAUDE.md actualizado.
 - Falta: probar con un PDF manuscrito real y con `chat-gpt-6-luna`.
+
+## Sugerencias de la IA al revisar una duda (2026-10-12)
+- Hecho (web): `FormularioDuda` (prop `regionId`) pide al abrir cada duda `POST /ocr/regions/:id/suggest` (hook `useSugerencias`, caché por duda, errores silenciosos, no se pide si ya hay corrección guardada) y muestra «La IA está leyendo el recorte…» y hasta 2 botones «Sugerencia N» que rellenan el cuadro. No guarda ni regenera nada. Tests nuevos en `FormularioDuda.test.tsx`.
+- Falta: probar con un manuscrito real (calidad de las sugerencias y costo por duda abierta).

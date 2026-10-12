@@ -2,8 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  HttpCode,
   Param,
   Patch,
+  Post,
   UseGuards,
 } from '@nestjs/common';
 import { SessionGuard } from '../auth/session.guard';
@@ -24,5 +26,14 @@ export class OcrRegionsController {
       throw new BadRequestException('El texto es demasiado largo');
     }
     return this.review.correctRegion(id, texto.trim());
+  }
+
+  /** Hasta 2 lecturas posibles del recorte; no persiste nada. */
+  @Post(':id/suggest')
+  @HttpCode(200)
+  suggest(@Param('id') id: string, @Body() body: { texto?: unknown }) {
+    const t = body?.texto;
+    const texto = typeof t === 'string' ? t.slice(0, 2000) : '';
+    return this.review.suggest(id, texto);
   }
 }

@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { LuSparkles } from 'react-icons/lu';
+import { useSugerencias } from '../hooks/useSugerencias';
 import { MARCADOR_ILEGIBLE, textoEnviable } from '../lib/borrador';
 
 interface Props {
+  /** Id de la duda (región): se usa para pedir las sugerencias de la IA. */
+  regionId: string;
+  /** Si ya tiene corrección guardada no se piden sugerencias. */
+  yaCorregida?: boolean;
   textoInicial: string;
   sugerencia: string;
   esUltima: boolean;
@@ -18,6 +24,8 @@ interface Props {
 
 /** Campo grande + botones de la duda actual. Se remonta (key) en cada duda. */
 export default function FormularioDuda({
+  regionId,
+  yaCorregida = false,
   textoInicial,
   sugerencia,
   esUltima,
@@ -30,6 +38,7 @@ export default function FormularioDuda({
   enModal = false,
 }: Props) {
   const [texto, setTexto] = useState(textoInicial);
+  const { cargando, sugerencias } = useSugerencias(regionId, textoInicial, !yaCorregida);
   const campo = useRef<HTMLTextAreaElement>(null);
   const valido = textoEnviable(texto) !== null;
 
@@ -98,6 +107,27 @@ export default function FormularioDuda({
           Usar lo que leyó la máquina: “{sugerencia}”
         </button>
       )}
+      {cargando && (
+        <p role="status" className="text-base text-slate-600">
+          La IA está leyendo el recorte…
+        </p>
+      )}
+      {sugerencias.map((s, i) => (
+        <button
+          key={i}
+          type="button"
+          className="btn btn-secondary w-full min-h-11 justify-start text-left"
+          onClick={() => {
+            setTexto(s);
+            onCambio(s);
+          }}
+        >
+          <LuSparkles aria-hidden="true" className="shrink-0" />
+          <span>
+            Sugerencia {i + 1}: “{s}”
+          </span>
+        </button>
+      ))}
       <textarea
         id="texto-duda"
         ref={campo}

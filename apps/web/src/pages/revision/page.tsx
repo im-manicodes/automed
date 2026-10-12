@@ -212,6 +212,8 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
   const formulario = (
     <FormularioDuda
       key={actual.id}
+      regionId={actual.id}
+      yaCorregida={!!(guardados[actual.id] ?? actual.textoGuardado)}
       textoInicial={textoInicial(borradores.leer(actual.id), guardados[actual.id] ?? actual.textoGuardado, actual.sugerencia)}
       sugerencia={actual.sugerencia}
       esUltima={esUltima}
