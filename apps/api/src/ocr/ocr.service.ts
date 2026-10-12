@@ -62,6 +62,8 @@ export class OcrService implements AttachmentProcessor {
         .map((p) => [p.pageNumber, p.markdown]),
     );
     const rasters = await this.rasterizer.rasterize(pdf);
+    const threadId = await this.threadIdOf(att.messageId);
+    await this.writeProgress(threadId, { etapa: 'ocr' });
 
     const built: {
       pageNumber: number;
@@ -95,7 +97,7 @@ export class OcrService implements AttachmentProcessor {
         lines,
         this.cfg.confidenceThreshold,
       ).map((r) => ({ ...r, source: 'ocr' as const }));
-      regions = await this.retryWithVision(page.png, regions);
+      regions = await this.retryWithVision(page.png, regions, threadId);
       regions = flagLowConfidencePage(regions);
       built.push({
         pageNumber: page.pageNumber,
@@ -149,9 +151,21 @@ export class OcrService implements AttachmentProcessor {
   async retryWithVision(
     png: Uint8Array,
     regions: StoredRegion[],
+    threadId?: string | null,
   ): Promise<StoredRegion[]> {
     if (!(await this.vision.isEnabled())) return regions;
     let budget = await this.vision.getMaxRegions();
+    const total = Math.min(
+      regions.filter((r) => r.status === 'dudoso').length,
+      Math.max(budget, 0),
+    );
+    if (total > 0) {
+      await this.writeProgress(threadId, {
+        etapa: 'vision_enviando',
+        regiones: { total, hechas: 0 },
+      });
+    }
+    let hechas = 0;
     const out: StoredRegion[] = [];
     for (const r of regions) {
       if (r.status !== 'dudoso' || budget <= 0) {
@@ -159,6 +173,11 @@ export class OcrService implements AttachmentProcessor {
         continue;
       }
       budget--;
+      await this.writeProgress(threadId, {
+        etapa: 'vision_procesando',
+        regiones: { total, hechas },
+      });
+      hechas++;
       try {
         const reading = await this.vision.reread(png, r.box, r.text);
         if (reading && reading.confidence >= this.vision.acceptThreshold) {
@@ -177,5 +196,38 @@ export class OcrService implements AttachmentProcessor {
       out.push(r);
     }
     return out;
+  }
+
+  private async threadIdOf(messageId: string): Promise<string | null> {
+    try {
+      const m = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: { threadId: true },
+      });
+      return m?.threadId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Sub-etapa para la vista de progreso; best-effort, solo etapa y contadores. */
+  private async writeProgress(
+    threadId: string | null | undefined,
+    value: {
+      etapa: 'ocr' | 'vision_enviando' | 'vision_procesando';
+      regiones?: { total: number; hechas: number };
+    },
+  ): Promise<void> {
+    if (!threadId) return;
+    try {
+      const key = `progress:${threadId}`;
+      await this.prisma.setting.upsert({
+        where: { key },
+        create: { key, value },
+        update: { value },
+      });
+    } catch {
+      /* nunca rompe el OCR */
+    }
   }
 }

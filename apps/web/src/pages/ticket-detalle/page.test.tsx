@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from '../../context/toasts'
-import type { Evento, EventoBorrador, ProcessStatus } from '../../lib/api'
+import type { Evento, EventoBorrador, ProcessStatus, ProgresoAnalisis } from '../../lib/api'
 import { callsOf, mockFetch, type MockHandler } from '../../test/mockFetch'
 import TicketDetalle from './page'
 
@@ -33,9 +33,9 @@ const borrador = (o: Partial<EventoBorrador> = {}): EventoBorrador => ({
 let eventos: Evento[]
 let routes: Record<string, MockHandler>
 let fetchMock: ReturnType<typeof mockFetch>
-function setup(status: ProcessStatus = 'listo', conResumen = true, vigente: string | null = 's1') {
+function setup(status: ProcessStatus = 'listo', conResumen = true, vigente: string | null = 's1', progreso: ProgresoAnalisis | null = null) {
   routes = {
-    'GET /api/threads/t1': { body: thread(status) },
+    'GET /api/threads/t1': { body: { ...thread(status), progreso } },
     'GET /api/threads/t1/synthesis': { body: synth(status, conResumen) },
     'GET /api/threads/t1/events': () => ({ body: { eventos, synthesisId: vigente } }),
   }
@@ -75,6 +75,17 @@ describe('TicketDetalle · Añadir al Excel', () => {
     const b = await boton()
     expect(b).toBeDisabled()
     expect(screen.getAllByText(razon).length).toBeGreaterThan(0)
+  })
+
+  it('procesando: muestra las etapas en el tab Resumen', async () => {
+    setup('procesando', false, null, { etapa: 'escaneando_ocr', porcentaje: 20, adjuntos: { total: 1, listos: 0 }, paginas: { total: 4, leidas: 1 } })
+    expect(await screen.findByText('Escaneando el PDF con OCR')).toBeInTheDocument()
+    expect(screen.getAllByText(/Páginas leídas: 1 de 4/).length).toBeGreaterThan(0)
+  })
+
+  it('necesita revisión: muestra el paso «Revisión manual»', async () => {
+    setup('necesita_revision', false, null, { etapa: 'revision_manual', porcentaje: 70, adjuntos: { total: 1, listos: 1 } })
+    expect(await screen.findByText('Revisión manual')).toBeInTheDocument()
   })
 
   it('sin resumen no hay botón', async () => {

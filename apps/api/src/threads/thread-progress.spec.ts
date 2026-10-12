@@ -8,7 +8,7 @@ const att = (status: string, t?: number, l?: number) => ({
 
 describe('computeProgress', () => {
   it('devuelve null si el hilo no está en marcha', () => {
-    for (const s of ['sin_analizar', 'listo', 'error', 'necesita_revision'])
+    for (const s of ['sin_analizar', 'listo', 'error'])
       expect(computeProgress({ threadStatus: s, attachments: [] })).toBeNull();
   });
 
@@ -20,10 +20,10 @@ describe('computeProgress', () => {
     expect(p).toMatchObject({ etapa: 'en_cola', porcentaje: 5 });
   });
 
-  it('sin adjuntos pasa directo a escribir el resumen', () => {
+  it('sin adjuntos pasa directo a generar el resumen', () => {
     const p = computeProgress({ threadStatus: 'procesando', attachments: [] });
     expect(p).toMatchObject({
-      etapa: 'escribiendo_resumen',
+      etapa: 'generando_resumen',
       porcentaje: 80,
       adjuntos: { total: 0, listos: 0 },
     });
@@ -39,7 +39,7 @@ describe('computeProgress', () => {
         att('pendiente'),
       ],
     });
-    expect(p?.etapa).toBe('leyendo_pdfs');
+    expect(p?.etapa).toBe('escaneando_ocr');
     expect(p?.adjuntos).toEqual({ total: 4, listos: 1 });
     expect(p?.porcentaje).toBe(24); // 5 + 75 * 1/4
     expect(p?.paginas).toBeUndefined();
@@ -62,22 +62,59 @@ describe('computeProgress', () => {
     expect(p?.porcentaje).toBeLessThan(80);
   });
 
-  it('todos listos = escribiendo resumen; con síntesis hecha = terminando', () => {
-    const base = { threadStatus: 'procesando', attachments: [att('listo')] };
-    expect(computeProgress(base)?.etapa).toBe('escribiendo_resumen');
+  it('todos listos = generando resumen aunque la síntesis ya esté hecha', () => {
     const p = computeProgress({
-      ...base,
-      jobs: [
-        {
-          type: 'synthesize_thread',
-          status: 'listo',
-          attempts: 1,
-          maxAttempts: 5,
-          lastError: null,
-        },
-      ],
+      threadStatus: 'procesando',
+      attachments: [att('listo')],
     });
-    expect(p).toMatchObject({ etapa: 'terminando', porcentaje: 95 });
+    expect(p?.etapa).toBe('generando_resumen');
+  });
+
+  it('usa la sub-etapa guardada y conserva páginas', () => {
+    const base = {
+      threadStatus: 'procesando',
+      attachments: [att('procesando', 4, 2)],
+    };
+    const a = computeProgress({
+      ...base,
+      stored: { etapa: 'vision_enviando', regiones: { total: 3, hechas: 0 } },
+    });
+    expect(a).toMatchObject({
+      etapa: 'ia_dudosas',
+      paginas: { total: 4, leidas: 2 },
+      regiones: { total: 3, hechas: 0 },
+    });
+    const b = computeProgress({
+      ...base,
+      stored: { etapa: 'vision_procesando', regiones: { total: 3, hechas: 1 } },
+    });
+    expect(b?.etapa).toBe('procesando_dudosas');
+    expect(b?.regiones).toEqual({ total: 3, hechas: 1 });
+    expect(computeProgress({ ...base, stored: { etapa: 'ocr' } })?.etapa).toBe(
+      'escaneando_ocr',
+    );
+  });
+
+  it('necesita_revision = revision_manual', () => {
+    expect(
+      computeProgress({ threadStatus: 'necesita_revision', attachments: [] }),
+    ).toMatchObject({ etapa: 'revision_manual' });
+  });
+
+  it('listo reciente = resumen_listo 100%; antiguo = null', () => {
+    const now = new Date('2026-01-01T00:01:00Z');
+    const mk = (updatedAt: Date) =>
+      computeProgress({
+        threadStatus: 'listo',
+        attachments: [att('listo')],
+        updatedAt,
+        now,
+      });
+    expect(mk(new Date('2026-01-01T00:00:30Z'))).toMatchObject({
+      etapa: 'resumen_listo',
+      porcentaje: 100,
+    });
+    expect(mk(new Date('2026-01-01T00:00:00Z'))).toBeNull();
   });
 
   it('informa reintento solo con intentos > 1 y error previo, sin exponer el error', () => {

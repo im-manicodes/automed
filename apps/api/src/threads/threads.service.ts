@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ProcessStatus } from '../generated/prisma/client';
-import { computeProgress, type ProgresoAnalisis } from './thread-progress';
+import {
+  computeProgress,
+  type ProgresoAnalisis,
+  type StoredProgress,
+} from './thread-progress';
 
 @Injectable()
 export class ThreadsService {
@@ -71,6 +75,7 @@ export class ThreadsService {
         t.id,
         t.status,
         t.messages.flatMap((m) => m.attachments),
+        t.updatedAt,
       ),
       // incluye isFromMe (mensaje propio) en cada mensaje
       messages: t.messages,
@@ -91,10 +96,20 @@ export class ThreadsService {
     threadId: string,
     status: ProcessStatus,
     atts: { id: string; status: string }[],
+    updatedAt?: Date,
   ): Promise<ProgresoAnalisis | null> {
-    if (status !== 'pendiente' && status !== 'procesando') return null;
+    const enMarcha = status === 'pendiente' || status === 'procesando';
+    if (!enMarcha && status !== 'necesita_revision' && status !== 'listo')
+      return null;
+    if (!enMarcha) {
+      return computeProgress({
+        threadStatus: status,
+        attachments: atts.map((a) => ({ status: a.status })),
+        updatedAt,
+      });
+    }
     const ids = atts.map((a) => a.id);
-    const [pages, jobs] = await Promise.all([
+    const [pages, jobs, setting] = await Promise.all([
       ids.length
         ? this.prisma.ocrPage.findMany({
             where: { attachmentId: { in: ids } },
@@ -118,6 +133,9 @@ export class ThreadsService {
           lastError: true,
         },
       }),
+      this.prisma.setting
+        .findUnique({ where: { key: `progress:${threadId}` } })
+        .catch(() => null),
     ]);
     const byAtt = new Map<string, { total: number; leidas: number }>();
     for (const p of pages) {
@@ -134,6 +152,29 @@ export class ThreadsService {
         paginasLeidas: byAtt.get(a.id)?.leidas,
       })),
       jobs,
+      stored: parseStored(setting?.value),
+      updatedAt,
     });
   }
+}
+
+function parseStored(v: unknown): StoredProgress | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as {
+    etapa?: unknown;
+    regiones?: { total?: unknown; hechas?: unknown };
+  };
+  if (
+    o.etapa !== 'ocr' &&
+    o.etapa !== 'vision_enviando' &&
+    o.etapa !== 'vision_procesando'
+  )
+    return null;
+  const r = o.regiones;
+  return {
+    etapa: o.etapa,
+    ...(r && typeof r.total === 'number' && typeof r.hechas === 'number'
+      ? { regiones: { total: r.total, hechas: r.hechas } }
+      : {}),
+  };
 }

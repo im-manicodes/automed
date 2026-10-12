@@ -16,6 +16,7 @@ import { canAnalyze, isBusy } from '../../lib/status'
 import ProgresoAnalisis from '../../components/ProgresoAnalisis'
 import { copiarTexto } from '../../lib/clipboard'
 import WhatsappDialog from './components/WhatsappDialog'
+import EtapasAnalisis from './components/EtapasAnalisis'
 import EventoDialog from './components/EventoDialog'
 import EventosRegistrados from './components/EventosRegistrados'
 import { usePolling } from '../../hooks/usePolling'
@@ -50,7 +51,7 @@ export default function TicketDetalle() {
   const [confirmTodo, setConfirmTodo] = useState(false)
   const [confirmSinRevision, setConfirmSinRevision] = useState(false)
 
-  usePolling(() => void refetch(), 5000, !!thread && isBusy(thread.status))
+  usePolling(() => void refetch(), 2000, !!thread && isBusy(thread.status))
 
   const run = async (fn: () => Promise<unknown>, okMsg: string) => {
     setBusy(true)
@@ -235,6 +236,13 @@ export default function TicketDetalle() {
 
           {tab === 'resumen' && (
             <div role="tabpanel" id="panel-resumen" aria-labelledby="tab-resumen" className="space-y-4">
+              {(isBusy(thread.status) || thread.progreso) ? (
+                <EtapasAnalisis progreso={thread.progreso} />
+              ) : !latest ? (
+                <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-700">
+                  Todavía no hay resumen. Pulsa “Analizar este ticket” para crearlo.
+                </p>
+              ) : null}
               {latest ? (
                 <>
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -278,11 +286,7 @@ export default function TicketDetalle() {
                   <EventosRegistrados eventos={eventos} onRemove={quitarEvento} />
                   <VersionHistory history={synth.history} />
                 </>
-              ) : (
-                <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-700">
-                  {isBusy(thread.status) ? 'El resumen aparecerá aquí en unos minutos.' : 'Todavía no hay resumen. Pulsa “Analizar este ticket” para crearlo.'}
-                </p>
-              )}
+              ) : null}
             </div>
           )}
 

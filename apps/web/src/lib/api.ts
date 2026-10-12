@@ -8,7 +8,14 @@ export type ProcessStatus =
   | 'necesita_revision'
   | 'error'
 
-export type EtapaProgreso = 'en_cola' | 'leyendo_pdfs' | 'escribiendo_resumen' | 'terminando'
+export type EtapaProgreso =
+  | 'en_cola'
+  | 'escaneando_ocr'
+  | 'ia_dudosas'
+  | 'procesando_dudosas'
+  | 'revision_manual'
+  | 'generando_resumen'
+  | 'resumen_listo'
 
 export interface ProgresoAnalisis {
   etapa: EtapaProgreso
@@ -16,6 +23,7 @@ export interface ProgresoAnalisis {
   porcentaje: number
   adjuntos: { total: number; listos: number }
   paginas?: { total: number; leidas: number }
+  regiones?: { total: number; hechas: number }
   reintento?: { intento: number; maximo: number }
 }
 

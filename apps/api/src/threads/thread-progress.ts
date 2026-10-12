@@ -1,6 +1,18 @@
 /** Progreso de análisis de un hilo, calculado solo con datos existentes (sin contenido de correos). */
 export type EtapaProgreso =
-  'en_cola' | 'leyendo_pdfs' | 'escribiendo_resumen' | 'terminando';
+  | 'en_cola'
+  | 'escaneando_ocr'
+  | 'ia_dudosas'
+  | 'procesando_dudosas'
+  | 'revision_manual'
+  | 'generando_resumen'
+  | 'resumen_listo';
+
+/** Sub-etapa guardada por OcrService en el Setting `progress:<threadId>`. */
+export interface StoredProgress {
+  etapa: 'ocr' | 'vision_enviando' | 'vision_procesando';
+  regiones?: { total: number; hechas: number };
+}
 
 export interface ProgresoAnalisis {
   etapa: EtapaProgreso;
@@ -8,6 +20,7 @@ export interface ProgresoAnalisis {
   porcentaje: number;
   adjuntos: { total: number; listos: number };
   paginas?: { total: number; leidas: number };
+  regiones?: { total: number; hechas: number };
   reintento?: { intento: number; maximo: number };
 }
 
@@ -30,12 +43,18 @@ export interface ProgressInput {
   threadStatus: string;
   attachments: ProgressAttachment[];
   jobs?: ProgressJob[];
+  /** Sub-etapa guardada (solo aplica con el hilo procesando y adjuntos pendientes). */
+  stored?: StoredProgress | null;
+  /** Última actualización del hilo (para detectar un resumen recién listo). */
+  updatedAt?: Date;
+  now?: Date;
 }
+
+const RECENT_MS = 60_000;
 
 const DONE = new Set(['listo', 'dudoso', 'necesita_revision']);
 const IN_QUEUE = 5;
 const READ_END = 80;
-const WRITE_END = 95;
 
 /** Reintento: el trabajo activo con más intentos que ya falló al menos una vez. */
 function pickRetry(jobs: ProgressJob[]): ProgresoAnalisis['reintento'] {
@@ -50,29 +69,32 @@ function pickRetry(jobs: ProgressJob[]): ProgresoAnalisis['reintento'] {
     : undefined;
 }
 
-/** null si el hilo no está en marcha (pendiente/procesando). */
+/** null si el hilo no está en marcha, ni en revisión, ni recién listo. */
 export function computeProgress(input: ProgressInput): ProgresoAnalisis | null {
   const { threadStatus, attachments } = input;
-  if (threadStatus !== 'pendiente' && threadStatus !== 'procesando')
-    return null;
-
   const total = attachments.length;
   const pending = attachments.filter((a) => !DONE.has(a.status));
   const listos = total - pending.length;
   const reintento = pickRetry(input.jobs ?? []);
   const base = { adjuntos: { total, listos }, ...(reintento && { reintento }) };
 
+  if (threadStatus === 'necesita_revision')
+    return { etapa: 'revision_manual', porcentaje: READ_END, ...base };
+  if (threadStatus === 'listo') {
+    if (!input.updatedAt) return null;
+    const age = (input.now ?? new Date()).getTime() - input.updatedAt.getTime();
+    return age < RECENT_MS
+      ? { etapa: 'resumen_listo', porcentaje: 100, ...base }
+      : null;
+  }
+  if (threadStatus !== 'pendiente' && threadStatus !== 'procesando')
+    return null;
+
   if (threadStatus === 'pendiente')
     return { etapa: 'en_cola', porcentaje: IN_QUEUE, ...base };
 
-  if (pending.length === 0) {
-    const sintesisHecha = (input.jobs ?? []).some(
-      (j) => j.type === 'synthesize_thread' && j.status === 'listo',
-    );
-    return sintesisHecha
-      ? { etapa: 'terminando', porcentaje: WRITE_END, ...base }
-      : { etapa: 'escribiendo_resumen', porcentaje: READ_END, ...base };
-  }
+  if (pending.length === 0)
+    return { etapa: 'generando_resumen', porcentaje: READ_END, ...base };
 
   let pTotal = 0;
   let pLeidas = 0;
@@ -89,10 +111,19 @@ export function computeProgress(input: ProgressInput): ProgresoAnalisis | null {
     READ_END - 1,
     Math.round(IN_QUEUE + (READ_END - IN_QUEUE) * fraccion),
   );
+  const st = input.stored;
+  const etapa: EtapaProgreso =
+    st?.etapa === 'vision_enviando'
+      ? 'ia_dudosas'
+      : st?.etapa === 'vision_procesando'
+        ? 'procesando_dudosas'
+        : 'escaneando_ocr';
   return {
-    etapa: 'leyendo_pdfs',
+    etapa,
     porcentaje,
     ...base,
+    ...(etapa !== 'escaneando_ocr' &&
+      st?.regiones && { regiones: st.regiones }),
     ...(pTotal > 0 && { paginas: { total: pTotal, leidas: pLeidas } }),
   };
 }

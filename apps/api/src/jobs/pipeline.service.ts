@@ -27,6 +27,8 @@ import type { ProcessStatus } from '../generated/prisma/client';
 const DONE: ProcessStatus[] = ['listo', 'necesita_revision'];
 const isDone = (s: ProcessStatus) => DONE.includes(s);
 const reanalyzeKey = (threadId: string) => `reanalyze:${threadId}`;
+/** Sub-etapa de progreso (escrita por OcrService, sin contenido). */
+const progressKey = (threadId: string) => `progress:${threadId}`;
 /** PDFs cuya revisión manual el usuario decidió omitir para este hilo ({ shas: string[] }). */
 const reviewSkipKey = (threadId: string) => `review-skip:${threadId}`;
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -576,6 +578,7 @@ export class PipelineService implements OnModuleInit {
     hash: string,
     tieneMensajesNuevos: boolean,
   ) {
+    await this.clearProgress(threadId);
     const review = await this.pendingReview(threadId);
     await this.state.transition(
       threadId,
@@ -589,8 +592,19 @@ export class PipelineService implements OnModuleInit {
 
   // ---- fallos definitivos ----
 
+  private async clearProgress(threadId: string) {
+    try {
+      await this.prisma.setting.deleteMany({
+        where: { key: progressKey(threadId) },
+      });
+    } catch {
+      /* best-effort */
+    }
+  }
+
   async failThread(threadId: string) {
     if (!threadId) return;
+    await this.clearProgress(threadId);
     await this.prisma.setting.deleteMany({
       where: { key: reanalyzeKey(threadId) },
     });

@@ -393,3 +393,7 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 - Hecho (web): campo + «Restablecer instrucciones» en Plantillas (también en la vista previa sin guardar) y «Tipo de documentos» en Ajustes -> OCR -> Opciones avanzadas (solo se envía si cambió).
 - Regla: no crea versión de plantilla, no regenera resúmenes, no entra en el hash. Lint, build y tests en verde (API 509 unit + 94 e2e; web 266).
 - Falta: probar con el manuscrito real si el ámbito mejora las relecturas; `test:e2e-flow` no se corrió (solo lint/tipos para `e2e-flow.integration.spec.ts`).
+
+## Animación por etapas del análisis (2026-10-12)
+- Hecho: el tab «Resumen» del ticket muestra `EtapasAnalisis` (escaneando PDF con OCR -> pasando a la IA las partes dudosas -> procesando las partes dudosas (opcional) -> revisión manual (si quedan dudosas) -> generando resumen -> resumen generado). La API guarda la sub-etapa transitoria en `Setting` `progress:<threadId>` (sin migración, sin contenido de correos) y `computeProgress` devuelve las 7 etapas (`resumen_listo` ~60 s tras terminar). Polling de 2 s mientras el hilo está en marcha.
+- Falta: probar manualmente con un PDF escaneado real.

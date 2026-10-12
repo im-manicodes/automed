@@ -13,24 +13,30 @@ function etapaTexto(p?: Progreso | null): string {
   switch (p.etapa) {
     case 'en_cola':
       return 'En cola…'
-    case 'leyendo_pdfs': {
+    case 'escaneando_ocr': {
       const { total, listos } = p.adjuntos
       const actual = Math.min(listos + 1, total)
-      return total > 1 ? `Leyendo el PDF ${actual} de ${total}…` : 'Leyendo el PDF…'
+      return total > 1 ? `Escaneando el PDF ${actual} de ${total}…` : 'Escaneando el PDF…'
     }
-    case 'escribiendo_resumen':
-      return 'Escribiendo el resumen…'
-    case 'terminando':
-      return 'Terminando…'
+    case 'ia_dudosas':
+      return 'Pasando a la IA las partes dudosas…'
+    case 'procesando_dudosas':
+      return 'Procesando las partes dudosas…'
+    case 'revision_manual':
+      return 'Esperando tu revisión…'
+    case 'generando_resumen':
+      return 'Generando el resumen…'
+    case 'resumen_listo':
+      return 'Resumen generado'
   }
 }
 
 export default function ProgresoAnalisis({ progreso, compact = false }: Props) {
   const texto = etapaTexto(progreso)
   // Sin datos, o mientras se escribe el resumen (no se sabe cuánto tarda): barra indeterminada
-  const indeterminada = !progreso || progreso.etapa === 'escribiendo_resumen'
+  const indeterminada = !progreso || progreso.etapa === 'generando_resumen'
   const valor = progreso ? Math.max(0, Math.min(100, Math.round(progreso.porcentaje))) : 0
-  const paginas = progreso?.etapa === 'leyendo_pdfs' ? progreso.paginas : undefined
+  const paginas = progreso?.etapa === 'escaneando_ocr' ? progreso.paginas : undefined
   return (
     <div className={compact ? 'space-y-1' : 'space-y-1.5'}>
       <div
