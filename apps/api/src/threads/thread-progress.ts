@@ -12,6 +12,10 @@ export type EtapaProgreso =
 export interface StoredProgress {
   etapa: 'ocr' | 'vision_enviando' | 'vision_procesando';
   regiones?: { total: number; hechas: number };
+  /** Modelo que lee las zonas dudosas (solo etapas de visión). */
+  modelo?: string;
+  /** 1 = modelo de lectura; 2 = segundo intento (modelo de respaldo). */
+  pasada?: 1 | 2;
 }
 
 export interface ProgresoAnalisis {
@@ -21,6 +25,10 @@ export interface ProgresoAnalisis {
   adjuntos: { total: number; listos: number };
   paginas?: { total: number; leidas: number };
   regiones?: { total: number; hechas: number };
+  /** Solo en ia_dudosas / procesando_dudosas: modelo que lee las zonas dudosas. */
+  modelo?: string;
+  /** Solo en ia_dudosas / procesando_dudosas: 1 = lectura, 2 = segundo intento. */
+  pasada?: 1 | 2;
   reintento?: { intento: number; maximo: number };
 }
 
@@ -124,6 +132,8 @@ export function computeProgress(input: ProgressInput): ProgresoAnalisis | null {
     ...base,
     ...(etapa !== 'escaneando_ocr' &&
       st?.regiones && { regiones: st.regiones }),
+    ...(etapa !== 'escaneando_ocr' && st?.modelo && { modelo: st.modelo }),
+    ...(etapa !== 'escaneando_ocr' && st?.pasada && { pasada: st.pasada }),
     ...(pTotal > 0 && { paginas: { total: pTotal, leidas: pLeidas } }),
   };
 }

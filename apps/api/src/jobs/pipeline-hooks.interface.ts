@@ -9,7 +9,14 @@
  * las regiones dudosas; el procesador no toca el estado del Attachment.
  */
 export interface AttachmentProcessor {
-  process(attachmentId: string): Promise<void>;
+  /**
+   * `shouldContinue` (opcional): punto de control de cancelación. Si devuelve false el
+   * procesador lanza `CancelledError` sin persistir nada (no quedan OcrPage a medias).
+   */
+  process(
+    attachmentId: string,
+    opts?: { shouldContinue?: () => Promise<boolean> },
+  ): Promise<void>;
 }
 export const ATTACHMENT_PROCESSOR = Symbol('ATTACHMENT_PROCESSOR');
 

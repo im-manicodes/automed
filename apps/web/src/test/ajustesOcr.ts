@@ -6,6 +6,7 @@ export const ajustesOcr = (o: Partial<AjustesOcr> = {}): AjustesOcr => ({
   origen: 'servidor',
   textractMode: 'detect',
   visionRetry: true,
+  visionSegundoIntento: true,
   visionMaxRegions: 40,
   renderDpi: 200,
   visionAmbito: '',

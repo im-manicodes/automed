@@ -3,6 +3,7 @@ import { join } from 'path';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PipelineService } from './pipeline.service';
 import { ThreadStateService } from './thread-state.service';
+import { CancelledError } from './cancelled.error';
 import { JobRecord } from './job-handler.interface';
 
 type St =
@@ -43,6 +44,8 @@ function fakePrisma() {
     doubtfulShas: new Set<string>(),
     ocrPages: [] as { sha256: string; pageNumber: number; imageKey: string }[],
     settings: new Map<string, unknown>(),
+    /** Versiones de Synthesis por hilo. */
+    syntheses: new Map<string, number>(),
   };
   const threadOfAtt = (a: Att) =>
     db.messages.find((m) => m.id === a.messageId)!.threadId;
@@ -78,6 +81,14 @@ function fakePrisma() {
             (a) => a.sha256 === sha && threadOfAtt(a) === t.id,
           );
         }),
+      count: async ({ where }: any) => {
+        const sha = where.messages.some.attachments.some.sha256;
+        return db.threads.filter(
+          (t) =>
+            where.status.in.includes(t.status) &&
+            db.atts.some((a) => a.sha256 === sha && threadOfAtt(a) === t.id),
+        ).length;
+      },
       updateMany: async ({ where, data }: any) => {
         const t = db.threads.find(
           (x) => x.id === where.id && x.status === where.status,
@@ -96,7 +107,7 @@ function fakePrisma() {
           ? { value: db.settings.get(where.key) }
           : null,
       deleteMany: async ({ where }: any) => {
-        db.settings.delete(where.key);
+        for (const k of where.key?.in ?? [where.key]) db.settings.delete(k);
       },
     },
     message: {
@@ -137,7 +148,12 @@ function fakePrisma() {
       count: async ({ where }: any) =>
         db.atts.filter((a) => attMatch(a, where)).length,
     },
+    synthesis: {
+      count: async ({ where }: any) => db.syntheses.get(where.threadId) ?? 0,
+    },
     ocrPage: {
+      count: async ({ where }: any) =>
+        db.ocrPages.filter((p) => p.sha256 === where.sha256).length,
       findMany: async ({ where }: any) =>
         db.ocrPages.filter((p) => p.sha256 === where.sha256),
       deleteMany: async ({ where }: any) => {
@@ -719,6 +735,204 @@ describe('PipelineService', () => {
         force: false,
         correctedSha256: 'shaA',
       });
+    });
+  });
+
+  describe('cancelar análisis', () => {
+    it('sin síntesis previa: vuelve a sin_analizar, limpia ajustes y los adjuntos sin OCR quedan pendiente', async () => {
+      const s = setup();
+      s.addThread('t1', [
+        ['a1', 'shaA'],
+        ['a2', 'shaB'],
+      ]);
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      s.db.atts[0].status = 'procesando';
+      s.db.ocrPages.push({ sha256: 'shaB', pageNumber: 1, imageKey: 'k' });
+      s.db.atts[1].status = 'procesando';
+      s.db.settings.set('progress:t1', { etapa: 'ocr' });
+      s.db.settings.set('reanalyze:t1', { full: true });
+      s.db.settings.set('review-skip:t1', { shas: [] });
+      expect(await s.pipeline.cancel('t1')).toEqual({
+        threadId: 't1',
+        status: 'sin_analizar',
+      });
+      expect(s.db.threads[0].status).toBe('sin_analizar');
+      expect(s.db.settings.has('progress:t1')).toBe(false);
+      expect(s.db.settings.has('reanalyze:t1')).toBe(false);
+      expect(s.db.settings.has('review-skip:t1')).toBe(true);
+      // sin OCR -> pendiente; con OcrPage del sha -> listo
+      expect(s.db.atts.map((a) => a.status)).toEqual(['pendiente', 'listo']);
+    });
+
+    it('con síntesis previa: listo (se conserva el resumen); con dudas sin revisar: necesita_revision', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      s.db.syntheses.set('t1', 2);
+      s.db.threads[0].status = 'procesando';
+      expect((await s.pipeline.cancel('t1')).status).toBe('listo');
+
+      const r = setup();
+      r.addThread('t1', [['a1', 'shaA']]);
+      r.db.syntheses.set('t1', 1);
+      r.db.ocrPages.push({ sha256: 'shaA', pageNumber: 1, imageKey: 'k' });
+      r.db.doubtfulShas.add('shaA');
+      expect((await r.pipeline.cancel('t1')).status).toBe('necesita_revision');
+      expect(r.db.atts[0].status).toBe('necesita_revision');
+
+      // PDF cuya revisión se omitió: no cuenta como pendiente de revisión
+      const o = setup();
+      o.addThread('t1', [['a1', 'shaA']]);
+      o.db.syntheses.set('t1', 1);
+      o.db.ocrPages.push({ sha256: 'shaA', pageNumber: 1, imageKey: 'k' });
+      o.db.doubtfulShas.add('shaA');
+      o.db.settings.set('review-skip:t1', { shas: ['shaA'] });
+      expect((await o.pipeline.cancel('t1')).status).toBe('listo');
+    });
+
+    it('reprocess cancelado: vuelve a listo con su resumen y los adjuntos sin OCR quedan pendiente', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      s.db.threads[0].status = 'listo';
+      s.db.atts[0].status = 'listo';
+      s.db.syntheses.set('t1', 1);
+      s.db.ocrPages.push({ sha256: 'shaA', pageNumber: 1, imageKey: 'k' });
+      await s.pipeline.reprocess('t1');
+      expect((await s.pipeline.cancel('t1')).status).toBe('listo');
+      expect(s.db.atts[0].status).toBe('pendiente');
+      expect(s.db.settings.has('reanalyze:t1')).toBe(false);
+    });
+
+    it('404 si no existe; 409 si no se está analizando o si cambió en paralelo', async () => {
+      const s = setup();
+      await expect(s.pipeline.cancel('x')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      s.addThread('t1', []);
+      for (const st of [
+        'sin_analizar',
+        'listo',
+        'necesita_revision',
+        'error',
+      ] as const) {
+        s.db.threads[0].status = st;
+        await expect(s.pipeline.cancel('t1')).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+      }
+      s.db.threads[0].status = 'procesando';
+      s.db.settings.set('progress:t1', { etapa: 'ocr' });
+      jest
+        .spyOn((s.pipeline as any).state, 'transition')
+        .mockResolvedValueOnce(false);
+      await expect(s.pipeline.cancel('t1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      // nada se tocó
+      expect(s.db.threads[0].status).toBe('procesando');
+      expect(s.db.settings.has('progress:t1')).toBe(true);
+    });
+
+    it('process_attachment tardío tras cancelar: no-op (sin OCR, sin síntesis, sin reintento)', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      await s.pipeline.cancel('t1');
+      await expect(
+        s.pipeline.processAttachment(s.job({ attachmentId: 'a1' })),
+      ).resolves.toBeUndefined();
+      expect(s.processor.process).not.toHaveBeenCalled();
+      expect(s.db.atts[0].status).toBe('pendiente');
+      expect(s.queued.some((q) => q.type === 'synthesize_thread')).toBe(false);
+    });
+
+    it('job compartido por sha256: cancelar un hilo no detiene el OCR que otro hilo activo necesita', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      s.addThread('t2', [['a2', 'shaA']]);
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      await s.pipeline.processThread(s.job({ threadId: 't2' }));
+      await s.pipeline.cancel('t1');
+      await s.pipeline.processAttachment(s.job({ attachmentId: 'a1' }));
+      expect(s.processor.process).toHaveBeenCalledTimes(1);
+      expect(s.db.atts.map((a) => a.status)).toEqual(['listo', 'listo']);
+      expect(s.db.threads.map((t) => t.status)).toEqual([
+        'sin_analizar',
+        'procesando',
+      ]);
+      const synth = s.queued.filter((q) => q.type === 'synthesize_thread');
+      expect(synth.map((q) => q.payload.threadId)).toEqual(['t2']);
+    });
+
+    it('cancelar a mitad del OCR: CancelledError termina el job con normalidad, sin error ni onFailed', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      s.processor.process.mockImplementationOnce(
+        async (_id: string, opts: any) => {
+          await s.pipeline.cancel('t1');
+          // el procesador ve el punto de control y aborta sin persistir
+          if (!(await opts.shouldContinue())) throw new CancelledError();
+        },
+      );
+      await expect(
+        s.pipeline.processAttachment(s.job({ attachmentId: 'a1' })),
+      ).resolves.toBeUndefined();
+      expect(s.processor.process).toHaveBeenCalledTimes(1);
+      expect(s.db.threads[0].status).toBe('sin_analizar');
+      expect(s.db.atts[0].status).toBe('pendiente');
+      expect(s.queued.some((q) => q.type === 'synthesize_thread')).toBe(false);
+    });
+
+    it('si se vuelve a pedir el análisis mientras el OCR cancelado termina, el mismo job lo retoma', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      s.processor.process.mockImplementationOnce(async () => {
+        await s.pipeline.cancel('t1');
+        await s.pipeline.analyze('t1');
+        throw new CancelledError();
+      });
+      await s.pipeline.processAttachment(s.job({ attachmentId: 'a1' }));
+      expect(s.processor.process).toHaveBeenCalledTimes(2);
+      expect(s.db.atts[0].status).toBe('listo');
+    });
+
+    it('síntesis cancelada durante la llamada al LLM: el job termina sin tocar el estado destino', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      const q = s.queued.find((x) => x.type === 'synthesize_thread')!;
+      s.synth.synthesize.mockImplementationOnce(async () => {
+        await s.pipeline.cancel('t1');
+        throw new CancelledError();
+      });
+      await expect(
+        s.pipeline.synthesizeThread(s.job(q.payload)),
+      ).resolves.toBeUndefined();
+      expect(s.db.threads[0].status).toBe('sin_analizar');
+      expect(s.db.threads[0].contentHash).toBeUndefined();
+    });
+
+    it('síntesis tardía tras cancelar: no llama al LLM', async () => {
+      const s = setup();
+      s.addThread('t1', []);
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      const q = s.queued.find((x) => x.type === 'synthesize_thread')!;
+      await s.pipeline.cancel('t1');
+      await s.pipeline.synthesizeThread(s.job(q.payload));
+      expect(s.synth.synthesize).not.toHaveBeenCalled();
+      expect(s.db.threads[0].status).toBe('sin_analizar');
+    });
+
+    it('un process_thread en cola tras cancelar no reanuda el hilo', async () => {
+      const s = setup();
+      s.addThread('t1', [['a1', 'shaA']]);
+      s.db.syntheses.set('t1', 1);
+      await s.pipeline.cancel('t1'); // estaba pendiente
+      expect(s.db.threads[0].status).toBe('listo');
+      await s.pipeline.processThread(s.job({ threadId: 't1' }));
+      expect(s.db.threads[0].status).toBe('listo');
+      expect(s.queued).toHaveLength(0);
     });
   });
 

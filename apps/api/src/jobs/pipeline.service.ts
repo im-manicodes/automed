@@ -10,6 +10,7 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ownPageKey } from '../storage/storage-keys';
 import { StorageService } from '../storage/storage.service';
+import { isCancelled } from './cancelled.error';
 import { JOB_TYPES, JobRecord } from './job-handler.interface';
 import { JobQueueService } from './job-queue.service';
 import { JobWorkerService } from './job-worker.service';
@@ -26,6 +27,8 @@ import type { ProcessStatus } from '../generated/prisma/client';
 
 const DONE: ProcessStatus[] = ['listo', 'necesita_revision'];
 const isDone = (s: ProcessStatus) => DONE.includes(s);
+/** Estados en los que un hilo tiene un análisis en marcha (se puede cancelar). */
+const ACTIVE: ProcessStatus[] = ['pendiente', 'procesando'];
 const reanalyzeKey = (threadId: string) => `reanalyze:${threadId}`;
 /** Sub-etapa de progreso (escrita por OcrService, sin contenido). */
 const progressKey = (threadId: string) => `progress:${threadId}`;
@@ -377,19 +380,119 @@ export class PipelineService implements OnModuleInit {
     };
   }
 
-  /** Adjuntos del hilo que aún piden revisión (excluye los que el usuario decidió omitir). */
-  private async pendingReview(threadId: string): Promise<number> {
+  /**
+   * Cancela el análisis en marcha (cooperativo): el estado del hilo es la fuente de verdad y lo
+   * que esté en vuelo lo ve en su siguiente punto de control (no se aborta una llamada LLM/OCR
+   * en curso; su resultado se ignora). Destino: sin síntesis previa -> sin_analizar; con
+   * síntesis -> necesita_revision si quedan PDFs por revisar, si no listo (el resumen anterior
+   * se conserva). Los adjuntos del hilo vuelven al estado que dicta su OCR guardado.
+   */
+  async cancel(threadId: string) {
+    const t = await this.prisma.thread.findUnique({
+      where: { id: threadId },
+      select: { status: true },
+    });
+    if (!t) throw new NotFoundException('Ticket no encontrado');
+    if (!ACTIVE.includes(t.status))
+      throw new ConflictException('El ticket no se está analizando');
+    const syntheses = await this.prisma.synthesis.count({
+      where: { threadId },
+    });
+    const restored = await this.restoredAttachmentStates(threadId);
+    let target: ProcessStatus = 'sin_analizar';
+    if (syntheses > 0) {
+      const skip = await this.reviewSkipShas(threadId);
+      const review = restored.some(
+        (r) => r.status === 'necesita_revision' && !skip.includes(r.sha256),
+      );
+      target = review ? 'necesita_revision' : 'listo';
+    }
+    // Compare-and-set: si el hilo cambió en paralelo (terminó, otro cancel...) no se toca nada.
+    if (!(await this.state.transition(threadId, target)))
+      throw new ConflictException(
+        'El ticket cambió de estado, intenta de nuevo',
+      );
+    await this.prisma.setting.deleteMany({
+      where: { key: { in: [reanalyzeKey(threadId), progressKey(threadId)] } },
+    });
+    for (const r of restored) {
+      await this.prisma.attachment.updateMany({
+        where: {
+          message: { threadId },
+          sha256: r.sha256,
+          // Sin OCR guardado: solo lo que no terminó vuelve a pendiente (un trabajo compartido
+          // que acabe después lo marcará listo/necesita_revision con su resultado).
+          ...(r.status === 'pendiente' ? { status: { notIn: DONE } } : {}),
+        },
+        data: { status: r.status },
+      });
+    }
+    this.logger.log(`Análisis cancelado: hilo ${threadId} -> ${target}`);
+    return { threadId, status: target };
+  }
+
+  /**
+   * Estado que corresponde a cada sha256 del hilo según el OCR guardado: con zonas dudosas ->
+   * necesita_revision; con páginas -> listo; sin OCR -> pendiente.
+   */
+  private async restoredAttachmentStates(
+    threadId: string,
+  ): Promise<{ sha256: string; status: ProcessStatus }[]> {
+    const atts = await this.prisma.attachment.findMany({
+      where: { message: { threadId } },
+      select: { sha256: true },
+    });
+    const out: { sha256: string; status: ProcessStatus }[] = [];
+    for (const sha256 of new Set(atts.map((a) => a.sha256))) {
+      const pages = await this.prisma.ocrPage.count({ where: { sha256 } });
+      const doubtful =
+        pages > 0
+          ? await this.prisma.ocrRegion.count({
+              where: { status: 'dudoso', page: { sha256 } },
+            })
+          : 0;
+      out.push({
+        sha256,
+        status:
+          doubtful > 0
+            ? 'necesita_revision'
+            : pages > 0
+              ? 'listo'
+              : 'pendiente',
+      });
+    }
+    return out;
+  }
+
+  /** ¿Algún hilo con análisis en marcha (pendiente/procesando) usa este PDF? */
+  private async shaInActiveThread(sha256: string): Promise<boolean> {
+    const n = await this.prisma.thread.count({
+      where: {
+        status: { in: ACTIVE },
+        messages: { some: { attachments: { some: { sha256 } } } },
+      },
+    });
+    return n > 0;
+  }
+
+  private async reviewSkipShas(threadId: string): Promise<string[]> {
     const skip = await this.prisma.setting.findUnique({
       where: { key: reviewSkipKey(threadId) },
     });
     const shas = (skip?.value as { shas?: unknown } | null)?.shas;
+    return Array.isArray(shas)
+      ? shas.filter((s): s is string => typeof s === 'string')
+      : [];
+  }
+
+  /** Adjuntos del hilo que aún piden revisión (excluye los que el usuario decidió omitir). */
+  private async pendingReview(threadId: string): Promise<number> {
+    const shas = await this.reviewSkipShas(threadId);
     return this.prisma.attachment.count({
       where: {
         message: { threadId },
         status: 'necesita_revision',
-        ...(Array.isArray(shas) && shas.length > 0
-          ? { sha256: { notIn: shas as string[] } }
-          : {}),
+        ...(shas.length > 0 ? { sha256: { notIn: shas } } : {}),
       },
     });
   }
@@ -511,11 +614,30 @@ export class PipelineService implements OnModuleInit {
     });
     if (!att) return;
     if (!isDone(att.status)) {
-      await this.prisma.attachment.update({
-        where: { id: att.id },
-        data: { status: 'procesando' },
-      });
-      await this.processor.process(att.id);
+      // El job es compartido por sha256 entre hilos: no se cancela a ciegas. Solo se omite (y
+      // termina como no-op, sin reintentos) si ningún hilo con análisis en marcha usa el PDF.
+      const shouldContinue = () => this.shaInActiveThread(att.sha256);
+      if (!(await shouldContinue())) return;
+      for (;;) {
+        await this.prisma.attachment.update({
+          where: { id: att.id },
+          data: { status: 'procesando' },
+        });
+        try {
+          await this.processor.process(att.id, { shouldContinue });
+          break;
+        } catch (e) {
+          if (!isCancelled(e)) throw e;
+          // Cancelado: no se guardó OCR. Los adjuntos sin terminar vuelven a pendiente.
+          await this.prisma.attachment.updateMany({
+            where: { sha256: att.sha256, status: 'procesando' },
+            data: { status: 'pendiente' },
+          });
+          // Si justo se volvió a pedir el análisis, se sigue aquí (el job aún está en vuelo y
+          // la cola no lo reencolaría); si no, termina con normalidad.
+          if (!(await shouldContinue())) return;
+        }
+      }
       const doubtful = await this.prisma.ocrRegion.count({
         where: {
           status: 'dudoso',
@@ -548,16 +670,22 @@ export class PipelineService implements OnModuleInit {
       { messageId?: unknown; full?: unknown } | undefined;
     const markId = markVal?.messageId;
     const force = job.payload.force === true || markVal?.full === true;
-    await this.synthesizer.synthesize(threadId, {
-      force,
-      ...(!force && typeof markId === 'string'
-        ? { reanalyzeMessageId: markId }
-        : {}),
-      correctedSha256:
-        typeof job.payload.correctedSha256 === 'string'
-          ? job.payload.correctedSha256
-          : undefined,
-    });
+    try {
+      await this.synthesizer.synthesize(threadId, {
+        force,
+        ...(!force && typeof markId === 'string'
+          ? { reanalyzeMessageId: markId }
+          : {}),
+        correctedSha256:
+          typeof job.payload.correctedSha256 === 'string'
+            ? job.payload.correctedSha256
+            : undefined,
+      });
+    } catch (e) {
+      // Cancelado durante la llamada al LLM: no se guardó versión; cancel() ya fijó el estado.
+      if (isCancelled(e)) return;
+      throw e;
+    }
     if (mark) await this.prisma.setting.deleteMany({ where: { key: reKey } });
 
     if ((await this.computeThreadHash(threadId)) !== hash) {

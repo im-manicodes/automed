@@ -17,6 +17,8 @@ export function useTicketAcciones(id: string) {
   const reanalyzeLast = useMutation<Estado & { mode: 'incremental'; messageId: string }>({ url: `${base}/reanalyze-last` })
   /** Genera el resumen sin esperar la revisión manual (las zonas dudosas se dejan fuera). */
   const continuar = useMutation<Estado>({ url: `${base}/synthesis/continue` })
+  /** Cancela el análisis en curso (el resumen anterior se conserva). */
+  const cancelar = useMutation<Estado>({ url: `${base}/cancel` })
   const regenerate = useMutation<RegenerateResponse>({ url: `${base}/synthesis/regenerate` })
   /** Mensaje de WhatsApp redactado por IA con el resumen vigente del ticket (no guarda nada). */
   const whatsappLast = useMutation<{ texto: string }>({ url: `${base}/whatsapp-last` })
@@ -31,6 +33,7 @@ export function useTicketAcciones(id: string) {
     reprocess: () => reprocess.mutate(),
     reanalyzeLast: () => reanalyzeLast.mutate(),
     continuar: () => continuar.mutate(),
+    cancelar: () => cancelar.mutate(),
     regenerate: () => regenerate.mutate(),
     whatsappLast: () => whatsappLast.mutate(),
     waLoading: whatsappLast.loading,

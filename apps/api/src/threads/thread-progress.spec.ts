@@ -1,4 +1,42 @@
 import { computeProgress } from './thread-progress';
+import { parseStored } from './threads.service';
+
+describe('parseStored (progress:<threadId>)', () => {
+  it('acepta modelo (texto corto) y pasada 1|2 solo en etapas de visión', () => {
+    expect(
+      parseStored({
+        etapa: 'vision_procesando',
+        regiones: { total: 2, hechas: 1 },
+        modelo: 'm',
+        pasada: 2,
+      }),
+    ).toEqual({
+      etapa: 'vision_procesando',
+      regiones: { total: 2, hechas: 1 },
+      modelo: 'm',
+      pasada: 2,
+    });
+    expect(parseStored({ etapa: 'ocr', modelo: 'm', pasada: 1 })).toEqual({
+      etapa: 'ocr',
+    });
+  });
+
+  it('descarta tipos inválidos', () => {
+    expect(
+      parseStored({
+        etapa: 'vision_enviando',
+        modelo: 5,
+        pasada: 3,
+        clave: 'secreta',
+      }),
+    ).toEqual({ etapa: 'vision_enviando' });
+    expect(
+      parseStored({ etapa: 'vision_enviando', modelo: 'x'.repeat(500) }),
+    ).toEqual({ etapa: 'vision_enviando' });
+    expect(parseStored({ etapa: 'otra' })).toBeNull();
+    expect(parseStored(null)).toBeNull();
+  });
+});
 
 const att = (status: string, t?: number, l?: number) => ({
   status,
@@ -93,6 +131,46 @@ describe('computeProgress', () => {
     expect(computeProgress({ ...base, stored: { etapa: 'ocr' } })?.etapa).toBe(
       'escaneando_ocr',
     );
+  });
+
+  it('expone modelo y pasada solo en las etapas de dudosas', () => {
+    const base = {
+      threadStatus: 'procesando',
+      attachments: [att('procesando', 4, 2)],
+    };
+    const p = computeProgress({
+      ...base,
+      stored: {
+        etapa: 'vision_procesando',
+        regiones: { total: 4, hechas: 2 },
+        modelo: 'gpt-x',
+        pasada: 2,
+      },
+    });
+    expect(p).toMatchObject({
+      etapa: 'procesando_dudosas',
+      modelo: 'gpt-x',
+      pasada: 2,
+    });
+    const e = computeProgress({
+      ...base,
+      stored: { etapa: 'vision_enviando', modelo: 'gpt-x', pasada: 1 },
+    });
+    expect(e).toMatchObject({
+      etapa: 'ia_dudosas',
+      modelo: 'gpt-x',
+      pasada: 1,
+    });
+    const o = computeProgress({
+      ...base,
+      stored: { etapa: 'ocr', modelo: 'gpt-x', pasada: 1 },
+    });
+    expect(o).not.toHaveProperty('modelo');
+    expect(o).not.toHaveProperty('pasada');
+    // sin progreso guardado de visión no hay modelo
+    expect(
+      computeProgress({ threadStatus: 'pendiente', attachments: [] }),
+    ).not.toHaveProperty('modelo');
   });
 
   it('necesita_revision = revision_manual', () => {

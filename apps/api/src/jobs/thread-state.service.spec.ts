@@ -15,25 +15,25 @@ describe('transiciones de Thread', () => {
     expect(canTransition('error', 'pendiente')).toBe(true);
   });
   it('transiciones inválidas', () => {
-    expect(canTransition('pendiente', 'listo')).toBe(false);
     expect(canTransition('listo', 'procesando')).toBe(false);
+    expect(canTransition('listo', 'sin_analizar')).toBe(false);
     expect(canTransition('error', 'listo')).toBe(false);
   });
 
   it('transition rechaza lo inválido y no escribe', async () => {
     const prisma = {
       thread: {
-        findUnique: jest.fn().mockResolvedValue({ status: 'pendiente' }),
+        findUnique: jest.fn().mockResolvedValue({ status: 'listo' }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
     const s = new ThreadStateService(prisma as unknown as PrismaService);
-    expect(await s.transition('t', 'listo')).toBe(false);
+    expect(await s.transition('t', 'procesando')).toBe(false);
     expect(prisma.thread.updateMany).not.toHaveBeenCalled();
-    expect(await s.transition('t', 'procesando')).toBe(true);
+    expect(await s.transition('t', 'pendiente')).toBe(true);
     expect(prisma.thread.updateMany).toHaveBeenCalledWith({
-      where: { id: 't', status: 'pendiente' },
-      data: { status: 'procesando' },
+      where: { id: 't', status: 'listo' },
+      data: { status: 'pendiente' },
     });
   });
 
@@ -47,7 +47,14 @@ describe('transiciones de Thread', () => {
     ] as const)
       expect(canTransition('sin_analizar', to)).toBe(false);
     expect(canTransition('listo', 'sin_analizar')).toBe(false);
-    expect(canTransition('pendiente', 'sin_analizar')).toBe(false);
+  });
+
+  it('cancelar: pendiente/procesando vuelven a sin_analizar, listo o necesita_revision', () => {
+    for (const from of ['pendiente', 'procesando'] as const)
+      for (const to of ['sin_analizar', 'listo', 'necesita_revision'] as const)
+        expect(canTransition(from, to)).toBe(true);
+    expect(canTransition('error', 'sin_analizar')).toBe(false);
+    expect(canTransition('necesita_revision', 'sin_analizar')).toBe(false);
   });
 
   it('stateOnNewContent: nunca analizado no cambia', () => {

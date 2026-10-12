@@ -97,6 +97,16 @@ export class ThreadsController {
     return this.pipeline.reanalyzeLast(id);
   }
 
+  /**
+   * Cancela el análisis en marcha (hilo completo o último correo). Cooperativo: lo que esté en
+   * vuelo termina y su resultado se ignora. Devuelve { threadId, status } con el estado destino.
+   */
+  @Post(':id/cancel')
+  @HttpCode(202)
+  cancel(@Param('id') id: string) {
+    return this.pipeline.cancel(id);
+  }
+
   /** Genera el resumen sin esperar la revisión manual: las zonas dudosas se dejan fuera. */
   @Post(':id/synthesis/continue')
   @HttpCode(202)

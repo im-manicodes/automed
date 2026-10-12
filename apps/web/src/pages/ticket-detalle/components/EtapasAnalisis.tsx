@@ -29,6 +29,16 @@ const POSICION: Record<EtapaProgreso, number> = {
   resumen_listo: 5,
 }
 
+function detalleDudosas(p: ProgresoAnalisis): string {
+  const r = p.regiones!
+  const partes = [
+    p.pasada === 2 ? 'Pasada 2 (segundo intento)' : p.pasada === 1 ? 'Pasada 1' : '',
+    `Zona ${Math.min(r.hechas + 1, r.total)} de ${r.total}`,
+    p.modelo ?? '',
+  ].filter(Boolean)
+  return partes.join(' · ')
+}
+
 type Estado = 'hecho' | 'actual' | 'pendiente'
 
 /** Lista animada de las etapas del análisis (tab «Resumen» mientras se analiza). */
@@ -64,7 +74,7 @@ export default function EtapasAnalisis({ progreso }: Props) {
             id === 'ocr' && estado === 'actual' && progreso?.paginas
               ? `Páginas leídas: ${progreso.paginas.leidas} de ${progreso.paginas.total}`
               : id === 'dudosas' && estado === 'actual' && progreso?.regiones
-                ? `Zona ${Math.min(progreso.regiones.hechas + 1, progreso.regiones.total)} de ${progreso.regiones.total}`
+                ? detalleDudosas(progreso)
                 : id === 'revision' && estado === 'actual'
                   ? 'Corrige las zonas marcadas en rojo para seguir.'
                   : ''

@@ -1,3 +1,4 @@
+import { CancelledError } from '../jobs/cancelled.error';
 import { LlmTruncatedError } from '../llm/llm-provider.interface';
 import {
   SynthesisService,
@@ -50,10 +51,15 @@ function setup(opts: SetupOpts = {}) {
       ],
     },
   ];
+  const thread = { status: 'procesando' };
   const prisma: any = {
     thread: {
       findUnique: jest.fn(() =>
-        Promise.resolve({ id: 't1', status: 'procesando', messages }),
+        Promise.resolve({ id: 't1', status: thread.status, messages }),
+      ),
+      // Bloqueo condicionado de saveVersion: solo cuenta si el hilo sigue procesando.
+      updateMany: jest.fn(({ where }: any) =>
+        Promise.resolve({ count: thread.status === where.status ? 1 : 0 }),
       ),
     },
     ocrPage: {
@@ -92,6 +98,7 @@ function setup(opts: SetupOpts = {}) {
       }),
     },
   };
+  prisma.$transaction = jest.fn((fn: (tx: any) => unknown) => fn(prisma));
   const templates: any = {
     getActive: jest.fn().mockResolvedValue({
       id: 'tpl1',
@@ -141,6 +148,7 @@ function setup(opts: SetupOpts = {}) {
     addMessage,
     addPage,
     instructions,
+    thread,
   };
 }
 
@@ -157,6 +165,28 @@ describe('SynthesisService', () => {
     });
     expect(s.prisma.synthesis.create).not.toHaveBeenCalled();
     expect(s.syntheses).toHaveLength(0);
+  });
+
+  it('cancelado durante la llamada al LLM: no guarda versión y lanza CancelledError', async () => {
+    const s = setup();
+    s.llm.text.mockImplementation(() => {
+      s.thread.status = 'sin_analizar'; // el usuario canceló mientras el LLM respondía
+      return Promise.resolve('## Resumen\nTodo bien');
+    });
+    await expect(s.svc.generate('t1')).rejects.toBeInstanceOf(CancelledError);
+    expect(s.prisma.synthesis.create).not.toHaveBeenCalled();
+    expect(s.syntheses).toHaveLength(0);
+
+    // incremental: tampoco guarda
+    const r = setup();
+    await r.svc.generate('t1');
+    r.addMessage('m3', 'Nuevo correo');
+    r.llm.text.mockImplementation(() => {
+      r.thread.status = 'listo';
+      return Promise.resolve('## Resumen\nActualizado');
+    });
+    await expect(r.svc.generate('t1')).rejects.toBeInstanceOf(CancelledError);
+    expect(r.syntheses).toHaveLength(1);
   });
 
   it('sin síntesis previa: modo completo sin zonas dudosas, isFromMe y plantilla; guarda cobertura', async () => {

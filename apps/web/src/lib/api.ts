@@ -25,6 +25,10 @@ export interface ProgresoAnalisis {
   paginas?: { total: number; leidas: number }
   regiones?: { total: number; hechas: number }
   reintento?: { intento: number; maximo: number }
+  /** Modelo que lee las zonas dudosas (solo en procesando_dudosas / ia_dudosas). */
+  modelo?: string
+  /** 1 = modelo de lectura; 2 = segundo intento (solo en esas etapas). */
+  pasada?: 1 | 2
 }
 
 export interface ThreadListItem {
@@ -501,6 +505,8 @@ export interface AjustesOcr {
   textractMode: 'detect' | 'analyze'
   /** Releer con IA (visión) las partes dudosas. */
   visionRetry: boolean
+  /** Segundo intento con otro modelo para lo que el primero no leyó (defecto true). */
+  visionSegundoIntento: boolean
   /** Máximo de partes a releer (1..200). */
   visionMaxRegions: number
   /** Calidad de lectura al rasterizar (150..400). */
@@ -538,6 +544,7 @@ export interface CambiosAjustesOcr {
   motor?: MotorOcr
   textractMode?: 'detect' | 'analyze'
   visionRetry?: boolean
+  visionSegundoIntento?: boolean
   visionMaxRegions?: number
   renderDpi?: number
   /** Texto nuevo, o null para volver al valor por defecto. */

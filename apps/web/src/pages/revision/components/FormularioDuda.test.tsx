@@ -65,12 +65,29 @@ describe('FormularioDuda', () => {
     beforeEach(() => limpiarCacheSugerencias());
     afterEach(() => vi.unstubAllGlobals());
     const abierta = { ...base, yaCorregida: false };
+    const ruta = 'POST /api/ocr/regions/r1/suggest';
 
-    it('muestra «leyendo…», luego 2 sugerencias y al elegir una rellena el cuadro', async () => {
-      mockFetch({ 'POST /api/ocr/regions/r1/suggest': { body: { sugerencias: ['120', '12O'] } } });
+    it('no llama a la IA hasta pulsar; una pulsación = una llamada con el texto actual', async () => {
+      const f = mockFetch({ [ruta]: { body: { sugerencias: ['120', '12O'] } } });
+      render(<FormularioDuda {...abierta} textoInicial="12o" sugerencia="" onGuardar={() => {}} />);
+      expect(callsOf(f)).toEqual([]);
+      expect(screen.queryByRole('status')).toBeNull();
+      await userEvent.type(screen.getByLabelText('¿Qué dice aquí?'), 'x');
+      await userEvent.click(screen.getByRole('button', { name: 'Obtener recomendaciones' }));
+      await screen.findByRole('button', { name: /Sugerencia 2/ });
+      expect(callsOf(f)).toEqual([ruta]);
+      expect(JSON.parse(String(f.mock.calls[0][1]?.body))).toEqual({ texto: '12ox' });
+    });
+    it('muestra «leyendo…» con el botón deshabilitado y al elegir una sugerencia rellena el cuadro', async () => {
+      let soltar: () => void = () => {};
+      const espera = new Promise<void>((r) => (soltar = r));
+      mockFetch({ [ruta]: async () => (await espera, { body: { sugerencias: ['120', '12O'] } }) });
       const onCambio = vi.fn();
       render(<FormularioDuda {...abierta} onCambio={onCambio} textoInicial="12o" sugerencia="" onGuardar={() => {}} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Obtener recomendaciones' }));
       expect(screen.getByRole('status')).toHaveTextContent('La IA está leyendo el recorte…');
+      expect(screen.getByRole('button', { name: 'Obtener recomendaciones' })).toBeDisabled();
+      soltar();
       const b = await screen.findByRole('button', { name: /Sugerencia 2/ });
       expect(screen.getByRole('button', { name: /Sugerencia 1/ })).toBeInTheDocument();
       expect(screen.queryByRole('status')).toBeNull();
@@ -78,24 +95,37 @@ describe('FormularioDuda', () => {
       expect(screen.getByLabelText('¿Qué dice aquí?')).toHaveValue('12O');
       expect(onCambio).toHaveBeenCalledWith('12O');
     });
-    it('si falla, no muestra sugerencias y el formulario sigue usable', async () => {
-      mockFetch({ 'POST /api/ocr/regions/r1/suggest': { status: 500, body: { message: 'x' } } });
+    it('si falla o viene vacío, avisa y «Intentar otra vez» repite la llamada', async () => {
+      const f = mockFetch({ [ruta]: { status: 500, body: { message: 'x' } } });
       render(<FormularioDuda {...abierta} textoInicial="abc" sugerencia="" onGuardar={() => {}} />);
-      await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+      await userEvent.click(screen.getByRole('button', { name: 'Obtener recomendaciones' }));
+      expect(await screen.findByText('No se pudieron obtener recomendaciones.')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Sugerencia/ })).toBeNull();
       expect(screen.getByRole('button', { name: 'Guardar y siguiente' })).toBeEnabled();
+      mockFetch({ [ruta]: { body: { sugerencias: [] } } });
+      await userEvent.click(screen.getByRole('button', { name: 'Intentar otra vez' }));
+      await waitFor(() => expect(screen.getByText('No se pudieron obtener recomendaciones.')).toBeInTheDocument());
+      expect(f).toBeDefined();
+      const g = mockFetch({ [ruta]: { body: { sugerencias: ['ok'] } } });
+      await userEvent.click(screen.getByRole('button', { name: 'Intentar otra vez' }));
+      await screen.findByRole('button', { name: /Sugerencia 1/ });
+      expect(callsOf(g)).toEqual([ruta]);
     });
-    it('pide una sola vez por duda (caché) y no pide si ya está corregida', async () => {
-      const f = mockFetch({ 'POST /api/ocr/regions/r1/suggest': { body: { sugerencias: ['a'] } } });
+    it('al volver a una duda ya consultada muestra las sugerencias sin nueva llamada', async () => {
+      const f = mockFetch({ [ruta]: { body: { sugerencias: ['a'] } } });
       const { unmount } = render(<FormularioDuda {...abierta} textoInicial="x" sugerencia="" onGuardar={() => {}} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Obtener recomendaciones' }));
       await screen.findByRole('button', { name: /Sugerencia 1/ });
       unmount();
       render(<FormularioDuda {...abierta} textoInicial="x" sugerencia="" onGuardar={() => {}} />);
       expect(screen.getByRole('button', { name: /Sugerencia 1/ })).toBeInTheDocument();
-      expect(callsOf(f)).toEqual(['POST /api/ocr/regions/r1/suggest']);
-      limpiarCacheSugerencias();
-      render(<FormularioDuda {...base} regionId="r2" textoInicial="x" sugerencia="" onGuardar={() => {}} />);
-      expect(callsOf(f)).toHaveLength(1);
+      expect(callsOf(f)).toEqual([ruta]);
+    });
+    it('si la duda ya está corregida no ofrece recomendaciones', () => {
+      const f = mockFetch({});
+      render(<FormularioDuda {...base} textoInicial="x" sugerencia="" onGuardar={() => {}} />);
+      expect(screen.queryByRole('button', { name: 'Obtener recomendaciones' })).toBeNull();
+      expect(callsOf(f)).toEqual([]);
     });
   });
 });

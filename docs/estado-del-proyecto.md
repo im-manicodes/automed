@@ -27,6 +27,8 @@
 
 - [x] Cambio transversal — Hot reload en Docker para desarrollo: `docker-compose.dev.yml` (activado solo por `COMPOSE_FILE` en `.env`; producción usa el compose base sin cambios), `apps/api/Dockerfile.dev` (devDeps, `prisma generate`+`migrate deploy`+`nest start --watch`, bind mounts de src/prisma/config, cliente Prisma en volumen) y `apps/web/Dockerfile.dev` (Vite :5173, proxy a `http://api:3000`, `CHOKIDAR_USEPOLLING` opcional en `vite.config.ts`). Verificado con `compose config` e imágenes dev construidas; no se ejecutó `compose up`.
 
+- [x] Hito 2026-10-12 — Modelo/pasada en las etapas y «Cancelar análisis»: `ProgresoAnalisis` gana `modelo` y `pasada` (1 = lectura, 2 = segundo intento; solo en `procesando_dudosas`/`ia_dudosas`) y `EtapasAnalisis` muestra «Pasada 1 · Zona x de y · modelo». Botón «Cancelar análisis» (con confirmación) en el recuadro de análisis del ticket -> `POST /threads/:id/cancel` (cooperativo; el resumen anterior se conserva). Web con tests; la parte API la hace otro subagente.
+
 ## En curso
 - Nada.
 
@@ -421,3 +423,11 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 ## Modal ampliado de la duda en celular (2026-10-12)
 - Hecho: en la revisión, tocar el recorte abre `VisorAmpliado` también en celular, a pantalla completa (`h-dvh`, safe-area; escritorio sin cambios vía `lg:`), con pellizco de dos dedos para zoom, arrastre, doble toque, «Duda N de M», sin foco automático en el campo (no abre el teclado), botón «Atrás» del celular cierra el modal (`hooks/useCerrarConAtras.ts`) y texto de ayuda táctil. `FormularioDuda` nuevo prop `enterGuarda` (en celular Enter = nueva línea, sin pista). Tests: VisorAmpliado, FormularioDuda y nuevo `page.test.tsx` de revisión. Sin cambios en la API.
 - Falta: probar en un teléfono real (teclado, pellizco y botón «Atrás»).
+
+## Recomendaciones de IA solo al pulsar (2026-10-12)
+- Hecho (web): las sugerencias de la revisión ya no se piden al abrir la duda: `FormularioDuda` muestra el botón «Obtener recomendaciones» (solo si la duda no está corregida) y `useSugerencias` devuelve `{estado, sugerencias, pedir(texto)}` (una pulsación = una llamada con el texto actual del cuadro; caché por duda solo con resultados; vacío o fallo -> «No se pudieron obtener recomendaciones.» e «Intentar otra vez»). Tests actualizados en `FormularioDuda.test.tsx`. Sin cambios en la API.
+- Falta: probar con un manuscrito real.
+
+## Interruptor del segundo intento de visión (2026-10-12)
+- Hecho (web): Ajustes -> OCR -> Opciones avanzadas: interruptor «Segundo intento con otro modelo» (`visionSegundoIntento` en `ocr.config`, defecto activado; deshabilitado si «Releer con IA» está apagado). Apagado, solo corre la pasada 1 y lo no resuelto queda para revisión manual (las sugerencias de la revisión no cambian). Tipos, `avanzadoDesde`, fixtures y tests (`AvanzadoOcr`, `ConfigOcr`, página de Ajustes IA) actualizados. API en paralelo por otro subagente (`OcrSettingsService`, `retryWithVision`).
+- Falta: probar con un manuscrito real y mirar el registro («segundo intento desactivado»).

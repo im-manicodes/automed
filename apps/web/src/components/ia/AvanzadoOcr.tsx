@@ -1,4 +1,5 @@
 import { LuInfo } from 'react-icons/lu'
+import Switch from '../Switch'
 import type { MotorOcr } from '../../lib/api'
 import { MAX_VISION_AMBITO, type AvanzadoOcr as Valor } from '../../lib/ocr'
 
@@ -34,6 +35,18 @@ export default function AvanzadoOcr({ motor, valor, onChange, ambitoPorDefecto =
           </label>
           <p className="text-sm text-slate-700">
             <LuInfo className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Usa un modelo con visión (Ajustes → IA) y hace una llamada por parte dudosa; con AWS o Azure el contenido va a ese servicio.
+          </p>
+        </div>
+
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+          <Switch
+            label="Segundo intento con otro modelo"
+            checked={valor.visionSegundoIntento}
+            disabled={!valor.visionRetry}
+            onChange={(v) => cambia({ visionSegundoIntento: v })}
+          />
+          <p className="text-sm text-slate-700">
+            Si lo apagas, lo que el primer modelo no pueda leer queda para tu revisión. Úsalo si solo tienes un modelo.
           </p>
         </div>
 

@@ -1,3 +1,4 @@
+import { CancelledError } from '../jobs/cancelled.error';
 import { OcrService } from './ocr.service';
 import type { OcrEngine, OcrWord } from './ocr-engine.interface';
 
@@ -11,6 +12,7 @@ function setup(
   opts: {
     existingPages?: number;
     visionEnabled?: boolean;
+    secondPass?: boolean;
     visionReading?: { text: string; confidence: number } | null;
     /** Respuesta de pdf-extract por página; null = servicio caído/desactivado. */
     textPages?:
@@ -39,6 +41,10 @@ function setup(
       }),
     },
     $transaction: jest.fn((ops: unknown[]) => Promise.resolve(ops)),
+    message: {
+      findUnique: jest.fn().mockResolvedValue({ threadId: 't1' }),
+    },
+    setting: { upsert: jest.fn().mockResolvedValue(undefined) },
   };
   const storage: any = {
     get: jest.fn().mockResolvedValue(new Uint8Array([1])),
@@ -62,8 +68,12 @@ function setup(
   };
   const vision: any = {
     isEnabled: jest.fn().mockResolvedValue(opts.visionEnabled ?? false),
+    isSecondPassEnabled: jest.fn().mockResolvedValue(opts.secondPass ?? true),
     acceptThreshold: 0.9,
     getMaxRegions: jest.fn().mockResolvedValue(10),
+    modelFor: jest.fn((task: string) =>
+      Promise.resolve(task === 'vision' ? 'modelo-lectura' : 'modelo-respaldo'),
+    ),
     // Por defecto la 1ª pasada no resuelve nada; el respaldo (en lote) devuelve `visionReading`.
     rereadBatch: jest.fn(
       (_png: unknown, items: unknown[], task: string = 'vision') =>
@@ -268,6 +278,138 @@ describe('OcrService (procesador de adjuntos)', () => {
     });
   });
 
+  describe('cancelación cooperativa', () => {
+    it('se detiene entre páginas con CancelledError y no guarda OcrPage parciales', async () => {
+      const { svc, engine, prisma, created } = setup();
+      let calls = 0;
+      const shouldContinue = jest.fn(() => Promise.resolve(++calls < 2));
+      await expect(
+        svc.process('att1', { shouldContinue }),
+      ).rejects.toBeInstanceOf(CancelledError);
+      expect(engine.recognize).toHaveBeenCalledTimes(1); // solo la página 1
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(created).toHaveLength(0);
+    });
+
+    it('se detiene entre lotes de visión (sin más llamadas al LLM ni OcrPage)', async () => {
+      const { svc, engine, vision, prisma, created } = setup({
+        visionEnabled: true,
+      });
+      (engine.recognize as jest.Mock).mockImplementation((_i, n: number) =>
+        Promise.resolve({
+          pageNumber: n,
+          words: [],
+          lines: Array.from({ length: 8 }, (_, i) => word(`d${i}`, 0.4)),
+        }),
+      );
+      // página 1: ok; 1er lote: ok; 2º lote: cancelado
+      let calls = 0;
+      const shouldContinue = jest.fn(() => Promise.resolve(++calls < 3));
+      await expect(
+        svc.process('att1', { shouldContinue }),
+      ).rejects.toBeInstanceOf(CancelledError);
+      expect(vision.rereadBatch).toHaveBeenCalledTimes(1);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(created).toHaveLength(0);
+    });
+
+    it('sin cancelar procesa todo normalmente', async () => {
+      const { svc, created } = setup();
+      await svc.process('att1', {
+        shouldContinue: () => Promise.resolve(true),
+      });
+      expect(created).toHaveLength(2);
+    });
+  });
+
+  describe('progreso con modelo y pasada', () => {
+    const values = (prisma: any) =>
+      prisma.setting.upsert.mock.calls.map((c: any[]) => c[0].update.value);
+
+    it('escribe el modelo y la pasada en las etapas de dudosas (1 = lectura, 2 = respaldo)', async () => {
+      const { svc, prisma, vision } = setup({ visionEnabled: true });
+      await svc.retryWithVision(
+        new Uint8Array([1]),
+        [
+          {
+            box: { x: 0, y: 0, w: 0.1, h: 0.1 },
+            text: 'd',
+            confidence: 0.4,
+            status: 'dudoso',
+            source: 'ocr',
+          },
+        ],
+        't1',
+      );
+      expect(prisma.setting.upsert.mock.calls[0][0].where).toEqual({
+        key: 'progress:t1',
+      });
+      expect(values(prisma)).toEqual([
+        {
+          etapa: 'vision_enviando',
+          regiones: { total: 1, hechas: 0 },
+          modelo: 'modelo-lectura',
+          pasada: 1,
+        },
+        {
+          etapa: 'vision_procesando',
+          regiones: { total: 1, hechas: 0 },
+          modelo: 'modelo-lectura',
+          pasada: 1,
+        },
+        {
+          etapa: 'vision_procesando',
+          regiones: { total: 1, hechas: 0 },
+          modelo: 'modelo-respaldo',
+          pasada: 2,
+        },
+      ]);
+      // el modelo se lee una vez por pasada
+      expect(vision.modelFor).toHaveBeenCalledTimes(2);
+    });
+
+    it('segundo intento apagado: nunca escribe la pasada 2', async () => {
+      const { svc, prisma } = setup({ visionEnabled: true, secondPass: false });
+      await svc.retryWithVision(
+        new Uint8Array([1]),
+        [
+          {
+            box: { x: 0, y: 0, w: 0.1, h: 0.1 },
+            text: 'd',
+            confidence: 0.4,
+            status: 'dudoso',
+            source: 'ocr',
+          },
+        ],
+        't1',
+      );
+      expect(values(prisma).some((v: any) => v.pasada === 2)).toBe(false);
+    });
+
+    it('si no se puede leer el modelo, el progreso sale sin él y el OCR sigue', async () => {
+      const { svc, prisma, vision } = setup({ visionEnabled: true });
+      vision.modelFor.mockRejectedValue(new Error('x'));
+      await svc.retryWithVision(
+        new Uint8Array([1]),
+        [
+          {
+            box: { x: 0, y: 0, w: 0.1, h: 0.1 },
+            text: 'd',
+            confidence: 0.4,
+            status: 'dudoso',
+            source: 'ocr',
+          },
+        ],
+        't1',
+      );
+      expect(values(prisma)[0]).toEqual({
+        etapa: 'vision_enviando',
+        regiones: { total: 1, hechas: 0 },
+        pasada: 1,
+      });
+    });
+  });
+
   describe('retryWithVision en lote', () => {
     const dudosas = (n: number, okCount = 0) => [
       ...Array.from({ length: okCount }, (_, i) => ({
@@ -341,6 +483,21 @@ describe('OcrService (procesador de adjuntos)', () => {
       );
       await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
       expect(vision.rereadBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('segundo intento apagado: una sola pasada y lo no resuelto queda dudoso', async () => {
+      const { svc, vision } = setup({ visionEnabled: true, secondPass: false });
+      vision.rereadBatch.mockImplementation((_p: unknown, items: any[]) =>
+        Promise.resolve(items.map((_, j) => (j === 0 ? good('a') : null))),
+      );
+      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
+      expect(vision.rereadBatch).toHaveBeenCalledTimes(1);
+      expect(
+        vision.rereadBatch.mock.calls.some(
+          (c: any[]) => c[2] === 'vision_respaldo',
+        ),
+      ).toBe(false);
+      expect(out.map((r) => r.status)).toEqual(['ok', 'dudoso', 'dudoso']);
     });
 
     it('respeta getMaxRegions por página', async () => {

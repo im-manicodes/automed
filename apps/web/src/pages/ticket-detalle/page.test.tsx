@@ -197,3 +197,21 @@ describe('TicketDetalle · Eventos registrados', () => {
     expect(screen.getByText('Evento quitado del Excel.')).toBeInTheDocument()
   })
 })
+
+describe('TicketDetalle · Cancelar análisis', () => {
+  it('confirma y envía POST /threads/t1/cancel', async () => {
+    setup('procesando')
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Cancelar análisis/ }))
+    expect(screen.getByText(/El resumen anterior se conserva/)).toBeInTheDocument()
+    routes['POST /api/threads/t1/cancel'] = { body: { threadId: 't1', status: 'sin_analizar' } }
+    await user.click(screen.getByRole('button', { name: 'Sí, cancelar' }))
+    await waitFor(() => expect(callsOf(fetchMock)).toContain('POST /api/threads/t1/cancel'))
+  })
+
+  it('no aparece si el ticket no se está analizando', async () => {
+    setup('listo')
+    await boton()
+    expect(screen.queryByRole('button', { name: /Cancelar análisis/ })).not.toBeInTheDocument()
+  })
+})

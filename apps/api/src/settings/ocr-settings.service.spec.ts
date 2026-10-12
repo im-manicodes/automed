@@ -23,6 +23,7 @@ describe('OcrSettingsService', () => {
       motor: 'local',
       textractMode: 'detect',
       visionRetry: false,
+      visionSegundoIntento: true,
       visionMaxRegions: 30,
       renderDpi: 250,
       visionAmbito: DEFAULT_VISION_AMBITO,
@@ -103,6 +104,15 @@ describe('OcrSettingsService', () => {
     });
   });
 
+  it('segundo intento: defecto true y panel', async () => {
+    const { svc } = make();
+    expect((await svc.getEffective()).visionSegundoIntento).toBe(true);
+    await svc.save({ visionSegundoIntento: false });
+    expect((await svc.getEffective()).visionSegundoIntento).toBe(false);
+    await svc.save({ visionSegundoIntento: true });
+    expect((await svc.getEffective()).visionSegundoIntento).toBe(true);
+  });
+
   it('rechaza valores fuera de rango con 400 en español', async () => {
     const { svc } = make();
     for (const bad of [
@@ -112,6 +122,7 @@ describe('OcrSettingsService', () => {
       { renderDpi: 149 },
       { renderDpi: 401 },
       { visionRetry: 'si' as never },
+      { visionSegundoIntento: 'no' as never },
     ]) {
       await expect(svc.save(bad)).rejects.toBeInstanceOf(BadRequestException);
     }

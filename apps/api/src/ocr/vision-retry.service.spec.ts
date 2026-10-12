@@ -32,6 +32,19 @@ describe('parseVisionBatch', () => {
   });
 });
 
+describe('VisionRetryService.modelFor', () => {
+  it('devuelve solo el nombre del modelo de la tarea', async () => {
+    const llm: any = { modelFor: jest.fn().mockResolvedValue('modelo-v') };
+    const svc = new VisionRetryService(
+      { get: () => undefined } as any,
+      {} as any,
+      llm,
+    );
+    await expect(svc.modelFor('vision_respaldo')).resolves.toBe('modelo-v');
+    expect(llm.modelFor).toHaveBeenCalledWith('vision_respaldo');
+  });
+});
+
 describe('VisionRetryService.rereadBatch', () => {
   it('hace una sola llamada con N imágenes y el system de lote (+ámbito)', async () => {
     const llm: any = {

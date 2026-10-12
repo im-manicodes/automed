@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import AvanzadoOcr from './AvanzadoOcr'
 
-const valor = { visionRetry: true, visionMaxRegions: 40, renderDpi: 200, textractMode: 'detect' as const, visionAmbito: 'Documentos clínicos' }
+const valor = { visionRetry: true, visionSegundoIntento: true, visionMaxRegions: 40, renderDpi: 200, textractMode: 'detect' as const, visionAmbito: 'Documentos clínicos' }
 
 describe('AvanzadoOcr', () => {
   it('muestra los controles y emite los cambios', () => {
@@ -15,6 +15,19 @@ describe('AvanzadoOcr', () => {
     expect(onChange).toHaveBeenLastCalledWith({ ...valor, visionMaxRegions: 80 })
     fireEvent.change(screen.getByLabelText('Calidad de lectura'), { target: { value: '300' } })
     expect(onChange).toHaveBeenLastCalledWith({ ...valor, renderDpi: 300 })
+  })
+
+  it('muestra el segundo intento, lo apaga y se deshabilita sin releer con IA', () => {
+    const onChange = vi.fn()
+    const { unmount } = render(<AvanzadoOcr motor="local" valor={valor} onChange={onChange} />)
+    const sw = screen.getByRole('switch', { name: /Segundo intento con otro modelo/ })
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText(/Úsalo si solo tienes un modelo/)).toBeInTheDocument()
+    fireEvent.click(sw)
+    expect(onChange).toHaveBeenLastCalledWith({ ...valor, visionSegundoIntento: false })
+    unmount()
+    render(<AvanzadoOcr motor="local" valor={{ ...valor, visionRetry: false }} onChange={() => {}} />)
+    expect(screen.getByRole('switch', { name: /Segundo intento con otro modelo/ })).toBeDisabled()
   })
 
   it('edita el tipo de documentos y lo restablece', () => {

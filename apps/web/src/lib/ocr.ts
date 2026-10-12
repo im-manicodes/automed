@@ -74,10 +74,11 @@ export function faltaParaOcr(motor: MotorOcr, a: AjustesOcr, ia: Pick<AjustesIa,
 }
 
 /** Ajustes avanzados de lectura que el usuario edita antes de guardar. */
-export type AvanzadoOcr = Pick<AjustesOcr, 'visionRetry' | 'visionMaxRegions' | 'renderDpi' | 'textractMode' | 'visionAmbito'>
+export type AvanzadoOcr = Pick<AjustesOcr, 'visionRetry' | 'visionSegundoIntento' | 'visionMaxRegions' | 'renderDpi' | 'textractMode' | 'visionAmbito'>
 
 export const avanzadoDesde = (a: AjustesOcr): AvanzadoOcr => ({
   visionRetry: a.visionRetry,
+  visionSegundoIntento: a.visionSegundoIntento,
   visionMaxRegions: a.visionMaxRegions,
   renderDpi: a.renderDpi,
   textractMode: a.textractMode,

@@ -115,7 +115,7 @@ describe('Configuración de IA: lectura de PDFs escaneados', () => {
 
     const puts = (u: string) => f.mock.calls.filter(([x, i]) => String(x) === u && i?.method === 'PUT').map(([, i]) => JSON.parse(String(i?.body)))
     expect(puts('/api/settings/ia')).toEqual([{ claveAwsAccessKeyId: 'AKIACONFIG999', claveAwsSecreto: 'secreto-config-777' }])
-    expect(puts('/api/settings/ocr')).toEqual([{ motor: 'textract', visionRetry: true, visionMaxRegions: 40, renderDpi: 200, textractMode: 'detect' }])
+    expect(puts('/api/settings/ocr')).toEqual([{ motor: 'textract', visionRetry: true, visionSegundoIntento: true, visionMaxRegions: 40, renderDpi: 200, textractMode: 'detect' }])
     expect(await screen.findByText('Ya hay una clave guardada')).toBeInTheDocument()
     expect(document.body.innerHTML).not.toContain('AKIACONFIG999')
     expect(document.body.innerHTML).not.toContain('secreto-config-777')

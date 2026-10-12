@@ -83,8 +83,18 @@ export class VisionRetryService {
     return (await this.ocrSettings.getEffective()).visionRetry;
   }
 
+  /** Segundo intento con el modelo de respaldo (panel > .env; defecto activado). */
+  async isSecondPassEnabled(): Promise<boolean> {
+    return (await this.ocrSettings.getEffective()).visionSegundoIntento;
+  }
+
   get acceptThreshold() {
     return this.cfg.visionAcceptThreshold;
+  }
+
+  /** Modelo vigente de la tarea (solo el nombre, sin claves), para la vista de progreso. */
+  modelFor(task: 'vision' | 'vision_respaldo'): Promise<string> {
+    return this.llm.modelFor(task);
   }
 
   async getMaxRegions(): Promise<number> {

@@ -7,6 +7,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
+import { CancelledError } from '../jobs/cancelled.error';
 import type { ThreadSynthesizer } from '../jobs/pipeline-hooks.interface';
 import { parseReportColumns } from '../templates/report-columns';
 import { AiSettingsService } from '../settings/ai-settings.service';
@@ -52,6 +53,10 @@ export interface SynthesisResult {
   /** Tokens estimados enviados al LLM en esta ejecución (0 si se omitió). */
   inputTokensEstimados: number;
 }
+
+type SynthesisCreateData = Parameters<
+  PrismaService['synthesis']['create']
+>[0]['data'];
 
 export interface GenerateOptions {
   /** Regenerar desde cero (modo completo). */
@@ -204,20 +209,18 @@ export class SynthesisService implements ThreadSynthesizer {
         meter,
       );
       const version = last.version + 1;
-      await this.prisma.synthesis.create({
-        data: {
-          threadId,
-          version,
-          markdown,
-          inputHash,
-          model: await this.llm.modelFor('resumen'),
-          templateId: tpl.id,
-          templateVersion: tpl.version,
-          coveredMessageIds: allIds,
-          mode: 'incremental',
-          baseSynthesisId: last.id,
-          inputTokensEstimados: meter.tokens,
-        },
+      await this.saveVersion({
+        threadId,
+        version,
+        markdown,
+        inputHash,
+        model: await this.llm.modelFor('resumen'),
+        templateId: tpl.id,
+        templateVersion: tpl.version,
+        coveredMessageIds: allIds,
+        mode: 'incremental',
+        baseSynthesisId: last.id,
+        inputTokensEstimados: meter.tokens,
       });
       this.logger.log(
         `Síntesis v${version} (hilo ${threadId}): modo incremental, ~${meter.tokens} tokens de entrada, ${newIds.size} mensajes nuevos`,
@@ -257,20 +260,18 @@ export class SynthesisService implements ThreadSynthesizer {
       meter,
     );
     const version = (last?.version ?? 0) + 1;
-    await this.prisma.synthesis.create({
-      data: {
-        threadId,
-        version,
-        markdown,
-        inputHash,
-        model: await this.llm.modelFor('resumen'),
-        templateId: template.id,
-        templateVersion: template.version,
-        coveredMessageIds: allIds,
-        mode: 'full',
-        baseSynthesisId: null,
-        inputTokensEstimados: meter.tokens,
-      },
+    await this.saveVersion({
+      threadId,
+      version,
+      markdown,
+      inputHash,
+      model: await this.llm.modelFor('resumen'),
+      templateId: template.id,
+      templateVersion: template.version,
+      coveredMessageIds: allIds,
+      mode: 'full',
+      baseSynthesisId: null,
+      inputTokensEstimados: meter.tokens,
     });
     this.logger.log(
       `Síntesis v${version} (hilo ${threadId}): modo completo, ~${meter.tokens} tokens de entrada`,
@@ -283,6 +284,25 @@ export class SynthesisService implements ThreadSynthesizer {
       mode: 'full',
       inputTokensEstimados: meter.tokens,
     };
+  }
+
+  /**
+   * Guarda la versión solo si el hilo sigue `procesando` (cancelación cooperativa: si el usuario
+   * canceló durante la llamada al LLM, el resultado se descarta y se lanza CancelledError).
+   * El updateMany condicionado bloquea la fila del hilo dentro de la transacción, así que un
+   * cancel concurrente espera a que termine (o la versión no se guarda): nunca ambas cosas.
+   */
+  private async saveVersion(
+    data: SynthesisCreateData & { threadId: string },
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const lock = await tx.thread.updateMany({
+        where: { id: data.threadId, status: 'procesando' },
+        data: { status: 'procesando' },
+      });
+      if (lock.count !== 1) throw new CancelledError();
+      await tx.synthesis.create({ data });
+    });
   }
 
   /** Plantilla con la que se escribió la síntesis previa (para conservar su formato). */

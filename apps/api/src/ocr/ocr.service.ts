@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { pageKey } from '../storage/storage-keys';
 import { StorageService } from '../storage/storage.service';
+import { CancelledError } from '../jobs/cancelled.error';
 import type { AttachmentProcessor } from '../jobs/pipeline-hooks.interface';
 import { classifyRegions, regionsOf } from './ocr-classifier';
 import type { ClassifiedRegion } from './ocr-classifier';
@@ -19,6 +20,23 @@ import type { VisionReading } from './vision-retry.service';
 export const PDF_TEXT_ENGINE = 'pdf-text';
 
 export type StoredRegion = ClassifiedRegion & { source: 'ocr' | 'vision' };
+
+/** Punto de control de cancelación: false -> se lanza CancelledError. */
+export type ShouldContinue = () => Promise<boolean>;
+
+async function checkpoint(shouldContinue?: ShouldContinue): Promise<void> {
+  if (shouldContinue && !(await shouldContinue())) throw new CancelledError();
+}
+
+/** Progreso escrito en `progress:<threadId>` (solo etapa, contadores, modelo y pasada). */
+type ProgressValue = {
+  etapa: 'ocr' | 'vision_enviando' | 'vision_procesando';
+  regiones?: { total: number; hechas: number };
+  /** Modelo que lee las zonas dudosas (solo en las etapas de visión). */
+  modelo?: string;
+  /** 1 = modelo de lectura; 2 = segundo intento con el modelo de respaldo. */
+  pasada?: 1 | 2;
+};
 
 /**
  * Implementación real de AttachmentProcessor (fase 4): PDF -> PNG por página (RustFS) ->
@@ -42,7 +60,16 @@ export class OcrService implements AttachmentProcessor {
     this.cfg = readOcrConfig(config);
   }
 
-  async process(attachmentId: string): Promise<void> {
+  /**
+   * `shouldContinue` se comprueba al inicio de cada página y de cada lote de visión; si devuelve
+   * false lanza CancelledError. Nada se persiste en BD hasta la transacción final (no quedan
+   * OcrPage a medias; las PNG ya subidas se sobrescriben en el siguiente análisis).
+   */
+  async process(
+    attachmentId: string,
+    opts: { shouldContinue?: ShouldContinue } = {},
+  ): Promise<void> {
+    const { shouldContinue } = opts;
     const att = await this.prisma.attachment.findUnique({
       where: { id: attachmentId },
     });
@@ -75,6 +102,7 @@ export class OcrService implements AttachmentProcessor {
       regions: StoredRegion[];
     }[] = [];
     for (const page of rasters) {
+      await checkpoint(shouldContinue);
       await this.storage.put(
         pageKey(att.storageKey, page.pageNumber),
         page.png,
@@ -98,7 +126,12 @@ export class OcrService implements AttachmentProcessor {
         lines,
         this.cfg.confidenceThreshold,
       ).map((r) => ({ ...r, source: 'ocr' as const }));
-      regions = await this.retryWithVision(page.png, regions, threadId);
+      regions = await this.retryWithVision(
+        page.png,
+        regions,
+        threadId,
+        shouldContinue,
+      );
       regions = flagLowConfidencePage(regions);
       built.push({
         pageNumber: page.pageNumber,
@@ -153,13 +186,14 @@ export class OcrService implements AttachmentProcessor {
    * Las zonas dudosas (hasta `getMaxRegions()` por página) van juntas en lotes de
    * `VISION_BATCH_SIZE` recortes por llamada; las que el lote no resuelve (omitidas,
    * `[ilegible]`, baja confianza o lote fallido) se reintentan UNA vez, también en lote, con el modelo `vision_respaldo`
-   * (nunca recortes sueltos).
+   * (nunca recortes sueltos), salvo que el ajuste `visionSegundoIntento` esté apagado.
    * Lo que siga sin resolverse queda `dudoso`. Las regiones `ok` nunca se envían.
    */
   async retryWithVision(
     png: Uint8Array,
     regions: StoredRegion[],
     threadId?: string | null,
+    shouldContinue?: ShouldContinue,
   ): Promise<StoredRegion[]> {
     if (!(await this.vision.isEnabled())) return regions;
     const budget = Math.max(await this.vision.getMaxRegions(), 0);
@@ -170,9 +204,12 @@ export class OcrService implements AttachmentProcessor {
     const total = idx.length;
     if (total === 0) return regions;
 
+    const modelo = await this.modelOf('vision');
     await this.writeProgress(threadId, {
       etapa: 'vision_enviando',
       regiones: { total, hechas: 0 },
+      ...(modelo ? { modelo } : {}),
+      pasada: 1,
     });
     const out = [...regions];
     const threshold = this.vision.acceptThreshold;
@@ -195,11 +232,18 @@ export class OcrService implements AttachmentProcessor {
       task: 'vision' | 'vision_respaldo',
     ): Promise<number[]> => {
       const unresolved: number[] = [];
+      // El modelo se lee una vez por pasada (solo el nombre, sin claves).
+      const modeloPasada =
+        task === 'vision' ? modelo : await this.modelOf(task);
+      const pasada = task === 'vision' ? 1 : 2;
       for (let k = 0; k < indices.length; k += VISION_BATCH_SIZE) {
+        await checkpoint(shouldContinue);
         const chunk = indices.slice(k, k + VISION_BATCH_SIZE);
         await this.writeProgress(threadId, {
           etapa: 'vision_procesando',
           regiones: { total, hechas },
+          ...(modeloPasada ? { modelo: modeloPasada } : {}),
+          pasada,
         });
         let readings: (VisionReading | null)[] = [];
         try {
@@ -225,7 +269,11 @@ export class OcrService implements AttachmentProcessor {
     };
 
     const pending = await lote(idx, 'vision');
-    if (pending.length > 0) {
+    if (pending.length > 0 && !(await this.vision.isSecondPassEnabled())) {
+      this.logger.log(
+        `Visión: ${pending.length} de ${total} zonas sin resolver; segundo intento desactivado`,
+      );
+    } else if (pending.length > 0) {
       this.logger.log(
         `Visión: ${pending.length} de ${total} zonas sin resolver; segundo intento en lote con el modelo de respaldo`,
       );
@@ -233,6 +281,18 @@ export class OcrService implements AttachmentProcessor {
       await lote(pending, 'vision_respaldo');
     }
     return out;
+  }
+
+  /** Nombre del modelo de la tarea para la vista de progreso; undefined si no se puede leer. */
+  private async modelOf(
+    task: 'vision' | 'vision_respaldo',
+  ): Promise<string | undefined> {
+    try {
+      const m = await this.vision.modelFor(task);
+      return typeof m === 'string' && m.trim() !== '' ? m : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private async threadIdOf(messageId: string): Promise<string | null> {
@@ -250,10 +310,7 @@ export class OcrService implements AttachmentProcessor {
   /** Sub-etapa para la vista de progreso; best-effort, solo etapa y contadores. */
   private async writeProgress(
     threadId: string | null | undefined,
-    value: {
-      etapa: 'ocr' | 'vision_enviando' | 'vision_procesando';
-      regiones?: { total: number; hechas: number };
-    },
+    value: ProgressValue,
   ): Promise<void> {
     if (!threadId) return;
     try {

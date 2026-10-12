@@ -5,8 +5,22 @@ import type { ProcessStatus } from '../generated/prisma/client';
 const ALLOWED: Record<ProcessStatus, ProcessStatus[]> = {
   // Solo el usuario (analyze/reprocess) saca a un hilo de sin_analizar.
   sin_analizar: ['pendiente'],
-  pendiente: ['procesando', 'error'],
-  procesando: ['listo', 'necesita_revision', 'error', 'pendiente'],
+  // sin_analizar/listo/necesita_revision desde pendiente o procesando: cancelar análisis
+  // (PipelineService.cancel; el resumen anterior se conserva).
+  pendiente: [
+    'procesando',
+    'error',
+    'sin_analizar',
+    'listo',
+    'necesita_revision',
+  ],
+  procesando: [
+    'listo',
+    'necesita_revision',
+    'error',
+    'pendiente',
+    'sin_analizar',
+  ],
   listo: ['pendiente'],
   necesita_revision: ['pendiente'],
   error: ['pendiente'],

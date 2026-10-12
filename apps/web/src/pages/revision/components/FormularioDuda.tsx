@@ -6,7 +6,7 @@ import { MARCADOR_ILEGIBLE, textoEnviable } from '../lib/borrador';
 interface Props {
   /** Id de la duda (región): se usa para pedir las sugerencias de la IA. */
   regionId: string;
-  /** Si ya tiene corrección guardada no se piden sugerencias. */
+  /** Si ya tiene corrección guardada no se ofrece pedir recomendaciones. */
   yaCorregida?: boolean;
   textoInicial: string;
   sugerencia: string;
@@ -41,7 +41,7 @@ export default function FormularioDuda({
   enterGuarda = enModal,
 }: Props) {
   const [texto, setTexto] = useState(textoInicial);
-  const { cargando, sugerencias } = useSugerencias(regionId, textoInicial, !yaCorregida);
+  const { estado, sugerencias, pedir } = useSugerencias(regionId);
   const campo = useRef<HTMLTextAreaElement>(null);
   const valido = textoEnviable(texto) !== null;
 
@@ -110,27 +110,44 @@ export default function FormularioDuda({
           Usar lo que leyó la máquina: “{sugerencia}”
         </button>
       )}
-      {cargando && (
+      {!yaCorregida && (
+        <button
+          type="button"
+          className="btn btn-secondary w-full min-h-11"
+          disabled={estado === 'cargando'}
+          onClick={() => void pedir(texto)}
+        >
+          <LuSparkles aria-hidden="true" className="shrink-0" />
+          <span>{estado === 'error' ? 'Intentar otra vez' : 'Obtener recomendaciones'}</span>
+        </button>
+      )}
+      {estado === 'cargando' && (
         <p role="status" className="text-base text-slate-600">
           La IA está leyendo el recorte…
         </p>
       )}
-      {sugerencias.map((s, i) => (
-        <button
-          key={i}
-          type="button"
-          className="btn btn-secondary w-full min-h-11 justify-start text-left"
-          onClick={() => {
-            setTexto(s);
-            onCambio(s);
-          }}
-        >
-          <LuSparkles aria-hidden="true" className="shrink-0" />
-          <span>
-            Sugerencia {i + 1}: “{s}”
-          </span>
-        </button>
-      ))}
+      {estado === 'error' && (
+        <p role="status" className="text-base text-slate-600">
+          No se pudieron obtener recomendaciones.
+        </p>
+      )}
+      {!yaCorregida &&
+        sugerencias.map((s, i) => (
+          <button
+            key={i}
+            type="button"
+            className="btn btn-secondary w-full min-h-11 justify-start text-left"
+            onClick={() => {
+              setTexto(s);
+              onCambio(s);
+            }}
+          >
+            <LuSparkles aria-hidden="true" className="shrink-0" />
+            <span>
+              Sugerencia {i + 1}: “{s}”
+            </span>
+          </button>
+        ))}
       <textarea
         id="texto-duda"
         ref={campo}

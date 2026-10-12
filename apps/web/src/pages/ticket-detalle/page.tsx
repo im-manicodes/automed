@@ -22,7 +22,7 @@ import EventosRegistrados from './components/EventosRegistrados'
 import { usePolling } from '../../hooks/usePolling'
 import { useTicketDetalle } from './hooks/useTicketDetalle'
 import { useTicketAcciones } from './hooks/useTicketAcciones'
-import { LuArrowLeft, LuHourglass, LuTriangleAlert, LuMail, LuFileText, LuCopy, LuDownload, LuArrowUpRight, LuArrowDownLeft, LuPaperclip, LuMessageCircle, LuFilePlus, LuRefreshCw, LuRotateCw } from 'react-icons/lu'
+import { LuArrowLeft, LuHourglass, LuTriangleAlert, LuMail, LuFileText, LuCopy, LuDownload, LuArrowUpRight, LuArrowDownLeft, LuPaperclip, LuMessageCircle, LuFilePlus, LuRefreshCw, LuRotateCw, LuCircleX } from 'react-icons/lu'
 
 type Tab = 'resumen' | 'correos' | 'adjuntos'
 const TABS: { id: Tab; label: string }[] = [
@@ -50,6 +50,7 @@ export default function TicketDetalle() {
   const [confirmUltimo, setConfirmUltimo] = useState(false)
   const [confirmTodo, setConfirmTodo] = useState(false)
   const [confirmSinRevision, setConfirmSinRevision] = useState(false)
+  const [confirmCancelar, setConfirmCancelar] = useState(false)
 
   usePolling(() => void refetch(), 2000, !!thread && isBusy(thread.status))
 
@@ -155,6 +156,9 @@ export default function TicketDetalle() {
                 <LuHourglass className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Estamos analizando este ticket. Se actualiza solo; puedes salir y volver luego.
               </p>
               <ProgresoAnalisis progreso={thread.progreso} />
+              <button type="button" className="btn btn-secondary w-full" disabled={busy} onClick={() => setConfirmCancelar(true)}>
+                <LuCircleX className="size-4" aria-hidden />Cancelar análisis
+              </button>
             </div>
           )}
           {thread.status === 'error' && (
@@ -395,6 +399,21 @@ export default function TicketDetalle() {
           <p><strong>Atención:</strong> se vuelve a leer TODO el hilo, correos y PDF (incluido el OCR), con inteligencia artificial.</p>
           <p>Consume <strong>mucho más</strong> que una actualización normal y puede tardar varios minutos.</p>
           <p>Úsalo solo si el resumen quedó mal. Para lo último que llegó, mejor “Re-analizar el último correo”.</p>
+        </ConfirmDialog>
+      )}
+
+      {confirmCancelar && (
+        <ConfirmDialog
+          title="¿Cancelar el análisis?"
+          confirmLabel="Sí, cancelar"
+          cancelLabel="No, seguir"
+          busy={busy}
+          onCancel={() => setConfirmCancelar(false)}
+          onConfirm={() => {
+            void run(() => acciones.cancelar(), 'Análisis cancelado.').finally(() => setConfirmCancelar(false))
+          }}
+        >
+          <p>¿Cancelar el análisis? El resumen anterior se conserva.</p>
         </ConfirmDialog>
       )}
 

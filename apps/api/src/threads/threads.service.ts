@@ -158,11 +158,15 @@ export class ThreadsService {
   }
 }
 
-function parseStored(v: unknown): StoredProgress | null {
+const MAX_MODEL_NAME = 200;
+
+export function parseStored(v: unknown): StoredProgress | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as {
     etapa?: unknown;
     regiones?: { total?: unknown; hechas?: unknown };
+    modelo?: unknown;
+    pasada?: unknown;
   };
   if (
     o.etapa !== 'ocr' &&
@@ -171,10 +175,21 @@ function parseStored(v: unknown): StoredProgress | null {
   )
     return null;
   const r = o.regiones;
+  const vision = o.etapa !== 'ocr';
   return {
     etapa: o.etapa,
     ...(r && typeof r.total === 'number' && typeof r.hechas === 'number'
       ? { regiones: { total: r.total, hechas: r.hechas } }
+      : {}),
+    // Solo el nombre del modelo (texto corto) y la pasada, y solo en las etapas de dudosas.
+    ...(vision &&
+    typeof o.modelo === 'string' &&
+    o.modelo.trim() !== '' &&
+    o.modelo.length <= MAX_MODEL_NAME
+      ? { modelo: o.modelo }
+      : {}),
+    ...(vision && (o.pasada === 1 || o.pasada === 2)
+      ? { pasada: o.pasada }
       : {}),
   };
 }
