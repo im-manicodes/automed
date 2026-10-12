@@ -135,7 +135,9 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
   const llm: LlmProvider = {
     modelFor: (task) =>
       Promise.resolve(
-        task === 'vision' || task === 'vision_respaldo'
+        task === 'vision' ||
+          task === 'vision_respaldo' ||
+          task === 'vision_sugerencias'
           ? 'mock-vision'
           : 'mock-text',
       ),

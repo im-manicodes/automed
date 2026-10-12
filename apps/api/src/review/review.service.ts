@@ -81,7 +81,7 @@ export class ReviewService {
         images: [{ mediaType: 'image/png', data: crop }],
         maxTokens: 300,
         temperature: 0,
-        task: 'vision_respaldo',
+        task: 'vision_sugerencias',
       });
       return { sugerencias: parseSugerencias(raw, texto) };
     } catch {

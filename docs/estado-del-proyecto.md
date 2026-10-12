@@ -406,6 +406,10 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 - Hecho: nueva tarea LLM `vision_respaldo` (modelo del segundo intento en lote; la primera pasada usa `vision`; vacío = el de `vision`). Web: fila «Segundo intento de zonas dudosas (visión)» en Ajustes -> IA y en el asistente `/bienvenida` (con ayuda y lista de modelos de visión), fixture y tests actualizados. Sin migración (Setting `ia.config`).
 - Falta: probar con `chat-gpt-6-luna` real en un PDF manuscrito.
 
+## Modelo propio para las sugerencias de revisión (2026-10-12)
+- Hecho: nueva tarea LLM `vision_sugerencias` (sugerencias de la pantalla de revisión, `ReviewService.suggest`; vacío = modelo efectivo de `vision_respaldo`), para poder usar un modelo más grande. Web: fila «Sugerencias al revisar una duda (visión)» en Ajustes -> IA y `/bienvenida`; fixture y tests actualizados. Sin migración (Setting `ia.config`).
+- Falta: probar con un modelo más grande real.
+
 ## Visión: ambas pasadas en lote (2026-10-12)
 - Hecho: la relectura con visión usa dos pasadas en lote (modelo `vision`, luego `vision_respaldo` con todas las zonas no resueltas juntas; tope `VISION_BATCH_SIZE` por llamada), sin envío individual. Web: etiqueta «Segundo intento de zonas dudosas (visión)» en Ajustes -> IA y bienvenida; CLAUDE.md actualizado.
 - Falta: probar con un PDF manuscrito real y con `chat-gpt-6-luna`.

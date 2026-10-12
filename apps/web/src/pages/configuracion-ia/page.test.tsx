@@ -38,6 +38,7 @@ describe('Configuración de IA', () => {
     const body = JSON.parse(String(put?.[1]?.body))
     expect(body.modelos.reporte).toBe('gpt-4o')
     expect(body.modelos).toHaveProperty('vision_respaldo')
+    expect(body.modelos).toHaveProperty('vision_sugerencias')
     expect(body.proveedor).toBe('openai')
     expect(body).not.toHaveProperty('claveOpenai')
     expect(body).not.toHaveProperty('bienvenidaCompletada')

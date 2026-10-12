@@ -84,7 +84,7 @@ describe('ReviewService.suggest', () => {
     };
   };
 
-  it('usa vision_respaldo con 1 imagen y devuelve <= 2 válidas, sin escribir', async () => {
+  it('usa vision_sugerencias con 1 imagen y devuelve <= 2 válidas, sin escribir', async () => {
     const complete = jest
       .fn()
       .mockResolvedValue(
@@ -94,7 +94,7 @@ describe('ReviewService.suggest', () => {
     const res = await svc.suggest('r1', 'texto');
     expect(res).toEqual({ sugerencias: ['Hola', 'Mundo'] });
     expect(complete.mock.calls[0][0]).toMatchObject({
-      task: 'vision_respaldo',
+      task: 'vision_sugerencias',
     });
     expect(complete.mock.calls[0][0].images).toHaveLength(1);
     expect(prisma.ocrRegion.update).not.toHaveBeenCalled();

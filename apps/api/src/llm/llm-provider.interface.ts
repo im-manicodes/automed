@@ -1,6 +1,12 @@
 /** Tarea para la que se usa el LLM; el modelo se elige por tarea (ver AiSettingsService). */
 export type LlmTask =
-  'resumen' | 'whatsapp' | 'evento' | 'reporte' | 'vision' | 'vision_respaldo';
+  | 'resumen'
+  | 'whatsapp'
+  | 'evento'
+  | 'reporte'
+  | 'vision'
+  | 'vision_respaldo'
+  | 'vision_sugerencias';
 
 export const LLM_TASKS: readonly LlmTask[] = [
   'resumen',
@@ -9,6 +15,7 @@ export const LLM_TASKS: readonly LlmTask[] = [
   'reporte',
   'vision',
   'vision_respaldo',
+  'vision_sugerencias',
 ];
 
 export interface LlmRequest {

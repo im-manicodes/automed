@@ -206,6 +206,8 @@ export class AiSettingsService {
       reporte: m.reporte || (sameAsEnv ? baseText : resumen),
       vision: visionPrincipal,
       vision_respaldo: m.vision_respaldo || visionPrincipal,
+      vision_sugerencias:
+        m.vision_sugerencias || m.vision_respaldo || visionPrincipal,
     };
     const ollamaUrl = stored?.ollamaUrl || env.ollamaBaseUrl;
     const foundryEndpoint =

@@ -407,7 +407,7 @@ export interface CambiosAjustesMicrosoft {
 }
 
 // --- Configuración de IA (/settings/ia) ---
-export type LlmTask = 'resumen' | 'whatsapp' | 'evento' | 'reporte' | 'vision' | 'vision_respaldo'
+export type LlmTask = 'resumen' | 'whatsapp' | 'evento' | 'reporte' | 'vision' | 'vision_respaldo' | 'vision_sugerencias'
 export type ProveedorIa = 'ollama' | 'openai' | 'anthropic' | 'bedrock' | 'foundry'
 
 export interface AjustesIa {

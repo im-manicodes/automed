@@ -10,13 +10,13 @@ describe('ModeloPorTarea', () => {
   })
 
   it('con otros proveedores no marca ninguno como recomendado', () => {
-    const a = ajustesIa({ proveedor: 'openai', modelos: { resumen: 'gpt-5', whatsapp: 'gpt-5', evento: 'gpt-5', reporte: 'gpt-5', vision: 'gpt-5', vision_respaldo: 'gpt-5' } })
+    const a = ajustesIa({ proveedor: 'openai', modelos: { resumen: 'gpt-5', whatsapp: 'gpt-5', evento: 'gpt-5', reporte: 'gpt-5', vision: 'gpt-5', vision_respaldo: 'gpt-5', vision_sugerencias: 'gpt-5' } })
     render(<ModeloPorTarea proveedor="openai" modelos={a.modelos} sugeridos={a.sugeridos.openai} onChange={() => {}} />)
     expect(screen.queryByRole('option', { name: /recomendado/ })).not.toBeInTheDocument()
   })
 
   it('muestra la fila del segundo intento con su ayuda y la lista de modelos de visión', () => {
-    const a = ajustesIa({ proveedor: 'openai', modelos: { resumen: 'gpt-4o-mini', whatsapp: 'gpt-4o-mini', evento: 'gpt-4o-mini', reporte: 'gpt-4o-mini', vision: 'gpt-4o', vision_respaldo: 'gpt-4o' } })
+    const a = ajustesIa({ proveedor: 'openai', modelos: { resumen: 'gpt-4o-mini', whatsapp: 'gpt-4o-mini', evento: 'gpt-4o-mini', reporte: 'gpt-4o-mini', vision: 'gpt-4o', vision_respaldo: 'gpt-4o', vision_sugerencias: 'gpt-4o' } })
     render(<ModeloPorTarea proveedor="openai" modelos={a.modelos} sugeridos={a.sugeridos.openai} onChange={() => {}} />)
     expect(screen.getByText('Si lo dejas vacío usa el mismo modelo de lectura de zonas')).toBeInTheDocument()
     const sel = screen.getByLabelText('Segundo intento de zonas dudosas (visión)')

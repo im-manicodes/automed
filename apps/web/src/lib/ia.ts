@@ -8,9 +8,10 @@ export const TAREAS: { id: LlmTask; etiqueta: string; ayuda?: string }[] = [
   { id: 'reporte', etiqueta: 'Reporte de Excel' },
   { id: 'vision', etiqueta: 'Lectura de zonas dudosas (visión)' },
   { id: 'vision_respaldo', etiqueta: 'Segundo intento de zonas dudosas (visión)', ayuda: 'Si lo dejas vacío usa el mismo modelo de lectura de zonas' },
+  { id: 'vision_sugerencias', etiqueta: 'Sugerencias al revisar una duda (visión)', ayuda: 'Si lo dejas vacío usa el modelo del segundo intento. Aquí conviene uno más grande' },
 ]
 
-export const esVision = (id: LlmTask) => id === 'vision' || id === 'vision_respaldo'
+export const esVision = (id: LlmTask) => id === 'vision' || id === 'vision_respaldo' || id === 'vision_sugerencias'
 
 export const PROVEEDORES: { id: ProveedorIa; nombre: string; descripcion: string }[] = [
   { id: 'ollama', nombre: 'Ollama (en este equipo)', descripcion: 'Gratis y privado: la IA corre aquí, sin enviar datos a internet.' },
