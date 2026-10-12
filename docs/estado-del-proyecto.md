@@ -417,3 +417,7 @@ Plan: `/home/mani/.claude/plans/este-proyecto-en-un-sharded-harp.md`. Protocolo 
 ## Sugerencias de la IA al revisar una duda (2026-10-12)
 - Hecho (web): `FormularioDuda` (prop `regionId`) pide al abrir cada duda `POST /ocr/regions/:id/suggest` (hook `useSugerencias`, caché por duda, errores silenciosos, no se pide si ya hay corrección guardada) y muestra «La IA está leyendo el recorte…» y hasta 2 botones «Sugerencia N» que rellenan el cuadro. No guarda ni regenera nada. Tests nuevos en `FormularioDuda.test.tsx`.
 - Falta: probar con un manuscrito real (calidad de las sugerencias y costo por duda abierta).
+
+## Modal ampliado de la duda en celular (2026-10-12)
+- Hecho: en la revisión, tocar el recorte abre `VisorAmpliado` también en celular, a pantalla completa (`h-dvh`, safe-area; escritorio sin cambios vía `lg:`), con pellizco de dos dedos para zoom, arrastre, doble toque, «Duda N de M», sin foco automático en el campo (no abre el teclado), botón «Atrás» del celular cierra el modal (`hooks/useCerrarConAtras.ts`) y texto de ayuda táctil. `FormularioDuda` nuevo prop `enterGuarda` (en celular Enter = nueva línea, sin pista). Tests: VisorAmpliado, FormularioDuda y nuevo `page.test.tsx` de revisión. Sin cambios en la API.
+- Falta: probar en un teléfono real (teclado, pellizco y botón «Atrás»).

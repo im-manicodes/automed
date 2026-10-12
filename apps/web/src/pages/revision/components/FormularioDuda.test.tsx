@@ -42,6 +42,25 @@ describe('FormularioDuda', () => {
     expect(onGuardar).not.toHaveBeenCalled();
   });
 
+  it('en el modal, Enter guarda por defecto y muestra la pista', async () => {
+    const onGuardar = vi.fn();
+    render(<FormularioDuda {...base} enModal textoInicial="abc" sugerencia="" onGuardar={onGuardar} />);
+    expect(screen.getByText(/guarda y pasa a la siguiente/)).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('¿Qué dice aquí?'));
+    await userEvent.keyboard('{Enter}');
+    expect(onGuardar).toHaveBeenCalledWith('abc');
+  });
+  it('en el modal con enterGuarda=false, Enter no guarda y no hay pista', async () => {
+    const onGuardar = vi.fn();
+    render(<FormularioDuda {...base} enModal enterGuarda={false} textoInicial="abc" sugerencia="" onGuardar={onGuardar} />);
+    expect(screen.queryByText(/guarda y pasa a la siguiente/)).toBeNull();
+    await userEvent.click(screen.getByLabelText('¿Qué dice aquí?'));
+    await userEvent.keyboard('{Enter}');
+    expect(onGuardar).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar y siguiente' }));
+    expect(onGuardar).toHaveBeenCalledTimes(1);
+  });
+
   describe('sugerencias de la IA', () => {
     beforeEach(() => limpiarCacheSugerencias());
     afterEach(() => vi.unstubAllGlobals());

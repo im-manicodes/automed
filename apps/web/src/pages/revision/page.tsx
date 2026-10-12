@@ -224,6 +224,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
       onAnterior={() => setFlujo((f) => anterior(f, dudas))}
       atajos={escritorio && !ampliado}
       enModal={ampliado && !!img}
+      enterGuarda={ampliado && !!img && escritorio}
     />
   );
 
@@ -233,7 +234,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
       bbox={actual.bbox}
       numero={flujo.indice + 1}
       altoMax={escritorio ? Math.max(260, Math.min(560, window.innerHeight * 0.45)) : undefined}
-      onAbrir={escritorio ? () => setAmpliado(true) : undefined}
+      onAbrir={() => setAmpliado(true)}
     />
   ) : errorImg ? (
     <div className="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-400" role="alert">
@@ -249,7 +250,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
   );
 
   const visorAmpliado = ampliado && img && (
-    <VisorAmpliado img={img} bbox={actual.bbox} numero={flujo.indice + 1} onCerrar={() => setAmpliado(false)} formulario={formulario} />
+    <VisorAmpliado img={img} bbox={actual.bbox} numero={flujo.indice + 1} onCerrar={() => setAmpliado(false)} formulario={formulario} total={dudas.length} tactil={!escritorio} />
   );
 
   if (escritorio) {
@@ -318,7 +319,10 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
       </div>
 
       {modo === 'recorte' ? (
-        recorte
+        <>
+          {recorte}
+          {img && <p className="text-sm text-slate-600">Toca el recorte para verlo más grande.</p>}
+        </>
       ) : (
         pagina && (
           <div className="space-y-2">
@@ -361,7 +365,9 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
         )
       )}
 
-      {formulario}
+      {/* Con el modal abierto el formulario vive dentro de él (un solo campo a la vez). */}
+      {!(ampliado && img) && formulario}
+      {visorAmpliado}
     </div>
   );
 }

@@ -20,6 +20,8 @@ interface Props {
   atajos?: boolean;
   /** Dentro del modal ampliado: Enter en el campo guarda y pasa a la siguiente. */
   enModal?: boolean;
+  /** Enter en el campo guarda (solo con teclado físico; en celular Enter es nueva línea). Por defecto = enModal. */
+  enterGuarda?: boolean;
 }
 
 /** Campo grande + botones de la duda actual. Se remonta (key) en cada duda. */
@@ -36,6 +38,7 @@ export default function FormularioDuda({
   onAnterior,
   atajos = false,
   enModal = false,
+  enterGuarda = enModal,
 }: Props) {
   const [texto, setTexto] = useState(textoInicial);
   const { cargando, sugerencias } = useSugerencias(regionId, textoInicial, !yaCorregida);
@@ -142,7 +145,7 @@ export default function FormularioDuda({
         onFocus={centrar}
         onKeyDown={(e) => {
           // El atajo global ignora los diálogos: dentro del modal el propio campo guarda con Enter.
-          if (!enModal || e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+          if (!enterGuarda || e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
           e.preventDefault();
           const t = textoEnviable(texto);
           if (t) onGuardar(t);
@@ -153,7 +156,7 @@ export default function FormularioDuda({
         }}
         className={`block ${enModal ? 'min-h-20' : 'min-h-28'} w-full rounded-xl border-2 border-slate-400 bg-white p-3 text-xl focus:border-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200`}
       />
-      {enModal && (
+      {enModal && enterGuarda && (
         <p className="text-sm text-slate-600">
           <kbd className="font-mono">Enter</kbd> guarda y pasa a la siguiente · <kbd className="font-mono">Mayús + Enter</kbd> nueva línea
         </p>

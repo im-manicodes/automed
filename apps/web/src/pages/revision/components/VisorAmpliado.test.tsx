@@ -127,3 +127,58 @@ describe('VisorAmpliado con formulario', () => {
     expect(onCerrar).toHaveBeenCalled();
   });
 });
+
+describe('VisorAmpliado táctil', () => {
+  const campoForm = (
+    <FormularioDuda
+      regionId="r1"
+      yaCorregida
+      textoInicial=""
+      sugerencia=""
+      esUltima={false}
+      puedeVolver={false}
+      onCambio={() => {}}
+      onGuardar={() => {}}
+      onOmitir={() => {}}
+      onAnterior={() => {}}
+      enModal
+      enterGuarda={false}
+    />
+  );
+
+  it('no enfoca el campo (enfoca Cerrar) y muestra el texto táctil y «Duda N de M»', () => {
+    render(<VisorAmpliado img={imagen()} bbox={bbox} numero={2} total={5} onCerrar={() => {}} formulario={campoForm} tactil />);
+    expect(screen.getByRole('textbox', { name: '¿Qué dice aquí?' })).not.toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toHaveFocus();
+    expect(screen.getByText(/Pellizca para acercar/)).toBeInTheDocument();
+    expect(screen.queryByText(/Rueda del ratón/)).toBeNull();
+    expect(screen.getByText('Duda 2 de 5')).toBeInTheDocument();
+  });
+
+  it('en escritorio mantiene el texto del ratón', () => {
+    render(<VisorAmpliado img={imagen()} bbox={bbox} numero={2} onCerrar={() => {}} />);
+    expect(screen.getByText(/Rueda del ratón/)).toBeInTheDocument();
+    expect(screen.queryByText(/Pellizca/)).toBeNull();
+  });
+
+  it('el pellizco con dos dedos cambia la escala', () => {
+    render(<VisorAmpliado img={imagen()} bbox={bbox} numero={1} onCerrar={() => {}} tactil />);
+    const caja = screen.getByTestId('visor-caja');
+    const recuadro = screen.getByTestId('recuadro-duda');
+    const antes = recuadro.style.border;
+    fireEvent.pointerDown(caja, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(caja, { pointerId: 2, clientX: 140, clientY: 100 });
+    fireEvent.pointerMove(caja, { pointerId: 2, clientX: 260, clientY: 100 });
+    expect(recuadro.style.border).not.toBe(antes);
+    fireEvent.pointerUp(caja, { pointerId: 2 });
+    fireEvent.pointerUp(caja, { pointerId: 1 });
+  });
+
+  it('el botón Atrás del navegador (popstate) cierra el modal', async () => {
+    const onCerrar = vi.fn();
+    render(<VisorAmpliado img={imagen()} bbox={bbox} numero={1} onCerrar={onCerrar} tactil />);
+    expect(window.history.state).toMatchObject({ amModalAtras: true });
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    expect(onCerrar).toHaveBeenCalledTimes(1);
+  });
+});
