@@ -92,7 +92,7 @@ export const REASONING_HEADROOM_TOKENS = 6000;
 
 /** Margen de salida según el modelo; 0 si no razona (o si el nombre del deployment no lo delata). */
 export function reasoningHeadroom(model: string): number {
-  return /(^|[./-])(gpt-5|o\d)/.test(model.toLowerCase())
+  return /(^|[./-])(gpt-([5-9]|[1-9]\d+)(?!\d)|o\d)/.test(model.toLowerCase())
     ? REASONING_HEADROOM_TOKENS
     : 0;
 }

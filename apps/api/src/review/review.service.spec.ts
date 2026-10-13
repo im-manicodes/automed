@@ -134,6 +134,17 @@ describe('ReviewService.suggest', () => {
     );
   });
 
+  it('avisa solo con la longitud cuando la respuesta viene vacía', async () => {
+    const { svc } = make(region, jest.fn().mockResolvedValue(''));
+    const warn = jest
+      .spyOn((svc as any).logger, 'warn')
+      .mockImplementation(() => undefined);
+    expect(await svc.suggest('r1', 'a')).toEqual({ sugerencias: [] });
+    expect(warn).toHaveBeenCalledWith(
+      'Sugerencias vacías: respuesta de 0 caracteres',
+    );
+  });
+
   it('si el LLM falla devuelve []', async () => {
     const { svc } = make(region, jest.fn().mockRejectedValue(new Error('x')));
     expect(await svc.suggest('r1', 'a')).toEqual({ sugerencias: [] });

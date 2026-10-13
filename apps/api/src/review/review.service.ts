@@ -105,9 +105,17 @@ export class ReviewService {
         task: 'vision_sugerencias',
         ...(threadId ? { threadId } : {}),
       });
-      return { sugerencias: parseSugerencias(raw, texto) };
-    } catch {
-      this.logger.warn('Falló la sugerencia de una duda');
+      const sugerencias = parseSugerencias(raw, texto);
+      if (sugerencias.length === 0) {
+        this.logger.warn(
+          `Sugerencias vacías: respuesta de ${raw?.length ?? 0} caracteres`,
+        );
+      }
+      return { sugerencias };
+    } catch (err) {
+      this.logger.warn(
+        `Falló la sugerencia de una duda (${err instanceof Error ? err.constructor.name : typeof err})`,
+      );
       return { sugerencias: [] };
     }
   }

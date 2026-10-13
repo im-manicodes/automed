@@ -405,6 +405,12 @@ describe('reasoningHeadroom', () => {
   it('da margen solo a modelos con razonamiento', () => {
     expect(reasoningHeadroom('gpt-5-mini')).toBeGreaterThan(0);
     expect(reasoningHeadroom('o3')).toBeGreaterThan(0);
+    for (const m of ['gpt-6-luna', 'gpt-6-sol', 'gpt-7', 'gpt-10-mini']) {
+      expect(reasoningHeadroom(m)).toBeGreaterThan(0);
+    }
+    for (const m of ['gpt-4o', 'gpt-4.1', 'claude-sonnet-5']) {
+      expect(reasoningHeadroom(m)).toBe(0);
+    }
     expect(reasoningHeadroom('gpt-4.1')).toBe(0);
     expect(reasoningHeadroom('qwen3-vl:4b-instruct')).toBe(0);
   });
