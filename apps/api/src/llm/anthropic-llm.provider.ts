@@ -2,7 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { BaseLlmProvider } from './base-llm.provider';
 import type { LlmConfig } from './llm-config';
 import { LlmTruncatedError } from './llm-provider.interface';
-import type { LlmRequest } from './llm-provider.interface';
+import type { LlmRequest, LlmResult } from './llm-provider.interface';
+import { usageFromAnthropic } from './usage-extract';
 
 type ImageMedia = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 
@@ -30,7 +31,7 @@ export class AnthropicLlmProvider extends BaseLlmProvider {
     model: string,
     maxTokens: number,
     temperature: number | undefined,
-  ): Promise<string> {
+  ): Promise<LlmResult> {
     const content: Anthropic.ContentBlockParam[] = [
       ...(req.images ?? []).map((img): Anthropic.ImageBlockParam => ({
         type: 'image',
@@ -58,10 +59,13 @@ export class AnthropicLlmProvider extends BaseLlmProvider {
     if (req.failOnTruncate && res.stop_reason === 'max_tokens') {
       throw new LlmTruncatedError();
     }
-    return res.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('')
-      .trim();
+    return {
+      text: res.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('')
+        .trim(),
+      usage: usageFromAnthropic(res.usage),
+    };
   }
 }

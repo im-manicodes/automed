@@ -212,3 +212,88 @@ describe('DynamicLlmProvider', () => {
     );
   });
 });
+
+describe('DynamicLlmProvider: registro de uso', () => {
+  beforeEach(() => mockCreate.mockReset());
+
+  function withUsage(
+    adapter: Record<string, jest.Mock>,
+    record = jest.fn().mockResolvedValue(undefined),
+  ) {
+    const settings: any = {
+      getEffective: jest.fn(() => Promise.resolve(eff())),
+      modelFor: jest.fn(),
+    };
+    mockCreate.mockImplementation(() => adapter as any);
+    return {
+      svc: new DynamicLlmProvider(settings, { record } as any),
+      record,
+    };
+  }
+
+  it('registra una vez con el uso del proveedor, el modelo, la tarea y el ticket', async () => {
+    const adapter = {
+      complete: jest.fn(),
+      completeDetailed: jest.fn().mockResolvedValue({
+        text: 'hola',
+        usage: { inputTokens: 100, outputTokens: 20, cachedTokens: 80 },
+      }),
+    };
+    const { svc, record } = withUsage(adapter);
+    expect(await svc.text('s', 'u', { task: 'whatsapp', threadId: 't1' })).toBe(
+      'hola',
+    );
+    expect(adapter.complete).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith({
+      kind: 'llm',
+      provider: 'openai',
+      model: 'm-wa',
+      task: 'whatsapp',
+      inputTokens: 100,
+      outputTokens: 20,
+      cachedTokens: 80,
+      cacheWriteTokens: 0,
+      estimated: false,
+      threadId: 't1',
+    });
+  });
+
+  it('sin uso del proveedor estima con len/4 y marca estimated (sin guardar texto)', async () => {
+    const adapter = { complete: jest.fn().mockResolvedValue('abcdefgh') };
+    const { svc, record } = withUsage(adapter);
+    await svc.text('x'.repeat(40), 'y'.repeat(40));
+    const entry = record.mock.calls[0][0];
+    expect(entry).toMatchObject({
+      task: 'resumen',
+      inputTokens: 20,
+      outputTokens: 2,
+      estimated: true,
+      threadId: null,
+    });
+    expect(JSON.stringify(entry)).not.toContain('abcdefgh');
+  });
+
+  it('si el registro falla la llamada no falla', async () => {
+    const adapter = { complete: jest.fn().mockResolvedValue('ok') };
+    const { svc } = withUsage(
+      adapter,
+      jest.fn().mockRejectedValue(new Error('bd caída')),
+    );
+    await expect(svc.text('s', 'u')).resolves.toBe('ok');
+    const { svc: svc2 } = withUsage(
+      adapter,
+      jest.fn(() => {
+        throw new Error('sync');
+      }),
+    );
+    await expect(svc2.text('s', 'u')).resolves.toBe('ok');
+  });
+
+  it('si la llamada al modelo falla no registra nada', async () => {
+    const adapter = { complete: jest.fn().mockRejectedValue(new Error('x')) };
+    const { svc, record } = withUsage(adapter);
+    await expect(svc.text('s', 'u')).rejects.toThrow('x');
+    expect(record).not.toHaveBeenCalled();
+  });
+});

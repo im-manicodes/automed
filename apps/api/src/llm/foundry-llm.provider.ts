@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { BaseLlmProvider } from './base-llm.provider';
 import { reasoningHeadroom, type LlmConfig } from './llm-config';
 import { LlmTruncatedError } from './llm-provider.interface';
-import type { LlmRequest } from './llm-provider.interface';
+import type { LlmRequest, LlmResult } from './llm-provider.interface';
+import { usageFromOpenAi } from './usage-extract';
 
 /**
  * Microsoft Foundry (Azure) vía su API v1 compatible con OpenAI. `baseURL` = endpoint del recurso
@@ -34,7 +35,7 @@ export class FoundryLlmProvider extends BaseLlmProvider {
     req: LlmRequest,
     model: string,
     maxTokens: number,
-  ): Promise<string> {
+  ): Promise<LlmResult> {
     const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
       ...(req.images ?? []).map(
         (img): OpenAI.Chat.Completions.ChatCompletionContentPart => ({
@@ -59,6 +60,9 @@ export class FoundryLlmProvider extends BaseLlmProvider {
     if (req.failOnTruncate && res.choices[0]?.finish_reason === 'length') {
       throw new LlmTruncatedError();
     }
-    return (res.choices[0]?.message?.content ?? '').trim();
+    return {
+      text: (res.choices[0]?.message?.content ?? '').trim(),
+      usage: usageFromOpenAi(res.usage),
+    };
   }
 }

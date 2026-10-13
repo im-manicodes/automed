@@ -4,6 +4,7 @@ import type {
   LlmCallOptions,
   LlmProvider,
   LlmRequest,
+  LlmResult,
   LlmTask,
 } from './llm-provider.interface';
 import { withRetry } from './llm-retry';
@@ -28,26 +29,38 @@ export abstract class BaseLlmProvider implements LlmProvider {
     );
   }
 
-  /** Una llamada sin reintentos. `temperature` ya viene resuelta (undefined = no enviar). */
+  /**
+   * Una llamada sin reintentos. `temperature` ya viene resuelta (undefined = no enviar).
+   * Devuelve el texto o `{ text, usage }` si el proveedor informó el uso.
+   */
   protected abstract call(
     req: LlmRequest,
     model: string,
     maxTokens: number,
     temperature: number | undefined,
-  ): Promise<string>;
+  ): Promise<string | LlmResult>;
 
-  complete(request: LlmRequest): Promise<string> {
+  async complete(request: LlmRequest): Promise<string> {
+    return (await this.completeDetailed(request)).text;
+  }
+
+  /** Texto + uso de la llamada que tuvo éxito (los intentos fallidos no informan uso). */
+  async completeDetailed(request: LlmRequest): Promise<LlmResult> {
     const model =
       request.model ??
       (request.images?.length ? this.cfg.modelVision : this.cfg.modelText);
     const maxTokens = request.maxTokens ?? this.cfg.defaultMaxTokens;
     const t = request.temperature ?? this.cfg.temperature;
     const temperature = modelAcceptsTemperature(model) ? t : undefined;
-    return withRetry(() => this.call(request, model, maxTokens, temperature), {
-      retries: this.cfg.maxRetries,
-      baseMs: this.cfg.retryBaseMs,
-      sleep: this.sleep,
-    });
+    const out = await withRetry(
+      () => this.call(request, model, maxTokens, temperature),
+      {
+        retries: this.cfg.maxRetries,
+        baseMs: this.cfg.retryBaseMs,
+        sleep: this.sleep,
+      },
+    );
+    return typeof out === 'string' ? { text: out } : out;
   }
 
   text(system: string, user: string, opts: LlmCallOptions = {}) {

@@ -1,12 +1,15 @@
 import { createHash } from 'crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { AiSettingsService } from '../settings/ai-settings.service';
+import { estimateTokens } from '../synthesis/thread-input';
+import { UsageService } from '../usage/usage.service';
 import type { AiEffectiveConfig } from '../settings/ai-settings.service';
 import { createLlmProvider } from './llm-provider.factory';
 import type {
   LlmCallOptions,
   LlmProvider,
   LlmRequest,
+  LlmResult,
   LlmTask,
 } from './llm-provider.interface';
 
@@ -19,7 +22,10 @@ import type {
 export class DynamicLlmProvider implements LlmProvider {
   private cached: { key: string; adapter: LlmProvider } | null = null;
 
-  constructor(private readonly settings: AiSettingsService) {}
+  constructor(
+    private readonly settings: AiSettingsService,
+    @Optional() private readonly usage?: UsageService,
+  ) {}
 
   private adapterFor(eff: AiEffectiveConfig): LlmProvider {
     const c = eff.llm;
@@ -57,7 +63,49 @@ export class DynamicLlmProvider implements LlmProvider {
     const task: LlmTask =
       request.task ?? (request.images?.length ? 'vision' : 'resumen');
     const model = request.model ?? eff.modelos[task];
-    return this.adapterFor(eff).complete({ ...request, task, model });
+    const adapter = this.adapterFor(eff);
+    const req = { ...request, task, model };
+    const res: LlmResult = adapter.completeDetailed
+      ? await adapter.completeDetailed(req)
+      : { text: await adapter.complete(req) };
+    this.recordUsage(eff.llm.provider, model, task, request, res);
+    return res.text;
+  }
+
+  /**
+   * Registro de uso (fire-and-forget, nunca rompe la llamada). Solo cifras: si el proveedor no
+   * informó el uso se estima (len/4) y se marca `estimated`. Nunca se guarda el texto.
+   */
+  private recordUsage(
+    provider: string,
+    model: string,
+    task: LlmTask,
+    request: LlmRequest,
+    res: LlmResult,
+  ): void {
+    if (!this.usage) return;
+    try {
+      const u = res.usage;
+      void this.usage
+        .record({
+          kind: 'llm',
+          provider,
+          model,
+          task,
+          inputTokens: u
+            ? u.inputTokens
+            : estimateTokens(request.system ?? '') +
+              estimateTokens(request.prompt),
+          outputTokens: u ? u.outputTokens : estimateTokens(res.text),
+          cachedTokens: u?.cachedTokens ?? 0,
+          cacheWriteTokens: u?.cacheWriteTokens ?? 0,
+          estimated: !u,
+          threadId: request.threadId ?? null,
+        })
+        .catch(() => undefined);
+    } catch {
+      // best-effort
+    }
   }
 
   text(system: string, user: string, opts: LlmCallOptions = {}) {

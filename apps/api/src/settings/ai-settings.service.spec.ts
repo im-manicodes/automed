@@ -276,4 +276,27 @@ describe('AiSettingsService', () => {
       );
     }
   });
+
+  it('segundoIntento y sugerencias: defecto true, se guardan y validan boolean', async () => {
+    const { svc } = setup({ LLM_PROVIDER: 'openai' });
+    expect(await svc.getPublic()).toMatchObject({
+      segundoIntento: true,
+      sugerencias: true,
+    });
+    const pub = await svc.save({ segundoIntento: false });
+    expect(pub).toMatchObject({ segundoIntento: false, sugerencias: true });
+    expect(await svc.getStoredSegundoIntento()).toBe(false);
+    expect(await svc.save({ sugerencias: false })).toMatchObject({
+      segundoIntento: false,
+      sugerencias: false,
+    });
+    for (const bad of ['no', 0, null]) {
+      await expect(
+        svc.save({ segundoIntento: bad as never }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        svc.save({ sugerencias: bad as never }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
 });

@@ -14,7 +14,7 @@ import { useAjustesIa } from '../../hooks/useAjustesIa'
 import { useAjustesAlmacenamiento } from '../../hooks/useAjustesAlmacenamiento'
 import { nombreProveedor } from '../../lib/ia'
 import { nombreAlmacenamiento } from '../../lib/almacenamiento'
-import { LuCheck, LuTriangleAlert, LuHourglass, LuScrollText } from 'react-icons/lu'
+import { LuCheck, LuTriangleAlert, LuHourglass, LuScrollText, LuReceipt } from 'react-icons/lu'
 
 export default function Ajustes() {
   const { session, logout } = useSession()
@@ -98,6 +98,12 @@ export default function Ajustes() {
         <h3 className="text-lg font-bold">Registro de la API</h3>
         <p className="text-slate-700">Mira lo que hace el servidor y si algo falló.</p>
         <Link to="/ajustes/registro" className="btn btn-secondary w-full"><LuScrollText className="size-5" aria-hidden />Ver registro</Link>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-lg font-bold">Uso y costo</h3>
+        <p className="text-slate-700">Mira cuántos tokens se gastan, en qué y cuánto cuesta.</p>
+        <Link to="/ajustes/uso" className="btn btn-secondary w-full"><LuReceipt className="size-5" aria-hidden />Ver uso y costo</Link>
       </div>
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">

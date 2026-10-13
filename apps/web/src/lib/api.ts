@@ -426,6 +426,10 @@ export interface AjustesIa {
   maxInputTokens: number
   /** Longitud máxima de cada respuesta del modelo (1000..64000). */
   maxOutputTokens: number
+  /** Segundo intento de zonas dudosas con otro modelo (defecto true). */
+  segundoIntento: boolean
+  /** Sugerencias de la IA al revisar una duda (defecto true). */
+  sugerencias: boolean
   /** Solo si hay clave guardada; la clave en sí nunca llega al navegador. */
   claves: { openai: boolean; anthropic: boolean; aws: boolean; foundry: boolean }
   sugeridos: Record<ProveedorIa, { texto: string[]; vision: string[] }>
@@ -438,6 +442,8 @@ export interface CambiosAjustesIa {
   awsRegion?: string
   maxInputTokens?: number
   maxOutputTokens?: number
+  segundoIntento?: boolean
+  sugerencias?: boolean
   /** string = nueva clave, null = quitar, ausente = no cambiar. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
@@ -506,7 +512,8 @@ export interface AjustesOcr {
   /** Releer con IA (visión) las partes dudosas. */
   visionRetry: boolean
   /** Segundo intento con otro modelo para lo que el primero no leyó (defecto true). */
-  visionSegundoIntento: boolean
+  /** Obsoleto: ahora vive en Ajustes -> IA (solo respaldo de lectura). */
+  visionSegundoIntento?: boolean
   /** Máximo de partes a releer (1..200). */
   visionMaxRegions: number
   /** Calidad de lectura al rasterizar (150..400). */
@@ -599,3 +606,64 @@ export interface RespuestaRegistro {
   /** Último id emitido por el servidor (aunque no pase el filtro); se usa como `desde`. */
   ultimoId: number
 }
+
+// --- Uso y costo (/settings/uso, /settings/precios) ---
+export type PeriodoUso = 'hoy' | '7d' | '30d' | 'mes'
+export type ClaveOcrPrecio = 'textract-detect' | 'textract-analyze' | 'azure-read'
+
+export interface UsoPorModelo {
+  kind: 'llm' | 'ocr'
+  provider: string
+  model: string
+  /** Tarea del LLM o 'ocr'. */
+  task: string
+  llamadas: number
+  inputTokens: number
+  outputTokens: number
+  cachedTokens: number
+  /** Tokens escritos en caché (opcional: la API puede no enviarlo). */
+  cacheWriteTokens?: number
+  paginas: number
+  /** null = el modelo no tiene precio. */
+  costo: number | null
+  estimado: boolean
+}
+
+export interface RespuestaUso {
+  desde: string
+  hasta: string
+  moneda: string
+  totales: { inputTokens: number; outputTokens: number; cachedTokens: number; cacheWriteTokens?: number; paginasOcr: number; costo: number }
+  porModelo: UsoPorModelo[]
+  porDia: { fecha: string; costo: number; tokens: number }[]
+  modelosSinPrecio: string[]
+  /** Motores de OCR de pago usados sin precio por página. */
+  ocrSinPrecio?: string[]
+}
+
+export interface RespuestaPronostico {
+  moneda: string
+  ventanaDias: number
+  diasConDatos: number
+  promedioDiario: number
+  finDeMes: number
+  proximos30Dias: number
+  porModelo: { model: string; task: string; promedioDiario: number; proximos30Dias: number }[]
+}
+
+export interface PrecioModelo {
+  /** USD por millón de tokens. */
+  entrada: number
+  salida: number
+  cacheada?: number
+  escrituraCache?: number
+}
+
+export interface Precios {
+  moneda: 'USD'
+  modelos: Record<string, PrecioModelo>
+  /** USD por página. */
+  ocr: Partial<Record<ClaveOcrPrecio, number>>
+}
+
+export type CambiosPrecios = Pick<Precios, 'modelos' | 'ocr'>

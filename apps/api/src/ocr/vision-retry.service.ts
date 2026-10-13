@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AiSettingsService } from '../settings/ai-settings.service';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
 import { withScope } from '../templates/template-instructions';
 import { LLM_PROVIDER } from '../llm/llm-provider.interface';
@@ -73,6 +74,7 @@ export class VisionRetryService {
   constructor(
     config: ConfigService,
     private readonly ocrSettings: OcrSettingsService,
+    private readonly aiSettings: AiSettingsService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
   ) {
     this.cfg = readOcrConfig(config);
@@ -83,8 +85,13 @@ export class VisionRetryService {
     return (await this.ocrSettings.getEffective()).visionRetry;
   }
 
-  /** Segundo intento con el modelo de respaldo (panel > .env; defecto activado). */
+  /**
+   * Segundo intento con el modelo de respaldo. Vive en `ai.config`; si ahí no hay valor guardado
+   * se respeta el antiguo `ocr.config.visionSegundoIntento` (defecto activado).
+   */
   async isSecondPassEnabled(): Promise<boolean> {
+    const ai = await this.aiSettings.getStoredSegundoIntento();
+    if (typeof ai === 'boolean') return ai;
     return (await this.ocrSettings.getEffective()).visionSegundoIntento;
   }
 
@@ -110,6 +117,7 @@ export class VisionRetryService {
     pagePng: Uint8Array,
     items: { box: OcrBox; ocrText: string }[],
     task: 'vision' | 'vision_respaldo' = 'vision',
+    threadId?: string | null,
   ): Promise<(VisionReading | null)[]> {
     if (items.length === 0) return [];
     const images = [];
@@ -134,6 +142,7 @@ export class VisionRetryService {
       maxTokens: Math.max(300, 150 * items.length),
       temperature: 0,
       task,
+      ...(threadId ? { threadId } : {}),
     });
     return parseVisionBatch(raw, items.length);
   }

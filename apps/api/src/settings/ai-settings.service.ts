@@ -34,6 +34,8 @@ export interface AiStoredConfig {
   awsRegion?: string;
   maxInputTokens?: number;
   maxOutputTokens?: number;
+  segundoIntento?: boolean;
+  sugerencias?: boolean;
   openaiKeyEnc?: string;
   anthropicKeyEnc?: string;
   foundryKeyEnc?: string;
@@ -50,6 +52,10 @@ export interface AiEffectiveConfig {
   awsRegion: string;
   maxInputTokens: number;
   maxOutputTokens: number;
+  /** Segundo intento de lectura con el modelo de respaldo (defecto true). */
+  segundoIntento: boolean;
+  /** Recomendaciones del LLM al revisar una duda (defecto true). */
+  sugerencias: boolean;
   origen: 'panel' | 'servidor';
   /** Config lista para los adaptadores (incluye claves en claro). */
   llm: LlmConfig;
@@ -71,6 +77,8 @@ export interface AiPublicSettings {
   awsRegion: string;
   maxInputTokens: number;
   maxOutputTokens: number;
+  segundoIntento: boolean;
+  sugerencias: boolean;
   claves: {
     openai: boolean;
     anthropic: boolean;
@@ -89,6 +97,8 @@ export interface AiSettingsInput {
   awsRegion?: string;
   maxInputTokens?: number;
   maxOutputTokens?: number;
+  segundoIntento?: boolean;
+  sugerencias?: boolean;
   claveOpenai?: string | null;
   claveAnthropic?: string | null;
   claveFoundry?: string | null;
@@ -124,10 +134,10 @@ const SUGGESTED: Record<LlmProviderName, AiSuggestedModels> = {
     texto: ['qwen3-vl:4b-instruct', 'llama3.2:3b'],
     vision: ['qwen3-vl:4b-instruct', 'llama3.2-vision:11b'],
   },
-  // Nombres de deployment genéricos (el real lo define el usuario en su recurso).
+  // Nombres de deployment habituales (el real lo define el usuario en su recurso).
   foundry: {
-    texto: ['gpt-5', 'gpt-5-mini', 'gpt-4.1'],
-    vision: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o'],
+    texto: ['gpt-6-sol', 'gpt-6-luna'],
+    vision: ['gpt-6-sol', 'gpt-6-luna'],
   },
 };
 
@@ -246,6 +256,8 @@ export class AiSettingsService {
       awsRegion,
       maxInputTokens,
       maxOutputTokens,
+      segundoIntento: stored?.segundoIntento !== false,
+      sugerencias: stored?.sugerencias !== false,
       origen: stored ? 'panel' : 'servidor',
       llm: {
         ...env,
@@ -287,6 +299,12 @@ export class AiSettingsService {
     return (await this.getEffective()).modelos[task];
   }
 
+  /** Valor guardado en el panel (`undefined` si nunca se fijó), para el respaldo con `ocr.config`. */
+  async getStoredSegundoIntento(): Promise<boolean | undefined> {
+    const v = (await this.load()).stored?.segundoIntento;
+    return typeof v === 'boolean' ? v : undefined;
+  }
+
   async bienvenidaCompletada(): Promise<boolean> {
     return (await this.load()).welcomeDone;
   }
@@ -312,6 +330,8 @@ export class AiSettingsService {
       awsRegion: e.awsRegion,
       maxInputTokens: e.maxInputTokens,
       maxOutputTokens: e.maxOutputTokens,
+      segundoIntento: e.segundoIntento,
+      sugerencias: e.sugerencias,
       claves: {
         openai: !!e.llm.openaiApiKey,
         anthropic: !!e.llm.anthropicApiKey,
@@ -431,6 +451,20 @@ export class AiSettingsService {
         );
       }
       next.maxOutputTokens = n;
+      touchesConfig = true;
+    }
+    for (const [field, label] of [
+      ['segundoIntento', 'El segundo intento'],
+      ['sugerencias', 'Las recomendaciones'],
+    ] as const) {
+      const v = input[field];
+      if (v === undefined) continue;
+      if (typeof v !== 'boolean') {
+        throw new BadRequestException(
+          `${label} debe ser verdadero o falso (true o false)`,
+        );
+      }
+      next[field] = v;
       touchesConfig = true;
     }
     for (const [field, enc, label] of [

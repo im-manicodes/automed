@@ -33,7 +33,7 @@ export default function CredencialesProveedor({ ajustes, borrador, onChange, har
           <div className="space-y-2">
             <label htmlFor="foundry-endpoint" className="block font-semibold">Endpoint de Foundry</label>
             <input id="foundry-endpoint" type="url" inputMode="url" placeholder="https://mi-recurso.openai.azure.com/openai/v1" className="min-h-12 w-full rounded-xl border border-slate-300 px-3" value={borrador.foundryEndpoint} onChange={(e) => onChange({ ...borrador, foundryEndpoint: e.target.value })} />
-            <p className="text-sm text-slate-600">Copia el Endpoint de tu recurso en el portal de Foundry; termina en /openai/v1.</p>
+            <p className="text-sm text-slate-600">Copia el Endpoint de tu recurso en el portal de Foundry; termina en /openai/v1. Se ofrecen los modelos gpt-6-sol y gpt-6-luna (el segundo es el más económico).</p>
           </div>
           <CampoClave label="Clave de Foundry" guardada={ajustes.claves.foundry} value={borrador.claveFoundry} onChange={(v) => onChange({ ...borrador, claveFoundry: v })} />
         </div>

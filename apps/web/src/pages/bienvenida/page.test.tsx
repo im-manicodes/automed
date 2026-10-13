@@ -82,6 +82,7 @@ describe('Asistente de bienvenida', () => {
     expect(body.modelos.resumen).toBe('gpt-4o-mini')
     expect(body.modelos.vision_respaldo).toBe('gpt-4o')
     expect(body.modelos.vision_sugerencias).toBe('gpt-4o')
+    expect(body).toMatchObject({ segundoIntento: true, sugerencias: true })
     expect(document.body.innerHTML).not.toContain('sk-secreta-123')
   })
 

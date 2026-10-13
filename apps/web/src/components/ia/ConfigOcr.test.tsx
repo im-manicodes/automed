@@ -16,7 +16,7 @@ describe('ConfigOcr', () => {
   it('muestra las opciones avanzadas cuando hay un motor y valores', () => {
     mockFetch({})
     const a = ajustesOcr({ motor: 'textract' })
-    render(<ConfigOcr {...props} motor="textract" ajustes={a} avanzado={{ visionRetry: a.visionRetry, visionSegundoIntento: a.visionSegundoIntento, visionMaxRegions: a.visionMaxRegions, renderDpi: a.renderDpi, textractMode: a.textractMode, visionAmbito: a.visionAmbito }} onAvanzado={() => {}} />)
+    render(<ConfigOcr {...props} motor="textract" ajustes={a} avanzado={{ visionRetry: a.visionRetry, visionMaxRegions: a.visionMaxRegions, renderDpi: a.renderDpi, textractMode: a.textractMode, visionAmbito: a.visionAmbito }} onAvanzado={() => {}} />)
     expect(screen.getByText('Opciones avanzadas de lectura')).toBeInTheDocument()
     expect(screen.getByLabelText('Modo')).toBeInTheDocument()
   })

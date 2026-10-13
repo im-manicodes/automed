@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { BaseLlmProvider } from './base-llm.provider';
 import type { LlmConfig } from './llm-config';
 import { LlmTruncatedError } from './llm-provider.interface';
-import type { LlmRequest } from './llm-provider.interface';
+import type { LlmRequest, LlmResult } from './llm-provider.interface';
+import { usageFromOpenAi } from './usage-extract';
 
 /**
  * Ollama (solo desarrollo/pruebas) vía su API compatible con OpenAI. No requiere API key
@@ -32,7 +33,7 @@ export class OllamaLlmProvider extends BaseLlmProvider {
     model: string,
     maxTokens: number,
     temperature: number | undefined,
-  ): Promise<string> {
+  ): Promise<LlmResult> {
     const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
       ...(req.images ?? []).map(
         (img): OpenAI.Chat.Completions.ChatCompletionContentPart => ({
@@ -58,6 +59,9 @@ export class OllamaLlmProvider extends BaseLlmProvider {
     if (req.failOnTruncate && res.choices[0]?.finish_reason === 'length') {
       throw new LlmTruncatedError();
     }
-    return (res.choices[0]?.message?.content ?? '').trim();
+    return {
+      text: (res.choices[0]?.message?.content ?? '').trim(),
+      usage: usageFromOpenAi(res.usage),
+    };
   }
 }

@@ -19,6 +19,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { ReportsModule } from './reports/reports.module';
 import { EventsModule } from './events/events.module';
 import { LogsModule } from './logs/logs.module';
+import { UsageModule } from './usage/usage.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { LogsModule } from './logs/logs.module';
     ReportsModule,
     EventsModule,
     LogsModule,
+    UsageModule,
   ],
   controllers: [AppController],
   providers: [AppService],

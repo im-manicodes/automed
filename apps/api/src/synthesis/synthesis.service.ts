@@ -101,6 +101,9 @@ export function stripEchoedInput(s: string): string {
 /** Limpia la salida de síntesis: sin vallas de código y sin eco de la entrada. */
 export const cleanSynthesis = (s: string) => stripEchoedInput(stripFences(s));
 
+/** Tokens de entrada estimados (para Synthesis) y ticket para el registro de uso. */
+type UsageMeter = { tokens: number; threadId?: string };
+
 @Injectable()
 export class SynthesisService implements ThreadSynthesizer {
   private readonly logger = new Logger(SynthesisService.name);
@@ -157,7 +160,7 @@ export class SynthesisService implements ThreadSynthesizer {
         ? opts.reanalyzeMessageId
         : undefined;
     if (reanalyzeId) covered.delete(reanalyzeId);
-    const meter = { tokens: 0 };
+    const meter: UsageMeter = { tokens: 0, threadId };
 
     // ---- incremental ----
     if (last && usable && !opts.force) {
@@ -393,7 +396,7 @@ export class SynthesisService implements ThreadSynthesizer {
       out = await this.llm.text(
         await this.scoped(WHATSAPP_SYSTEM_PROMPT, 'whatsapp'),
         buildWhatsappPrompt(tpl.markdown, body),
-        { maxTokens: 2000, task: 'whatsapp' },
+        { maxTokens: 2000, task: 'whatsapp', threadId },
       );
     } catch (e) {
       this.logger.warn(
@@ -524,7 +527,7 @@ export class SynthesisService implements ThreadSynthesizer {
 
   /** Llama al LLM acumulando el tamaño estimado de entrada (sin registrar contenido). */
   private ask(
-    meter: { tokens: number },
+    meter: UsageMeter,
     system: string,
     user: string,
     opts?: { maxTokens?: number },
@@ -532,7 +535,12 @@ export class SynthesisService implements ThreadSynthesizer {
     meter.tokens += estimateTokens(system) + estimateTokens(user);
     // failOnTruncate: una síntesis cortada nunca se guarda como si estuviera completa.
     return this.llm
-      .text(system, user, { ...opts, task: 'resumen', failOnTruncate: true })
+      .text(system, user, {
+        ...opts,
+        task: 'resumen',
+        failOnTruncate: true,
+        ...(meter.threadId ? { threadId: meter.threadId } : {}),
+      })
       .catch((e: unknown) => {
         if (e instanceof LlmTruncatedError) {
           // Sin contenido en logs; el mensaje llega a Job.lastError y el hilo pasa a 'error'.
@@ -549,7 +557,7 @@ export class SynthesisService implements ThreadSynthesizer {
   private async fit(
     blocks: string[],
     budget: number,
-    meter: { tokens: number },
+    meter: UsageMeter,
   ): Promise<{ text: string; mapped: boolean }> {
     const full = blocks.join('\n\n');
     if (estimateTokens(full) <= budget) return { text: full, mapped: false };
@@ -600,7 +608,7 @@ export class SynthesisService implements ThreadSynthesizer {
   async renderMarkdown(
     blocks: string[],
     template: string,
-    meter: { tokens: number } = { tokens: 0 },
+    meter: UsageMeter = { tokens: 0 },
   ): Promise<string> {
     const overhead =
       estimateTokens(template) +
@@ -629,7 +637,7 @@ export class SynthesisService implements ThreadSynthesizer {
     previousMarkdown: string,
     template: string,
     correction: boolean,
-    meter: { tokens: number },
+    meter: UsageMeter,
   ): Promise<string> {
     const overhead =
       estimateTokens(template) +

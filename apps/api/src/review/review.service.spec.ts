@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ReviewService, parseSugerencias } from './review.service';
 
 describe('ReviewService.correctRegion', () => {
@@ -17,7 +17,14 @@ describe('ReviewService.correctRegion', () => {
       onRegionsChanged: jest.fn().mockResolvedValue(['t1']),
     };
     return {
-      svc: new ReviewService(prisma, pipeline, {} as any, {} as any, {} as any),
+      svc: new ReviewService(
+        prisma,
+        pipeline,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      ),
       prisma,
       pipeline,
     };
@@ -62,7 +69,7 @@ describe('ReviewService.suggest', () => {
     h: 0.05,
     page: { imageKey: 'k.png' },
   };
-  const make = (reg: unknown, complete: jest.Mock) => {
+  const make = (reg: unknown, complete: jest.Mock, sugerencias = true) => {
     const prisma: any = {
       ocrRegion: {
         findUnique: jest.fn().mockResolvedValue(reg),
@@ -77,8 +84,18 @@ describe('ReviewService.suggest', () => {
     const ocrSettings: any = {
       getEffective: jest.fn().mockResolvedValue({ visionAmbito: 'x' }),
     };
+    const aiSettings: any = {
+      getEffective: jest.fn().mockResolvedValue({ sugerencias }),
+    };
     return {
-      svc: new ReviewService(prisma, pipeline, storage, llm, ocrSettings),
+      svc: new ReviewService(
+        prisma,
+        pipeline,
+        storage,
+        llm,
+        ocrSettings,
+        aiSettings,
+      ),
       prisma,
       pipeline,
     };
@@ -99,6 +116,15 @@ describe('ReviewService.suggest', () => {
     expect(complete.mock.calls[0][0].images).toHaveLength(1);
     expect(prisma.ocrRegion.update).not.toHaveBeenCalled();
     expect(pipeline.onRegionsChanged).not.toHaveBeenCalled();
+  });
+
+  it('409 si las recomendaciones están desactivadas, sin llamar al LLM', async () => {
+    const complete = jest.fn();
+    const { svc } = make(region, complete, false);
+    await expect(svc.suggest('r1', 't')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(complete).not.toHaveBeenCalled();
   });
 
   it('404 si la región no existe', async () => {

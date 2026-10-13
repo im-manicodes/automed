@@ -353,3 +353,30 @@ model HospitalEvent {
   @@index([threadId, fechaEvento])
   @@index([fecha])
 }
+
+/// Uso de IA por llamada (LLM) o por página (OCR de pago). SOLO cifras: nunca contenido de
+/// correos, PDFs ni pacientes. El costo se calcula al consultar con los precios de `ia.precios`.
+model LlmUsage {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  /// llm | ocr
+  kind             String
+  provider         String
+  /// En OCR: textract-detect | textract-analyze | azure-read
+  model            String
+  /// LlmTask o 'ocr'
+  task             String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cachedTokens     Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  pages            Int      @default(0)
+  /// true si el proveedor no devolvió uso y se estimó (len/4)
+  estimated        Boolean  @default(false)
+  /// Ticket asociado (sin FK: el registro sobrevive al borrado del hilo)
+  threadId         String?
+
+  @@index([createdAt])
+  @@index([model, createdAt])
+  @@index([threadId])
+}

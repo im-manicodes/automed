@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { OcrEngine, OcrPageResult, OcrWord } from './ocr-engine.interface';
+import type {
+  OcrEngine,
+  OcrPageResult,
+  OcrRecognizeContext,
+  OcrWord,
+} from './ocr-engine.interface';
 import { OcrConfig, readOcrConfig } from './ocr-config';
 
 interface LocalItem {
@@ -35,7 +40,7 @@ export class LocalOcrEngineService implements OcrEngine {
   async recognize(
     image: Uint8Array,
     pageNumber: number,
-    opts: { baseUrl?: string } = {},
+    opts: { baseUrl?: string } & OcrRecognizeContext = {},
   ): Promise<OcrPageResult> {
     const res = await fetch(`${opts.baseUrl ?? this.cfg.localUrl}/ocr`, {
       method: 'POST',

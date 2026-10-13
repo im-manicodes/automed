@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { ajustesIa } from '../../test/ajustesIa'
 import ModeloPorTarea from './ModeloPorTarea'
 
@@ -22,5 +22,22 @@ describe('ModeloPorTarea', () => {
     const sel = screen.getByLabelText('Segundo intento de zonas dudosas (visión)')
     expect(sel).toHaveValue('gpt-4o')
     expect(Array.from((sel as HTMLSelectElement).options).map((o) => o.value)).not.toContain('gpt-4o-mini')
+  })
+
+  it('muestra interruptores solo para segundo intento y sugerencias, y los emite', () => {
+    const a = ajustesIa()
+    const onActivar = vi.fn()
+    render(<ModeloPorTarea proveedor="ollama" modelos={a.modelos} sugeridos={a.sugeridos.ollama} onChange={() => {}} activas={{ segundoIntento: true, sugerencias: true }} onActivar={onActivar} />)
+    expect(screen.getAllByRole('switch')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('switch', { name: /Sugerencias al revisar una duda/ }))
+    expect(onActivar).toHaveBeenCalledWith('sugerencias', false)
+  })
+
+  it('con el interruptor apagado atenúa la fila, deshabilita el selector y dice «Desactivado»', () => {
+    const a = ajustesIa()
+    render(<ModeloPorTarea proveedor="ollama" modelos={a.modelos} sugeridos={a.sugeridos.ollama} onChange={() => {}} activas={{ segundoIntento: false, sugerencias: true }} onActivar={() => {}} />)
+    expect(screen.getByLabelText('Segundo intento de zonas dudosas (visión)')).toBeDisabled()
+    expect(screen.getByLabelText('Sugerencias al revisar una duda (visión)')).toBeEnabled()
+    expect(screen.getAllByText('Desactivado')).toHaveLength(1)
   })
 })

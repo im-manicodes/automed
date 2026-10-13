@@ -38,6 +38,7 @@ describe('VisionRetryService.modelFor', () => {
     const svc = new VisionRetryService(
       { get: () => undefined } as any,
       {} as any,
+      {} as any,
       llm,
     );
     await expect(svc.modelFor('vision_respaldo')).resolves.toBe('modelo-v');
@@ -63,6 +64,7 @@ describe('VisionRetryService.rereadBatch', () => {
     const svc = new VisionRetryService(
       { get: () => undefined } as any,
       ocrSettings,
+      {} as any,
       llm,
     );
     const png = new Uint8Array(createCanvas(100, 100).toBuffer('image/png'));
@@ -96,6 +98,7 @@ describe('VisionRetryService.rereadBatch', () => {
       {
         getEffective: jest.fn().mockResolvedValue({ visionAmbito: '' }),
       } as any,
+      {} as any,
       llm,
     );
     const png = new Uint8Array(createCanvas(100, 100).toBuffer('image/png'));
@@ -104,11 +107,37 @@ describe('VisionRetryService.rereadBatch', () => {
       png,
       [1, 2, 3].map(() => ({ box, ocrText: 'x' })),
       'vision_respaldo',
+      'hilo-1',
     );
     expect(llm.complete).toHaveBeenCalledTimes(1);
     const req = llm.complete.mock.calls[0][0];
     expect(req.images).toHaveLength(3);
     expect(req.task).toBe('vision_respaldo');
+    expect(req.threadId).toBe('hilo-1'); // solo para el registro de uso
     expect(out).toHaveLength(3);
+  });
+});
+
+describe('VisionRetryService.isSecondPassEnabled', () => {
+  const make = (ai: boolean | undefined, ocr: boolean) =>
+    new VisionRetryService(
+      { get: () => undefined } as any,
+      {
+        getEffective: jest
+          .fn()
+          .mockResolvedValue({ visionSegundoIntento: ocr }),
+      } as any,
+      { getStoredSegundoIntento: jest.fn().mockResolvedValue(ai) } as any,
+      {} as any,
+    );
+
+  it('ai.config manda sobre ocr.config', async () => {
+    expect(await make(false, true).isSecondPassEnabled()).toBe(false);
+    expect(await make(true, false).isSecondPassEnabled()).toBe(true);
+  });
+
+  it('sin valor en ai.config respeta el antiguo ocr.config', async () => {
+    expect(await make(undefined, false).isSecondPassEnabled()).toBe(false);
+    expect(await make(undefined, true).isSecondPassEnabled()).toBe(true);
   });
 });

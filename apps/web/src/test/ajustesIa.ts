@@ -10,13 +10,15 @@ export const ajustesIa = (o: Partial<AjustesIa> = {}): AjustesIa => ({
   awsRegion: 'us-east-1',
   maxInputTokens: 24000,
   maxOutputTokens: 8000,
+  segundoIntento: true,
+  sugerencias: true,
   claves: { openai: false, anthropic: false, aws: false, foundry: false },
   sugeridos: {
     ollama: { texto: ['qwen3-vl:4b-instruct'], vision: ['qwen3-vl:4b-instruct'] },
     openai: { texto: ['gpt-4o-mini', 'gpt-4o'], vision: ['gpt-4o'] },
     anthropic: { texto: ['claude-haiku-4-5'], vision: ['claude-sonnet-4-5'] },
     bedrock: { texto: ['amazon.nova-lite-v1:0'], vision: ['amazon.nova-pro-v1:0'] },
-    foundry: { texto: ['gpt-4o-mini'], vision: ['gpt-4o'] },
+    foundry: { texto: ['gpt-6-sol', 'gpt-6-luna'], vision: ['gpt-6-sol', 'gpt-6-luna'] },
   },
   ...o,
 })

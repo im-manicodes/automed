@@ -55,6 +55,7 @@ export class GeneratorService {
     columnas: ReportColumn[],
     previous: PreviousEventHint | null = null,
     task: 'reporte' | 'evento' = 'reporte',
+    threadId?: string,
   ): Promise<ExtractedPatient | null> {
     for (const retry of [false, true]) {
       try {
@@ -64,7 +65,7 @@ export class GeneratorService {
             await this.instructions.get('reporte'),
           ),
           buildReportPrompt(synthesisMarkdown, columnas, retry, previous),
-          { maxTokens: 1800, task },
+          { maxTokens: 1800, task, ...(threadId ? { threadId } : {}) },
         );
         const parsed = parseExtraction(raw, columnas);
         if (parsed) return parsed;
@@ -151,7 +152,7 @@ export class GeneratorService {
             novedadTexto: cached.novedadTexto ?? '',
             data: asData(cached.data),
           }
-        : await this.extract(syn.markdown, columnas);
+        : await this.extract(syn.markdown, columnas, null, 'reporte', t.id);
       if (!cached && ex0) {
         try {
           await this.prisma.threadReportData.create({

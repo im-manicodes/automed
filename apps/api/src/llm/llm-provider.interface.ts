@@ -32,6 +32,8 @@ export interface LlmRequest {
   model?: string;
   /** Lanza LlmTruncatedError si el modelo se detiene por límite de tokens de salida. */
   failOnTruncate?: boolean;
+  /** Ticket asociado (solo para el registro de uso; nunca se envía al modelo). */
+  threadId?: string;
 }
 
 export interface LlmCallOptions {
@@ -40,6 +42,25 @@ export interface LlmCallOptions {
   task?: LlmTask;
   /** Lanza LlmTruncatedError si la salida se corta por límite de tokens. */
   failOnTruncate?: boolean;
+  /** Ticket asociado (solo para el registro de uso). */
+  threadId?: string;
+}
+
+/**
+ * Uso devuelto por el proveedor, normalizado: `inputTokens` es la entrada TOTAL (incluye la
+ * parte leída de caché y la escrita en caché); `cachedTokens` y `cacheWriteTokens` son subconjuntos.
+ */
+export interface LlmUsageInfo {
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens?: number;
+  cacheWriteTokens?: number;
+}
+
+/** Respuesta con el texto y el uso (si el proveedor lo informó). */
+export interface LlmResult {
+  text: string;
+  usage?: LlmUsageInfo;
 }
 
 /** La salida del modelo se cortó por el límite de tokens de salida. */
@@ -57,6 +78,8 @@ export interface LlmProvider {
   /** Modelo que se usa para la tarea (se guarda, p. ej., en Synthesis.model). */
   modelFor(task: LlmTask): Promise<string>;
   complete(request: LlmRequest): Promise<string>;
+  /** Como `complete`, pero también devuelve el uso informado por el proveedor (si lo hay). */
+  completeDetailed?(request: LlmRequest): Promise<LlmResult>;
   /** Texto: system + user, temperatura baja. */
   text(system: string, user: string, opts?: LlmCallOptions): Promise<string>;
   /** Visión: una imagen + instrucción (p. ej. releer un recorte OCR dudoso). */

@@ -121,6 +121,12 @@ describe('FormularioDuda', () => {
       expect(screen.getByRole('button', { name: /Sugerencia 1/ })).toBeInTheDocument();
       expect(callsOf(f)).toEqual([ruta]);
     });
+    it('con las sugerencias apagadas en Ajustes no muestra el botón ni llama a la IA', () => {
+      const f = mockFetch({});
+      render(<FormularioDuda {...abierta} sugerenciasActivas={false} textoInicial="x" sugerencia="" onGuardar={() => {}} />);
+      expect(screen.queryByRole('button', { name: 'Obtener recomendaciones' })).toBeNull();
+      expect(callsOf(f)).toEqual([]);
+    });
     it('si la duda ya está corregida no ofrece recomendaciones', () => {
       const f = mockFetch({});
       render(<FormularioDuda {...base} textoInicial="x" sugerencia="" onGuardar={() => {}} />);

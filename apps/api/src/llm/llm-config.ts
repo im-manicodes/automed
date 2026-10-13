@@ -30,8 +30,8 @@ export const DEFAULT_MODELS: Record<LlmProviderName, string> = {
   // `-instruct`: el tag `qwen3-vl:4b` a secas apunta a la de razonamiento (mismo digest que `4b-thinking`),
   // que mete su razonamiento en la respuesta y gasta el límite de tokens.
   ollama: 'qwen3-vl:4b-instruct',
-  // En Foundry el modelo es el nombre del deployment (lo elige el usuario): sin valor por defecto.
-  foundry: '',
+  // En Foundry el modelo es el nombre del deployment; por defecto el más económico.
+  foundry: 'gpt-6-luna',
 };
 
 const num = (v: string | undefined, d: number) => {

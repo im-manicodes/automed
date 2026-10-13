@@ -9,7 +9,8 @@ import type {
 import { BaseLlmProvider } from './base-llm.provider';
 import type { LlmConfig } from './llm-config';
 import { LlmTruncatedError } from './llm-provider.interface';
-import type { LlmRequest } from './llm-provider.interface';
+import type { LlmRequest, LlmResult } from './llm-provider.interface';
+import { usageFromBedrock } from './usage-extract';
 
 const FORMATS: Record<string, ImageFormat> = {
   'image/png': 'png',
@@ -44,7 +45,7 @@ export class BedrockLlmProvider extends BaseLlmProvider {
     model: string,
     maxTokens: number,
     temperature: number | undefined,
-  ): Promise<string> {
+  ): Promise<LlmResult> {
     const content: ContentBlock[] = [
       ...(req.images ?? []).map((img): ContentBlock => ({
         image: {
@@ -69,9 +70,12 @@ export class BedrockLlmProvider extends BaseLlmProvider {
     if (req.failOnTruncate && res.stopReason === 'max_tokens') {
       throw new LlmTruncatedError();
     }
-    return (res.output?.message?.content ?? [])
-      .map((b) => b.text ?? '')
-      .join('')
-      .trim();
+    return {
+      text: (res.output?.message?.content ?? [])
+        .map((b) => b.text ?? '')
+        .join('')
+        .trim(),
+      usage: usageFromBedrock(res.usage),
+    };
   }
 }

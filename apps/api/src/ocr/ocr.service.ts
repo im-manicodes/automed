@@ -120,7 +120,9 @@ export class OcrService implements AttachmentProcessor {
         });
         continue;
       }
-      const result = await this.engine.recognize(page.png, page.pageNumber);
+      const result = await this.engine.recognize(page.png, page.pageNumber, {
+        threadId,
+      });
       const lines = regionsOf(result);
       let regions: StoredRegion[] = classifyRegions(
         lines,
@@ -254,6 +256,7 @@ export class OcrService implements AttachmentProcessor {
               ocrText: regions[i].text,
             })),
             task,
+            threadId,
           );
         } catch {
           this.logger.warn(

@@ -1,14 +1,16 @@
 import type { AjustesIa, CambiosAjustesIa, LlmTask, ProveedorIa } from './api'
 import { awsIncompleta, cambiosAws, type ClavesAws } from './ocr'
 
-export const TAREAS: { id: LlmTask; etiqueta: string; ayuda?: string }[] = [
+export type InterruptorIa = 'segundoIntento' | 'sugerencias'
+
+export const TAREAS: { id: LlmTask; etiqueta: string; ayuda?: string; interruptor?: InterruptorIa }[] = [
   { id: 'resumen', etiqueta: 'Resúmenes de tickets' },
   { id: 'whatsapp', etiqueta: 'Mensaje de WhatsApp' },
   { id: 'evento', etiqueta: 'Borrador de evento' },
   { id: 'reporte', etiqueta: 'Reporte de Excel' },
   { id: 'vision', etiqueta: 'Lectura de zonas dudosas (visión)' },
-  { id: 'vision_respaldo', etiqueta: 'Segundo intento de zonas dudosas (visión)', ayuda: 'Si lo dejas vacío usa el mismo modelo de lectura de zonas' },
-  { id: 'vision_sugerencias', etiqueta: 'Sugerencias al revisar una duda (visión)', ayuda: 'Si lo dejas vacío usa el modelo del segundo intento. Aquí conviene uno más grande' },
+  { id: 'vision_respaldo', etiqueta: 'Segundo intento de zonas dudosas (visión)', interruptor: 'segundoIntento', ayuda: 'Si lo dejas vacío usa el mismo modelo de lectura de zonas' },
+  { id: 'vision_sugerencias', etiqueta: 'Sugerencias al revisar una duda (visión)', interruptor: 'sugerencias', ayuda: 'Si lo dejas vacío usa el modelo del segundo intento. Aquí conviene uno más grande' },
 ]
 
 export const esVision = (id: LlmTask) => id === 'vision' || id === 'vision_respaldo' || id === 'vision_sugerencias'
@@ -32,6 +34,8 @@ export interface BorradorIa {
   foundryEndpoint: string
   maxInputTokens: number
   maxOutputTokens: number
+  segundoIntento: boolean
+  sugerencias: boolean
   /** undefined = sin cambios, string = clave nueva, null = quitar la guardada. */
   claveOpenai?: string | null
   claveAnthropic?: string | null
@@ -49,6 +53,8 @@ export function borradorDesde(a: AjustesIa): BorradorIa {
     foundryEndpoint: a.foundryEndpoint ?? '',
     maxInputTokens: a.maxInputTokens,
     maxOutputTokens: a.maxOutputTokens,
+    segundoIntento: a.segundoIntento ?? true,
+    sugerencias: a.sugerencias ?? true,
   }
 }
 
@@ -73,6 +79,8 @@ export function cambiosDesde(b: BorradorIa): CambiosAjustesIa {
     foundryEndpoint: b.foundryEndpoint,
     maxInputTokens: b.maxInputTokens,
     maxOutputTokens: b.maxOutputTokens,
+    segundoIntento: b.segundoIntento,
+    sugerencias: b.sugerencias,
   }
   if (b.claveOpenai !== undefined) c.claveOpenai = b.claveOpenai
   if (b.claveAnthropic !== undefined) c.claveAnthropic = b.claveAnthropic

@@ -20,10 +20,19 @@ export interface OcrPageResult {
   lines?: OcrWord[];
 }
 
+/** Contexto opcional de una página (solo para el registro de uso; no llega al motor). */
+export interface OcrRecognizeContext {
+  threadId?: string | null;
+}
+
 /** Motor OCR intercambiable (local|textract|azure). */
 export interface OcrEngine {
   readonly name: string;
-  recognize(image: Uint8Array, pageNumber: number): Promise<OcrPageResult>;
+  recognize(
+    image: Uint8Array,
+    pageNumber: number,
+    ctx?: OcrRecognizeContext,
+  ): Promise<OcrPageResult>;
 }
 
 export const OCR_ENGINE = Symbol('OCR_ENGINE');

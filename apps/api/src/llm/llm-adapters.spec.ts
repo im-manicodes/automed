@@ -9,6 +9,7 @@ import { modelAcceptsTemperature, readLlmConfig } from './llm-config';
 import { isRetryable, withRetry } from './llm-retry';
 import { LlmTruncatedError } from './llm-provider.interface';
 import type { LlmConfig } from './llm-config';
+import { usageFromOpenAi } from './usage-extract';
 
 const cfg = (over: Partial<LlmConfig> = {}): LlmConfig => ({
   provider: 'anthropic',
@@ -406,5 +407,145 @@ describe('reasoningHeadroom', () => {
     expect(reasoningHeadroom('o3')).toBeGreaterThan(0);
     expect(reasoningHeadroom('gpt-4.1')).toBe(0);
     expect(reasoningHeadroom('qwen3-vl:4b-instruct')).toBe(0);
+  });
+});
+
+describe('uso informado por el proveedor (completeDetailed)', () => {
+  const openAiLike = (cls: typeof OpenAiLlmProvider, provider: string) => {
+    const create = jest.fn().mockResolvedValue({
+      choices: [{ message: { content: ' ok ' } }],
+      usage: {
+        prompt_tokens: 120,
+        completion_tokens: 30,
+        prompt_tokens_details: { cached_tokens: 100 },
+      },
+    });
+    return new cls(
+      cfg({
+        provider: provider as never,
+        modelText: 'gpt-4.1',
+        foundryEndpoint: 'https://x/openai/v1',
+      }),
+      { chat: { completions: { create } } } as never,
+      noSleep,
+    );
+  };
+
+  it.each([
+    ['openai', OpenAiLlmProvider],
+    ['foundry', FoundryLlmProvider],
+    ['ollama', OllamaLlmProvider],
+  ] as const)(
+    '%s: prompt_tokens, completion_tokens y cached_tokens',
+    async (name, cls) => {
+      const p = openAiLike(cls as typeof OpenAiLlmProvider, name);
+      expect(await p.completeDetailed({ prompt: 'u' })).toEqual({
+        text: 'ok',
+        usage: {
+          inputTokens: 120,
+          outputTokens: 30,
+          cachedTokens: 100,
+          cacheWriteTokens: 0,
+        },
+      });
+      expect(await p.complete({ prompt: 'u' })).toBe('ok');
+    },
+  );
+
+  it.each([
+    [{ cached_tokens: 10, cache_write_tokens: 40 }, 40],
+    [{ cached_tokens: 10, cache_creation_tokens: 30 }, 30],
+    [{ cached_tokens: 10, cache_creation_input_tokens: 20 }, 20],
+  ])('openai/foundry: escritura en caché defensiva %j', (details, write) => {
+    expect(
+      usageFromOpenAi({
+        prompt_tokens: 100,
+        completion_tokens: 5,
+        prompt_tokens_details: details,
+      }),
+    ).toEqual({
+      inputTokens: 100,
+      outputTokens: 5,
+      cachedTokens: 10,
+      cacheWriteTokens: write,
+    });
+  });
+
+  it('openai sin usage: sin uso (lo estima el proveedor dinámico)', async () => {
+    const create = jest
+      .fn()
+      .mockResolvedValue({ choices: [{ message: { content: 'x' } }] });
+    const p = new OpenAiLlmProvider(
+      cfg({ provider: 'openai', modelText: 'gpt-4.1' }),
+      { chat: { completions: { create } } } as never,
+      noSleep,
+    );
+    expect((await p.completeDetailed({ prompt: 'u' })).usage).toBeUndefined();
+  });
+
+  it('anthropic: suma caché leída y escrita a la entrada', async () => {
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'hola' }],
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 200,
+        cache_creation_input_tokens: 40,
+      },
+    });
+    const p = new AnthropicLlmProvider(
+      cfg(),
+      { messages: { create } } as never,
+      noSleep,
+    );
+    expect(await p.completeDetailed({ prompt: 'u' })).toEqual({
+      text: 'hola',
+      usage: {
+        inputTokens: 250,
+        outputTokens: 5,
+        cachedTokens: 200,
+        cacheWriteTokens: 40,
+      },
+    });
+  });
+
+  it('bedrock: inputTokens/outputTokens y cacheRead/WriteInputTokens', async () => {
+    const send = jest.fn().mockResolvedValue({
+      output: { message: { content: [{ text: 'b' }] } },
+      usage: {
+        inputTokens: 7,
+        outputTokens: 3,
+        totalTokens: 10,
+        cacheReadInputTokens: 50,
+        cacheWriteInputTokens: 0,
+      },
+    });
+    const p = new BedrockLlmProvider(
+      cfg({ provider: 'bedrock', modelText: 'anthropic.claude-sonnet-5-5' }),
+      { send },
+      noSleep,
+    );
+    expect(await p.completeDetailed({ prompt: 'u' })).toEqual({
+      text: 'b',
+      usage: {
+        inputTokens: 57,
+        outputTokens: 3,
+        cachedTokens: 50,
+        cacheWriteTokens: 0,
+      },
+    });
+  });
+
+  it('no envía threadId al proveedor', async () => {
+    const create = jest
+      .fn()
+      .mockResolvedValue({ choices: [{ message: { content: 'x' } }] });
+    const p = new OpenAiLlmProvider(
+      cfg({ provider: 'openai', modelText: 'gpt-4.1' }),
+      { chat: { completions: { create } } } as never,
+      noSleep,
+    );
+    await p.complete({ prompt: 'u', threadId: 't1' });
+    expect(JSON.stringify(create.mock.calls[0][0])).not.toContain('t1');
   });
 });

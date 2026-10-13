@@ -1,9 +1,16 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PipelineService } from '../jobs/pipeline.service';
 import { LLM_PROVIDER } from '../llm/llm-provider.interface';
 import type { LlmProvider } from '../llm/llm-provider.interface';
 import { cropRegionPng } from '../ocr/image-crop';
 import { PrismaService } from '../prisma/prisma.service';
+import { AiSettingsService } from '../settings/ai-settings.service';
 import { OcrSettingsService } from '../settings/ocr-settings.service';
 import { StorageService } from '../storage/storage.service';
 import { withScope } from '../templates/template-instructions';
@@ -52,6 +59,7 @@ export class ReviewService {
     private readonly storage: StorageService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
     private readonly ocrSettings: OcrSettingsService,
+    private readonly aiSettings: AiSettingsService,
   ) {}
 
   private readonly logger = new Logger(ReviewService.name);
@@ -61,11 +69,24 @@ export class ReviewService {
     regionId: string,
     texto: string,
   ): Promise<{ sugerencias: string[] }> {
+    if (!(await this.aiSettings.getEffective()).sugerencias) {
+      throw new ConflictException('Las recomendaciones están desactivadas');
+    }
     const region = await this.prisma.ocrRegion.findUnique({
       where: { id: regionId },
-      include: { page: { select: { imageKey: true } } },
+      include: {
+        page: {
+          select: {
+            imageKey: true,
+            attachment: {
+              select: { message: { select: { threadId: true } } },
+            },
+          },
+        },
+      },
     });
     if (!region) throw new NotFoundException('Región no encontrada');
+    const threadId = region.page.attachment?.message?.threadId;
     try {
       const png = await this.storage.get(region.page.imageKey);
       const crop = await cropRegionPng(png, {
@@ -82,6 +103,7 @@ export class ReviewService {
         maxTokens: 300,
         temperature: 0,
         task: 'vision_sugerencias',
+        ...(threadId ? { threadId } : {}),
       });
       return { sugerencias: parseSugerencias(raw, texto) };
     } catch {

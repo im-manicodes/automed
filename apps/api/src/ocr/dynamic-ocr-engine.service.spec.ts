@@ -72,3 +72,47 @@ describe('DynamicOcrEngine', () => {
     expect(engine.name).toBe('azure');
   });
 });
+
+describe('DynamicOcrEngine: registro de páginas de OCR de pago', () => {
+  function withUsage(motor: string, textractMode = 'detect') {
+    const record = jest.fn().mockResolvedValue(undefined);
+    const eff = { motor, textractMode };
+    const recognize = () => jest.fn().mockResolvedValue(page);
+    const engine = new DynamicOcrEngine(
+      { get: () => undefined } as never,
+      { getEffective: () => Promise.resolve(eff) } as never,
+      { recognize: recognize() } as never,
+      { recognize: recognize() } as never,
+      { recognize: recognize() } as never,
+      { record } as never,
+    );
+    return { engine, record };
+  }
+
+  it.each([
+    ['textract', 'detect', 'textract-detect'],
+    ['textract', 'analyze', 'textract-analyze'],
+    ['azure', 'detect', 'azure-read'],
+  ])(
+    '%s (%s) registra 1 página como %s con el ticket',
+    async (motor, mode, model) => {
+      const { engine, record } = withUsage(motor, mode);
+      await engine.recognize(img, 1, { threadId: 't9' });
+      expect(record).toHaveBeenCalledTimes(1);
+      expect(record).toHaveBeenCalledWith({
+        kind: 'ocr',
+        provider: motor,
+        model,
+        task: 'ocr',
+        pages: 1,
+        threadId: 't9',
+      });
+    },
+  );
+
+  it('el motor local no se registra', async () => {
+    const { engine, record } = withUsage('local');
+    await engine.recognize(img, 1, { threadId: 't9' });
+    expect(record).not.toHaveBeenCalled();
+  });
+});

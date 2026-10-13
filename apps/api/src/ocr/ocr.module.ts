@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { LlmModule } from '../llm/llm.module';
+import { UsageModule } from '../usage/usage.module';
 import { ATTACHMENT_PROCESSOR } from '../jobs/pipeline-hooks.interface';
 import { LocalOcrEngineService } from './local-ocr-engine.service';
 import { OCR_ENGINE } from './ocr-engine.interface';
@@ -22,6 +23,7 @@ import { AzureOcrEngineService } from './azure-ocr-engine.service';
   imports: [
     LlmModule,
     SettingsModule,
+    UsageModule,
     AuthModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
   ],

@@ -7,7 +7,11 @@ import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiSettingsService } from '../settings/ai-settings.service';
-import type { OcrEngine, OcrPageResult } from './ocr-engine.interface';
+import type {
+  OcrEngine,
+  OcrPageResult,
+  OcrRecognizeContext,
+} from './ocr-engine.interface';
 import { OcrConfig, readOcrConfig } from './ocr-config';
 import { mapTextractBlocks } from './textract-mapper';
 
@@ -56,7 +60,7 @@ export class TextractOcrEngineService implements OcrEngine {
   async recognize(
     image: Uint8Array,
     pageNumber: number,
-    opts: { mode?: 'detect' | 'analyze' } = {},
+    opts: { mode?: 'detect' | 'analyze' } & OcrRecognizeContext = {},
   ): Promise<OcrPageResult> {
     if (image.byteLength > MAX_BYTES) {
       throw new Error(

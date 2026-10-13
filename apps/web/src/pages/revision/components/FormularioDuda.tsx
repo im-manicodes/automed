@@ -8,6 +8,8 @@ interface Props {
   regionId: string;
   /** Si ya tiene corrección guardada no se ofrece pedir recomendaciones. */
   yaCorregida?: boolean;
+  /** Ajustes -> IA -> sugerencias: si es falso no se ofrece «Obtener recomendaciones». */
+  sugerenciasActivas?: boolean;
   textoInicial: string;
   sugerencia: string;
   esUltima: boolean;
@@ -28,6 +30,7 @@ interface Props {
 export default function FormularioDuda({
   regionId,
   yaCorregida = false,
+  sugerenciasActivas = true,
   textoInicial,
   sugerencia,
   esUltima,
@@ -110,7 +113,7 @@ export default function FormularioDuda({
           Usar lo que leyó la máquina: “{sugerencia}”
         </button>
       )}
-      {!yaCorregida && (
+      {!yaCorregida && sugerenciasActivas && (
         <button
           type="button"
           className="btn btn-secondary w-full min-h-11"
@@ -121,17 +124,17 @@ export default function FormularioDuda({
           <span>{estado === 'error' ? 'Intentar otra vez' : 'Obtener recomendaciones'}</span>
         </button>
       )}
-      {estado === 'cargando' && (
+      {sugerenciasActivas && estado === 'cargando' && (
         <p role="status" className="text-base text-slate-600">
           La IA está leyendo el recorte…
         </p>
       )}
-      {estado === 'error' && (
+      {sugerenciasActivas && estado === 'error' && (
         <p role="status" className="text-base text-slate-600">
           No se pudieron obtener recomendaciones.
         </p>
       )}
-      {!yaCorregida &&
+      {!yaCorregida && sugerenciasActivas &&
         sugerencias.map((s, i) => (
           <button
             key={i}

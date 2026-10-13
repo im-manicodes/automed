@@ -1,7 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { mockFetch } from '../../test/mockFetch';
+import { ajustesIa } from '../../test/ajustesIa';
 import { limpiarCacheSugerencias } from './hooks/useSugerencias';
 import { _vaciarCachePaginas } from '../../hooks/usePaginaImagen';
 import RevisionPage from './page';
@@ -78,5 +79,23 @@ describe('Revisión en celular', () => {
     expect(campos[0]).not.toHaveFocus();
     expect(screen.getByText(/Pellizca para acercar/)).toBeInTheDocument();
     expect(within(d).getByText('Duda 1 de 1')).toBeInTheDocument();
+  });
+
+  it('con las sugerencias apagadas en Ajustes -> IA no muestra «Obtener recomendaciones»', async () => {
+    const f = mockFetch({
+      'GET /api/attachments/a1/pages': { body: respuesta },
+      'GET /api/settings/ia': { body: ajustesIa({ sugerencias: false }) },
+    });
+    render(
+      <MemoryRouter initialEntries={['/tickets/t1/revision/a1']}>
+        <Routes>
+          <Route path="/tickets/:id/revision/:attachmentId" element={<RevisionPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Toca el recorte para verlo más grande.')).toBeInTheDocument();
+    await waitFor(() => expect(f.mock.calls.some(([u]) => String(u) === '/api/settings/ia')).toBe(true));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Obtener recomendaciones' })).toBeNull());
+    expect(f.mock.calls.some(([u]) => String(u).includes('/suggest'))).toBe(false);
   });
 });
