@@ -18,6 +18,7 @@ import { copiarTexto } from '../../lib/clipboard'
 import WhatsappDialog from './components/WhatsappDialog'
 import EtapasAnalisis from './components/EtapasAnalisis'
 import EventoDialog from './components/EventoDialog'
+import FormatosDialog from './components/FormatosDialog'
 import EventosRegistrados from './components/EventosRegistrados'
 import { usePolling } from '../../hooks/usePolling'
 import { useTicketDetalle } from './hooks/useTicketDetalle'
@@ -45,6 +46,7 @@ export default function TicketDetalle() {
   const [busy, setBusy] = useState(false)
   const [waTexto, setWaTexto] = useState<string | null>(null)
   const [borrador, setBorrador] = useState<EventoBorrador | null>(null)
+  const [formatosAbierto, setFormatosAbierto] = useState(false)
   const [yaAnadido, setYaAnadido] = useState<Evento | null>(null)
   const [confirmRegen, setConfirmRegen] = useState(false)
   const [confirmUltimo, setConfirmUltimo] = useState(false)
@@ -276,6 +278,13 @@ export default function TicketDetalle() {
                       </button>
                     )}
                   </div>
+                  {thread.status === 'listo' && (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button type="button" className="btn btn-secondary flex-1" onClick={() => setFormatosAbierto(true)}>
+                        <LuFileText className="size-5 shrink-0" aria-hidden />Llenar formatos
+                      </button>
+                    </div>
+                  )}
                   {(evRazon || eventoVigente) && (
                     <p id="ev-ayuda" className="text-sm text-slate-700">
                       {evRazon}
@@ -336,6 +345,8 @@ export default function TicketDetalle() {
           )}
         </div>
       </div>
+
+      {formatosAbierto && <FormatosDialog threadId={id} asunto={thread.subject} resumen={latest?.markdown ?? null} mensajes={thread.messages} onClose={() => setFormatosAbierto(false)} />}
 
       {borrador && (
         <EventoDialog

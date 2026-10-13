@@ -28,6 +28,7 @@
     "test:e2e-flow": "ts-node scripts/e2e-flow.ts",
     "ocr:benchmark": "ts-node scripts/ocr-benchmark.ts",
     "test:raster": "NODE_OPTIONS=--experimental-vm-modules jest src/ocr/pdf-rasterizer",
+    "test:preview": "NODE_OPTIONS=--experimental-vm-modules jest src/forms/form-preview",
     "test:pdf-text": "NODE_OPTIONS=--experimental-vm-modules jest src/ocr/pdf-text-node",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -42,7 +43,8 @@
     "db:validate": "prisma validate",
     "db:format": "prisma format",
     "user:create": "pnpm build && node dist/cli/user.js create",
-    "user:reset-password": "pnpm build && node dist/cli/user.js reset-password"
+    "user:reset-password": "pnpm build && node dist/cli/user.js reset-password",
+    "forms:inspect": "node scripts/forms-inspect.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

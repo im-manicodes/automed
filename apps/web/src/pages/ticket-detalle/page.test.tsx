@@ -88,6 +88,21 @@ describe('TicketDetalle · Añadir al Excel', () => {
     expect(await screen.findByText('Revisión manual')).toBeInTheDocument()
   })
 
+  it('«Llenar formatos» solo aparece con el ticket listo y abre el panel', async () => {
+    setup('listo')
+    routes['GET /api/forms'] = { body: [{ id: 'visita-directiva', titulo: 'Visita directiva', campos: [] }] }
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Llenar formatos' }))
+    expect(await screen.findByRole('dialog', { name: 'Llenar formatos' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Visita directiva/ })).toBeInTheDocument()
+  })
+
+  it('con revisión pendiente no hay «Llenar formatos»', async () => {
+    setup('necesita_revision', true, null)
+    await boton()
+    expect(screen.queryByRole('button', { name: 'Llenar formatos' })).toBeNull()
+  })
+
   it('sin resumen no hay botón', async () => {
     setup('sin_analizar', false, null)
     await screen.findByText(/Todavía no hay resumen/)

@@ -1,11 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { LuFilePlus, LuTriangleAlert, LuX } from 'react-icons/lu'
+import { LuFilePlus, LuTriangleAlert } from 'react-icons/lu'
 import { useToast } from '../../../context/toasts-context'
 import { ApiError, type Evento, type EventoBorrador, type EventoEstado, type MessageInfo } from '../../../lib/api'
-import { useEsEscritorio } from '../../../hooks/useEsEscritorio'
-import AdjuntosRevision from './AdjuntosRevision'
+import RevisionSplit from './RevisionSplit'
 import ConfirmDialog from '../../../components/ConfirmDialog'
-import Markdown from '../../../components/Markdown'
 import { errorMessage } from '../../../lib/format'
 import { ESTADOS, MAX_NOVEDAD, MAX_VALOR } from '../lib/eventos'
 import { useCrearEvento } from '../hooks/useCrearEvento'
@@ -61,12 +59,9 @@ interface Props {
   onConflict?: () => void
 }
 
-type Vista = 'formulario' | 'resumen' | 'adjuntos'
-
 export default function EventoDialog({ threadId, asunto, resumen, mensajes = [], borrador, onClose, onSaved, onConflict }: Props) {
   const { toast } = useToast()
   const uid = useId()
-  const dlgRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
   useEffect(() => {
     closeRef.current = onClose
@@ -84,66 +79,17 @@ export default function EventoDialog({ threadId, asunto, resumen, mensajes = [],
   const { crear, saving } = useCrearEvento(threadId)
   const [error, setError] = useState<string | null>(null)
   const max = fechaMax()
-  const esLg = useEsEscritorio()
-  const [vista, setVista] = useState<Vista>('formulario')
-  const [adjuntosVistos, setAdjuntosVistos] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
-  const confirmRef = useRef(false)
   const inicial = useRef({ datos, estado, dia, novedad })
   const sucio = useRef(false)
-  useEffect(() => {
-    confirmRef.current = confirmando
-  })
   useEffect(() => {
     const i = inicial.current
     sucio.current = estado !== i.estado || dia !== i.dia || novedad !== i.novedad || Object.keys(i.datos).some((k) => datos[k] !== i.datos[k])
   }, [datos, estado, dia, novedad])
-  // En pantallas grandes el formulario siempre se ve; la pestaña activa de la izquierda es Resumen o Adjuntos.
-  const activa: Vista = esLg && vista === 'formulario' ? 'resumen' : vista
-  const cambiarVista = (v: Vista) => {
-    setVista(v)
-    if (v === 'adjuntos') setAdjuntosVistos(true)
-  }
   const pedirCerrar = () => {
     if (sucio.current) setConfirmando(true)
     else closeRef.current()
   }
-  const pedirCerrarRef = useRef(pedirCerrar)
-  useEffect(() => {
-    pedirCerrarRef.current = pedirCerrar
-  })
-
-  useEffect(() => {
-    const previo = document.activeElement as HTMLElement | null
-    dlgRef.current?.querySelector<HTMLElement>('input, textarea, select')?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (confirmRef.current) return
-      if (e.key === 'Escape') {
-        pedirCerrarRef.current()
-        return
-      }
-      if (e.key !== 'Tab' || !dlgRef.current) return
-      const foc = Array.from(dlgRef.current.querySelectorAll<HTMLElement>('input, textarea, select, button, a[href], [role="tab"]')).filter(
-        (el) => !(el as HTMLButtonElement).disabled && !el.closest('[hidden]'),
-      )
-      if (foc.length === 0) return
-      const first = foc[0]
-      const last = foc[foc.length - 1]
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      previo?.focus?.()
-    }
-  }, [])
-
   const fechaInvalida = !dia || dia < FECHA_MIN || dia > max
   const valorLargo = borrador.columnas.some((c) => (datos[c.nombre] ?? '').length > MAX_VALOR)
   const novedadLarga = novedad.length > MAX_NOVEDAD
@@ -175,83 +121,24 @@ export default function EventoDialog({ threadId, asunto, resumen, mensajes = [],
     }
   }
 
-  const tabs: { v: Vista; label: string }[] = esLg
-    ? [{ v: 'resumen', label: 'Resumen' }, { v: 'adjuntos', label: 'Adjuntos' }]
-    : [{ v: 'formulario', label: 'Formulario' }, { v: 'resumen', label: 'Resumen' }, { v: 'adjuntos', label: 'Adjuntos' }]
-  const onTabKey = (e: React.KeyboardEvent) => {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
-    e.preventDefault()
-    const i = tabs.findIndex((x) => x.v === activa)
-    const sig = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]
-    cambiarVista(sig.v)
-    document.getElementById(`${uid}-tab-${sig.v}`)?.focus()
-  }
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/50">
-      <div
-        ref={dlgRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${uid}-title`}
-        className="absolute inset-0 grid grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)] bg-white lg:grid-cols-[3fr_2fr]"
-      >
-        <header className="flex items-start gap-3 border-b border-slate-200 p-3 sm:p-4 lg:col-span-2">
-          <div className="min-w-0 flex-1 space-y-2">
-            <h2 id={`${uid}-title`} className="text-xl font-bold">Añadir al Excel</h2>
-            {asunto && <p className="truncate text-slate-700" title={asunto}>{asunto}</p>}
-            <p className="rounded-xl border border-amber-400 bg-amber-50 p-2 text-sm text-amber-900">
-              <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Revisa los datos: los propone la inteligencia artificial.
-            </p>
-          </div>
-          <button type="button" className="btn btn-secondary shrink-0" onClick={pedirCerrar}>
-            <LuX className="size-5 shrink-0" aria-hidden />Cerrar
-          </button>
-        </header>
-
-        <div role="tablist" aria-label="Qué quieres ver" onKeyDown={onTabKey} className="flex gap-1 border-b border-slate-200 bg-slate-50 p-2 lg:col-start-1">
-          {tabs.map((x) => (
-            <button
-              key={x.v}
-              id={`${uid}-tab-${x.v}`}
-              type="button"
-              role="tab"
-              aria-selected={activa === x.v}
-              aria-controls={`${uid}-panel-${x.v}`}
-              tabIndex={activa === x.v ? 0 : -1}
-              onClick={() => cambiarVista(x.v)}
-              className={`btn flex-1 ${activa === x.v ? '' : 'btn-secondary'}`}
-            >
-              {x.label}
-            </button>
-          ))}
-        </div>
-
-        <section
-          id={`${uid}-panel-resumen`}
-          role="tabpanel"
-          aria-labelledby={`${uid}-tab-resumen`}
-          hidden={activa !== 'resumen'}
-          className="min-h-0 overflow-y-auto p-4 lg:col-start-1 lg:row-start-3"
-        >
-          {resumen ? <Markdown>{resumen}</Markdown> : <p className="text-slate-700">Este ticket aún no tiene resumen.</p>}
-        </section>
-
-        <section
-          id={`${uid}-panel-adjuntos`}
-          role="tabpanel"
-          aria-labelledby={`${uid}-tab-adjuntos`}
-          hidden={activa !== 'adjuntos'}
-          className="min-h-0 overflow-y-auto p-4 lg:col-start-1 lg:row-start-3"
-        >
-          {adjuntosVistos && <AdjuntosRevision mensajes={mensajes} />}
-        </section>
-
+    <RevisionSplit
+      titulo="Añadir al Excel"
+      asunto={asunto}
+      aviso={
+        <p className="rounded-xl border border-amber-400 bg-amber-50 p-2 text-sm text-amber-900">
+          <LuTriangleAlert className="mr-1.5 -mt-0.5 inline size-4" aria-hidden />Revisa los datos: los propone la inteligencia artificial.
+        </p>
+      }
+      resumen={resumen}
+      mensajes={mensajes}
+      onCerrar={pedirCerrar}
+      confirmando={confirmando}
+      formulario={
         <form
           onSubmit={(e) => void guardar(e)}
           aria-label="Datos para el Excel"
-          hidden={!esLg && vista !== 'formulario'}
-          className="flex min-h-0 flex-col lg:col-start-2 lg:row-span-2 lg:row-start-2 lg:border-l lg:border-slate-200"
+          className="flex min-h-0 flex-1 flex-col"
           noValidate
         >
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
@@ -310,19 +197,19 @@ export default function EventoDialog({ threadId, asunto, resumen, mensajes = [],
             </button>
           </div>
         </form>
-
-        {confirmando && (
-          <ConfirmDialog
-            title="¿Salir sin guardar?"
-            confirmLabel="Salir sin guardar"
-            cancelLabel="Seguir revisando"
-            onCancel={() => setConfirmando(false)}
-            onConfirm={() => closeRef.current()}
-          >
-            <p>Tienes cambios sin guardar. Si sales, se pierden.</p>
-          </ConfirmDialog>
+      }
+    >
+      {confirmando && (
+        <ConfirmDialog
+          title="¿Salir sin guardar?"
+          confirmLabel="Salir sin guardar"
+          cancelLabel="Seguir revisando"
+          onCancel={() => setConfirmando(false)}
+          onConfirm={() => closeRef.current()}
+        >
+          <p>Tienes cambios sin guardar. Si sales, se pierden.</p>
+        </ConfirmDialog>
         )}
-      </div>
-    </div>
+    </RevisionSplit>
   )
 }

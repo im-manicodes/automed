@@ -20,6 +20,7 @@ import { ReportsModule } from './reports/reports.module';
 import { EventsModule } from './events/events.module';
 import { LogsModule } from './logs/logs.module';
 import { UsageModule } from './usage/usage.module';
+import { FormsModule } from './forms/forms.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { UsageModule } from './usage/usage.module';
     EventsModule,
     LogsModule,
     UsageModule,
+    FormsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

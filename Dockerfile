@@ -34,6 +34,7 @@ RUN pnpm --filter api --legacy deploy --prod /out \
  && cp -r apps/api/dist /out/dist \
  && cp -r apps/api/prisma /out/prisma \
  && cp -r apps/api/src /out/src \
+ && cp -r apps/api/assets /out/assets \
  && cp apps/api/prisma.config.ts /out/prisma.config.ts
 
 # ---- 3. Imagen final ----

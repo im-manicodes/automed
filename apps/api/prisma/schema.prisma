@@ -127,6 +127,7 @@ model Thread {
   reportRows          ReportRow[]
   reportData          ThreadReportData[]
   hospitalEvents      HospitalEvent[]
+  formDrafts          FormDraft[]
 
   @@unique([accountId, conversationId])
 }
@@ -381,4 +382,26 @@ model LlmUsage {
   @@index([createdAt])
   @@index([model, createdAt])
   @@index([threadId])
+}
+
+/// Borrador guardado de un formato PDF por hilo (la IA solo se llama la primera vez o al actualizar)
+model FormDraft {
+  id          String   @id @default(uuid())
+  threadId    String
+  /// id del catálogo (ingreso-pemex, ...)
+  formato     String
+  /// Versión de síntesis desde la que se propuso
+  synthesisId String
+  /// Hash de las claves del catálogo al proponer
+  catalogHash String
+  /// Última propuesta de la IA
+  valoresIA   Json
+  /// Estado actual (editado por el usuario)
+  valores     Json
+  modelo      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  thread      Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, formato])
 }

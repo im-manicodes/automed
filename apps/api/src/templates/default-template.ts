@@ -6,6 +6,61 @@ export const DEFAULT_TEMPLATE_NAME = 'Plantilla estándar';
 
 export const DEFAULT_TEMPLATE_MARKDOWN = `<!-- Reglas generales (no se copian a la salida): no inventes datos; si un dato falta escribe "No indicado". No copies ruido del OCR o del manuscrito como si fuera un dato y nunca escribas "ilegible": usa solo lo que se entienda. Usa abreviaturas médicas habituales (APP, PO, SV, TA, FC, FR, SatO2) y fechas dd/mm/aa. -->
 
+## Constantes
+<!-- Datos que cambian poco a lo largo del hilo, en tablas | Campo | Valor | por bloque. Si un dato falta escribe "No indicado". Fechas dd/mm/aa. Anota solo lo que se entienda. En una actualización, ACTUALIZA el valor existente de la fila en lugar de duplicar filas. -->
+
+### Actores
+<!-- Personas e instituciones involucradas. Varios médicos: sepáralos con "; " en la misma celda. -->
+| Campo | Valor |
+| --- | --- |
+| Paciente | |
+| Médico(s) tratante(s) | |
+| Médico(s) interconsultante(s) | |
+| Quién firma | |
+| Aseguradora | |
+
+### Datos personales
+| Campo | Valor |
+| --- | --- |
+| Edad | |
+| Fecha de nacimiento | |
+| Sexo | |
+| Talla | |
+| Peso | |
+| Grupo sanguíneo | |
+
+### Antecedentes
+| Campo | Valor |
+| --- | --- |
+| Heredo-familiares | |
+| Personales patológicos | |
+| Enfermedades crónicas | |
+| Cirugías previas | |
+| Transfusiones | |
+| Tabaquismo | |
+| Alcoholismo | |
+| Consumo de sustancias | |
+| Medicación actual | |
+| Alergias | |
+| Gineco-obstétricos | |
+
+### Motivo
+| Campo | Valor |
+| --- | --- |
+| Padecimiento actual | |
+| Motivo de hospitalización | |
+
+### Fechas y montos relevantes
+<!-- Fechas clave (ingreso, cirugía, alta, autorizaciones) y montos (presupuesto, anticipos, cuentas), con unidad o moneda. Una fila por concepto. -->
+| Campo | Valor |
+| --- | --- |
+| | |
+
+## Historial de eventos
+<!-- Tabla cronológica | Fecha y hora | Tipo | Detalle |. Una fila por evento, en orden cronológico (dd/mm/aa hh:mm). Tipos permitidos: laboratorio, signos vitales, dosis de medicamento, solicitud de estudio, estudio/laboratorio programado, cirugía programada, cirugía realizada, interconsulta, cambio de ubicación, otro. En el Detalle pon valores con cifras y unidades (p. ej. "Hb 9.8 g/dL", "TA 120/80 mmHg", "Ceftriaxona 1 g IV"). En una actualización incremental solo se AÑADEN filas de eventos nuevos: no reescribas ni borres las anteriores. -->
+| Fecha y hora | Tipo | Detalle |
+| --- | --- | --- |
+
 # Paciente
 <!-- Tabla de dos columnas. Filas: Nombre (APELLIDOS NOMBRE), Edad, Sexo, Ficha / expediente, Codificación, Hospital / prestador, Región / localidad, Contrato / póliza, Aseguradora, Ubicación (UCI / Hab. / cama). "No indicado" si falta. -->
 | Campo | Valor |

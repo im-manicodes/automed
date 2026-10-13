@@ -165,4 +165,16 @@ describe('TemplatesService', () => {
       parseReportColumns(TEMPLATE_KINDS.reporte.defaultMarkdown).columnas,
     ).toHaveLength(21);
   });
+
+  it('el defecto del resumen trae Constantes e Historial de eventos antes de # Paciente', () => {
+    const md = DEFAULT_TEMPLATE_MARKDOWN;
+    const paciente = md.indexOf('\n# Paciente');
+    const constantes = md.indexOf('\n## Constantes');
+    const historial = md.indexOf('\n## Historial de eventos');
+    expect(constantes).toBeGreaterThan(-1);
+    expect(historial).toBeGreaterThan(constantes);
+    expect(paciente).toBeGreaterThan(historial);
+    expect(md).toContain('| Fecha y hora | Tipo | Detalle |');
+    expect(validateTemplateMarkdown(md)).toBeNull();
+  });
 });
