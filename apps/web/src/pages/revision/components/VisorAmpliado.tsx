@@ -119,14 +119,14 @@ export default function VisorAmpliado({ img, bbox, numero, onCerrar, formulario,
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/70 lg:items-center lg:p-6" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center">
       <div
         ref={dialogo}
         role="dialog"
         aria-modal="true"
         aria-label={`Recorte ampliado de la duda ${numero}`}
         onKeyDown={alTeclear}
-        className="flex h-dvh w-full flex-col gap-2 bg-white p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] lg:h-full lg:max-h-[96dvh] lg:max-w-[96vw] lg:rounded-2xl lg:p-3 lg:shadow-2xl"
+        className="flex h-dvh max-h-none w-screen max-w-none flex-col gap-2 rounded-none bg-white p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))]"
       >
         <div className="flex flex-wrap items-center gap-2">
           <p className="order-1 mr-auto text-base font-semibold">{total ? `Duda ${numero} de ${total}` : `Duda ${numero}`}</p>
@@ -231,7 +231,7 @@ export default function VisorAmpliado({ img, bbox, numero, onCerrar, formulario,
             />
           </div>
         </div>
-        {formulario && <div className="max-h-[48dvh] overflow-y-auto px-1 lg:max-h-[42dvh]">{formulario}</div>}
+        {formulario && <div className="max-h-[45dvh] shrink-0 overflow-y-auto px-1">{formulario}</div>}
         <p className="text-sm text-slate-600">
           {tactil
             ? 'Pellizca para acercar, arrastra para mover, toca dos veces para acercar o alejar.'
