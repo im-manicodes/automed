@@ -32,7 +32,6 @@ export class OcrSettingsController {
       origen: eff.origen,
       textractMode: eff.textractMode,
       visionRetry: eff.visionRetry,
-      visionSegundoIntento: eff.visionSegundoIntento,
       visionMaxRegions: eff.visionMaxRegions,
       renderDpi: eff.renderDpi,
       visionAmbito: eff.visionAmbito,

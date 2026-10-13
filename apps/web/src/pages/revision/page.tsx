@@ -17,7 +17,6 @@ import {
 import type { ApiPagesResponse } from './lib/types';
 import { usePaginasAdjunto } from './hooks/usePaginasAdjunto';
 import { useGuardado } from './hooks/useGuardado';
-import { useAjustesIa } from '../../hooks/useAjustesIa';
 import { useEsEscritorio } from '../../hooks/useEsEscritorio';
 import { usePaginaImagen } from '../../hooks/usePaginaImagen';
 import VisorAmpliado from './components/VisorAmpliado';
@@ -77,7 +76,6 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
   const [paginaVista, setPaginaVista] = useState<number | null>(null);
   const [ampliado, setAmpliado] = useState(false);
   const escritorio = useEsEscritorio();
-  const { data: ajustesIa } = useAjustesIa();
   const [guardados, setGuardados] = useState<Record<string, string>>({});
   const { estados, enviar, reintentarTodo, conError, guardando } = useGuardado();
   const titulo = useRef<HTMLHeadingElement>(null);
@@ -214,9 +212,7 @@ function Revision({ datos, ticketId, attachmentId }: { datos: ApiPagesResponse; 
   const formulario = (
     <FormularioDuda
       key={actual.id}
-      regionId={actual.id}
-      sugerenciasActivas={ajustesIa?.sugerencias !== false}
-      yaCorregida={!!(guardados[actual.id] ?? actual.textoGuardado)}
+      sugerenciasIa={guardados[actual.id] ?? actual.textoGuardado ? [] : actual.sugerencias}
       textoInicial={textoInicial(borradores.leer(actual.id), guardados[actual.id] ?? actual.textoGuardado, actual.sugerencia)}
       sugerencia={actual.sugerencia}
       esUltima={esUltima}

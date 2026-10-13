@@ -115,3 +115,41 @@ describe('AttachmentsService.listPages (confianza)', () => {
     expect(r.nivel).toBe('media');
   });
 });
+
+describe('AttachmentsService.listPages (sugerencias)', () => {
+  it('cada región incluye sugerencias: string[] (vacío si no hay)', async () => {
+    const { svc } = setup('hilos/t1/pdf_1/original.pdf', 'k', []);
+    const region = (id: string, sugerencias: unknown) => ({
+      id,
+      x: 0,
+      y: 0,
+      w: 0.1,
+      h: 0.1,
+      text: 't',
+      confidence: 0.4,
+      status: 'dudoso',
+      userText: null,
+      sugerencias,
+    });
+    (svc as any).prisma.ocrPage.findMany.mockResolvedValue([
+      {
+        pageNumber: 1,
+        width: 1,
+        height: 1,
+        imageKey: 'k',
+        engine: 'mock',
+        regions: [
+          region('r1', ['A', 'B']),
+          region('r2', null),
+          region('r3', ['', 5, 'C', 'D', 'E']),
+        ],
+      },
+    ]);
+    const r = await svc.listPages('a1');
+    expect(r.pages[0].regions.map((x: any) => x.sugerencias)).toEqual([
+      ['A', 'B'],
+      [],
+      ['C', 'D'],
+    ]);
+  });
+});

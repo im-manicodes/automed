@@ -187,22 +187,24 @@ model OcrPage {
 }
 
 model OcrRegion {
-  id         String       @id @default(uuid())
-  pageId     String
+  id          String       @id @default(uuid())
+  pageId      String
   /// Caja normalizada 0..1
-  x          Float
-  y          Float
-  w          Float
-  h          Float
-  text       String
-  confidence Float
-  status     RegionStatus @default(ok)
-  userText   String?
+  x           Float
+  y           Float
+  w           Float
+  h           Float
+  text        String
+  confidence  Float
+  status      RegionStatus @default(ok)
+  userText    String?
   /// Origen del texto vigente: ocr | vision | usuario
-  source     String       @default("ocr")
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  page       OcrPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  source      String       @default("ocr")
+  /// Hasta 2 lecturas posibles de una zona dudosa (pasada 3 del OCR, modelo vision_sugerencias)
+  sugerencias Json?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  page        OcrPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@index([pageId, status])
 }

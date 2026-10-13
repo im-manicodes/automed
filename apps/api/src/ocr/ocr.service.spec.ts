@@ -12,7 +12,7 @@ function setup(
   opts: {
     existingPages?: number;
     visionEnabled?: boolean;
-    secondPass?: boolean;
+    /** Lectura que devuelve la pasada única para cada zona (null = sin lectura). */
     visionReading?: { text: string; confidence: number } | null;
     /** Respuesta de pdf-extract por página; null = servicio caído/desactivado. */
     textPages?:
@@ -68,20 +68,17 @@ function setup(
   };
   const vision: any = {
     isEnabled: jest.fn().mockResolvedValue(opts.visionEnabled ?? false),
-    isSecondPassEnabled: jest.fn().mockResolvedValue(opts.secondPass ?? true),
     acceptThreshold: 0.9,
     getMaxRegions: jest.fn().mockResolvedValue(10),
-    modelFor: jest.fn((task: string) =>
-      Promise.resolve(task === 'vision' ? 'modelo-lectura' : 'modelo-respaldo'),
-    ),
-    // Por defecto la 1ª pasada no resuelve nada; el respaldo (en lote) devuelve `visionReading`.
-    rereadBatch: jest.fn(
-      (_png: unknown, items: unknown[], task: string = 'vision') =>
-        Promise.resolve(
-          items.map(() =>
-            task === 'vision_respaldo' ? (opts.visionReading ?? null) : null,
-          ),
-        ),
+    modelFor: jest.fn().mockResolvedValue('modelo-lectura'),
+    // Pasada única: por zona, `visionReading` y 2 alternativas.
+    readZones: jest.fn((_png: unknown, items: any[]) =>
+      Promise.resolve(
+        items.map((it) => ({
+          lectura: opts.visionReading ?? null,
+          sugerencias: [`S1 ${it.ocrText}`, `S2 ${it.ocrText}`],
+        })),
+      ),
     ),
   };
   const pdfText: any = {
@@ -173,7 +170,8 @@ describe('OcrService (procesador de adjuntos)', () => {
       visionReading: { text: 'borrosa leída', confidence: 0.95 },
     });
     await svc.process('att1');
-    expect(vision.rereadBatch).toHaveBeenCalledTimes(4); // 2 páginas x 2 pasadas
+    expect(vision.readZones).toHaveBeenCalledTimes(2); // 1 por página, una sola pasada
+    expect(vision.readZones.mock.calls[0][2]).toBe('t1');
     const r = created[0].regions.create[1];
     expect(r).toMatchObject({
       status: 'ok',
@@ -181,24 +179,34 @@ describe('OcrService (procesador de adjuntos)', () => {
       confidence: 0.95,
       source: 'vision',
     });
+    expect(r).not.toHaveProperty('sugerencias');
   });
 
-  it('relectura de baja confianza o sin respuesta deja la región dudosa', async () => {
+  it('relectura de baja confianza o sin respuesta deja la región dudosa con sus sugerencias', async () => {
     for (const reading of [{ text: 'x', confidence: 0.5 }, null]) {
-      const { svc, created } = setup({
+      const { svc, created, vision } = setup({
         visionEnabled: true,
         visionReading: reading,
       });
       await svc.process('att1');
-      expect(created[0].regions.create[1].status).toBe('dudoso');
-      expect(created[0].regions.create[1].text).toBe('borroso');
+      expect(vision.readZones).toHaveBeenCalledTimes(2);
+      expect(created[0].regions.create[1]).toMatchObject({
+        status: 'dudoso',
+        text: 'borroso',
+        source: 'ocr',
+        sugerencias: ['S1 borroso', 'S2 borroso'],
+      });
+      expect(created[0].regions.create[0]).not.toHaveProperty('sugerencias');
     }
   });
 
-  it('sin visión no llama al LLM', async () => {
-    const { svc, vision } = setup({ visionEnabled: false });
+  it('sin visión no llama al LLM ni guarda sugerencias', async () => {
+    const { svc, vision, created } = setup({ visionEnabled: false });
     await svc.process('att1');
-    expect(vision.rereadBatch).not.toHaveBeenCalled();
+    expect(vision.readZones).not.toHaveBeenCalled();
+    expect(
+      created[0].regions.create.every((r: any) => !('sugerencias' in r)),
+    ).toBe(true);
   });
 
   it('ignora el error de unicidad (otro worker ya guardó ese sha256)', async () => {
@@ -226,7 +234,7 @@ describe('OcrService (procesador de adjuntos)', () => {
       });
       await svc.process('att1');
       expect(engine.recognize).not.toHaveBeenCalled();
-      expect(vision.rereadBatch).not.toHaveBeenCalled();
+      expect(vision.readZones).not.toHaveBeenCalled();
       expect(storage.put).toHaveBeenCalledTimes(2); // sigue guardando pagina_<k>.png
       expect(created).toHaveLength(2);
       expect(created[0]).toMatchObject({
@@ -308,7 +316,7 @@ describe('OcrService (procesador de adjuntos)', () => {
       await expect(
         svc.process('att1', { shouldContinue }),
       ).rejects.toBeInstanceOf(CancelledError);
-      expect(vision.rereadBatch).toHaveBeenCalledTimes(1);
+      expect(vision.readZones).toHaveBeenCalledTimes(1);
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(created).toHaveLength(0);
     });
@@ -322,95 +330,7 @@ describe('OcrService (procesador de adjuntos)', () => {
     });
   });
 
-  describe('progreso con modelo y pasada', () => {
-    const values = (prisma: any) =>
-      prisma.setting.upsert.mock.calls.map((c: any[]) => c[0].update.value);
-
-    it('escribe el modelo y la pasada en las etapas de dudosas (1 = lectura, 2 = respaldo)', async () => {
-      const { svc, prisma, vision } = setup({ visionEnabled: true });
-      await svc.retryWithVision(
-        new Uint8Array([1]),
-        [
-          {
-            box: { x: 0, y: 0, w: 0.1, h: 0.1 },
-            text: 'd',
-            confidence: 0.4,
-            status: 'dudoso',
-            source: 'ocr',
-          },
-        ],
-        't1',
-      );
-      expect(prisma.setting.upsert.mock.calls[0][0].where).toEqual({
-        key: 'progress:t1',
-      });
-      expect(values(prisma)).toEqual([
-        {
-          etapa: 'vision_enviando',
-          regiones: { total: 1, hechas: 0 },
-          modelo: 'modelo-lectura',
-          pasada: 1,
-        },
-        {
-          etapa: 'vision_procesando',
-          regiones: { total: 1, hechas: 0 },
-          modelo: 'modelo-lectura',
-          pasada: 1,
-        },
-        {
-          etapa: 'vision_procesando',
-          regiones: { total: 1, hechas: 0 },
-          modelo: 'modelo-respaldo',
-          pasada: 2,
-        },
-      ]);
-      // el modelo se lee una vez por pasada
-      expect(vision.modelFor).toHaveBeenCalledTimes(2);
-    });
-
-    it('segundo intento apagado: nunca escribe la pasada 2', async () => {
-      const { svc, prisma } = setup({ visionEnabled: true, secondPass: false });
-      await svc.retryWithVision(
-        new Uint8Array([1]),
-        [
-          {
-            box: { x: 0, y: 0, w: 0.1, h: 0.1 },
-            text: 'd',
-            confidence: 0.4,
-            status: 'dudoso',
-            source: 'ocr',
-          },
-        ],
-        't1',
-      );
-      expect(values(prisma).some((v: any) => v.pasada === 2)).toBe(false);
-    });
-
-    it('si no se puede leer el modelo, el progreso sale sin él y el OCR sigue', async () => {
-      const { svc, prisma, vision } = setup({ visionEnabled: true });
-      vision.modelFor.mockRejectedValue(new Error('x'));
-      await svc.retryWithVision(
-        new Uint8Array([1]),
-        [
-          {
-            box: { x: 0, y: 0, w: 0.1, h: 0.1 },
-            text: 'd',
-            confidence: 0.4,
-            status: 'dudoso',
-            source: 'ocr',
-          },
-        ],
-        't1',
-      );
-      expect(values(prisma)[0]).toEqual({
-        etapa: 'vision_enviando',
-        regiones: { total: 1, hechas: 0 },
-        pasada: 1,
-      });
-    });
-  });
-
-  describe('retryWithVision en lote', () => {
+  describe('pasada única en lote (readDoubtfulZones)', () => {
     const dudosas = (n: number, okCount = 0) => [
       ...Array.from({ length: okCount }, (_, i) => ({
         box: { x: 0, y: 0, w: 0.1, h: 0.1 },
@@ -427,101 +347,169 @@ describe('OcrService (procesador de adjuntos)', () => {
         source: 'ocr' as const,
       })),
     ];
-    const good = (t: string) => ({ text: t, confidence: 0.95 });
+    const values = (prisma: any) =>
+      prisma.setting.upsert.mock.calls.map((c: any[]) => c[0].update.value);
+    const zona = (
+      text: string | null,
+      confidence = 0.95,
+      sug: string[] = [],
+    ) => ({
+      lectura: text === null ? null : { text, confidence },
+      sugerencias: sug,
+    });
 
-    it('8 dudosas -> 2 lotes (6+2) y sin 2ª pasada si el lote resuelve', async () => {
+    it('progreso con modelo y regiones, sin pasada; el modelo se lee una vez', async () => {
+      const { svc, prisma, vision } = setup({ visionEnabled: true });
+      await svc.readDoubtfulZones(new Uint8Array([1]), dudosas(8), 't1');
+      expect(prisma.setting.upsert.mock.calls[0][0].where).toEqual({
+        key: 'progress:t1',
+      });
+      expect(values(prisma)).toEqual([
+        {
+          etapa: 'vision_enviando',
+          regiones: { total: 8, hechas: 0 },
+          modelo: 'modelo-lectura',
+        },
+        {
+          etapa: 'vision_procesando',
+          regiones: { total: 8, hechas: 0 },
+          modelo: 'modelo-lectura',
+        },
+        {
+          etapa: 'vision_procesando',
+          regiones: { total: 8, hechas: 6 },
+          modelo: 'modelo-lectura',
+        },
+      ]);
+      expect(vision.modelFor).toHaveBeenCalledTimes(1);
+      expect(vision.modelFor).toHaveBeenCalledWith('vision');
+    });
+
+    it('si no se puede leer el modelo, el progreso sale sin él y el OCR sigue', async () => {
+      const { svc, prisma, vision } = setup({ visionEnabled: true });
+      vision.modelFor.mockRejectedValue(new Error('x'));
+      await svc.readDoubtfulZones(new Uint8Array([1]), dudosas(1), 't1');
+      expect(values(prisma)[0]).toEqual({
+        etapa: 'vision_enviando',
+        regiones: { total: 1, hechas: 0 },
+      });
+    });
+
+    it('8 dudosas -> 2 lotes (6+2), una sola llamada por lote, con threadId', async () => {
       const { svc, vision } = setup({ visionEnabled: true });
-      vision.rereadBatch.mockImplementation((_p: unknown, items: any[]) =>
-        Promise.resolve(items.map((it) => good('L' + it.ocrText))),
+      vision.readZones.mockImplementation((_p: unknown, items: any[]) =>
+        Promise.resolve(items.map((it) => zona('L' + it.ocrText))),
       );
-      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(8, 2));
-      expect(vision.rereadBatch).toHaveBeenCalledTimes(2);
-      expect(vision.rereadBatch.mock.calls[0][1]).toHaveLength(6);
-      expect(vision.rereadBatch.mock.calls[1][1]).toHaveLength(2);
+      const out = await svc.readDoubtfulZones(
+        new Uint8Array([1]),
+        dudosas(8, 2),
+        't1',
+      );
+      expect(vision.readZones).toHaveBeenCalledTimes(2);
+      expect(vision.readZones.mock.calls[0][1]).toHaveLength(6);
+      expect(vision.readZones.mock.calls[1][1]).toHaveLength(2);
+      expect(vision.readZones.mock.calls[0][2]).toBe('t1');
       expect(out.filter((r) => r.source === 'vision')).toHaveLength(8);
       expect(out.slice(0, 2).every((r) => r.source === 'ocr')).toBe(true);
     });
 
-    it('lo que el lote no resuelve va JUNTO al respaldo en una sola llamada', async () => {
+    it('aceptación por umbral; lo no resuelto queda dudoso con sugerencias y sin más pasadas', async () => {
       const { svc, vision } = setup({ visionEnabled: true });
-      vision.rereadBatch.mockImplementation(
-        (_p: unknown, items: any[], task: string) =>
-          Promise.resolve(
-            task === 'vision_respaldo'
-              ? items.map(() => good('respaldo'))
-              : [good('a'), null, { text: 'b', confidence: 0.3 }],
-          ),
-      );
-      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
-      expect(vision.rereadBatch).toHaveBeenCalledTimes(2);
-      const [, items, task] = vision.rereadBatch.mock.calls[1];
-      expect(task).toBe('vision_respaldo');
-      expect(items).toHaveLength(2); // nunca recortes sueltos
-      expect(out.map((r) => r.text)).toEqual(['a', 'respaldo', 'respaldo']);
-      expect(out.every((r) => r.status === 'ok')).toBe(true);
+      vision.readZones.mockResolvedValue([
+        zona('a', 0.95, ['a', 'a2']),
+        zona(null, 0, ['b1', 'b2']),
+        zona('c', 0.3, ['c', 'c1']),
+      ]);
+      const out = await svc.readDoubtfulZones(new Uint8Array([1]), dudosas(3));
+      expect(vision.readZones).toHaveBeenCalledTimes(1);
+      expect(out[0]).toMatchObject({
+        status: 'ok',
+        text: 'a',
+        source: 'vision',
+      });
+      expect(out[0]).not.toHaveProperty('sugerencias');
+      expect(out[1]).toMatchObject({
+        status: 'dudoso',
+        text: 'd1',
+        source: 'ocr',
+        sugerencias: ['b1', 'b2'],
+      });
+      expect(out[2]).toMatchObject({
+        status: 'dudoso',
+        text: 'd2',
+        confidence: 0.4,
+        sugerencias: ['c', 'c1'],
+      });
     });
 
-    it('si el lote lanza excepción, todo el trozo va al respaldo en lote', async () => {
+    it('zona dudosa sin sugerencias válidas no lleva la propiedad', async () => {
       const { svc, vision } = setup({ visionEnabled: true });
-      vision.rereadBatch.mockImplementation(
-        (_p: unknown, items: any[], task: string) =>
-          task === 'vision'
-            ? Promise.reject(new Error('boom'))
-            : Promise.resolve(items.map(() => good('r'))),
-      );
-      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
-      expect(vision.rereadBatch).toHaveBeenCalledTimes(2);
-      expect(vision.rereadBatch.mock.calls[1][1]).toHaveLength(3);
-      expect(vision.rereadBatch.mock.calls[1][2]).toBe('vision_respaldo');
-      expect(out.every((r) => r.status === 'ok')).toBe(true);
+      vision.readZones.mockResolvedValue([zona(null)]);
+      const out = await svc.readDoubtfulZones(new Uint8Array([1]), dudosas(1));
+      expect(out[0].status).toBe('dudoso');
+      expect(out[0]).not.toHaveProperty('sugerencias');
     });
 
-    it('sin pendientes tras la 1ª pasada no hay 2ª pasada', async () => {
+    it('un lote fallido deja esas zonas dudosas sin sugerencias y sigue con el resto', async () => {
       const { svc, vision } = setup({ visionEnabled: true });
-      vision.rereadBatch.mockImplementation((_p: unknown, items: any[]) =>
-        Promise.resolve(items.map(() => good('x'))),
-      );
-      await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
-      expect(vision.rereadBatch).toHaveBeenCalledTimes(1);
+      vision.readZones
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockImplementationOnce((_p: unknown, items: any[]) =>
+          Promise.resolve(items.map(() => zona(null, 0, ['x']))),
+        );
+      const out = await svc.readDoubtfulZones(new Uint8Array([1]), dudosas(8));
+      expect(vision.readZones).toHaveBeenCalledTimes(2);
+      expect(out.slice(0, 6).every((r) => !r.sugerencias)).toBe(true);
+      expect(out.slice(6).every((r) => r.sugerencias?.[0] === 'x')).toBe(true);
+      expect(out.every((r) => r.status === 'dudoso')).toBe(true);
     });
 
-    it('segundo intento apagado: una sola pasada y lo no resuelto queda dudoso', async () => {
-      const { svc, vision } = setup({ visionEnabled: true, secondPass: false });
-      vision.rereadBatch.mockImplementation((_p: unknown, items: any[]) =>
-        Promise.resolve(items.map((_, j) => (j === 0 ? good('a') : null))),
-      );
-      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(3));
-      expect(vision.rereadBatch).toHaveBeenCalledTimes(1);
-      expect(
-        vision.rereadBatch.mock.calls.some(
-          (c: any[]) => c[2] === 'vision_respaldo',
-        ),
-      ).toBe(false);
-      expect(out.map((r) => r.status)).toEqual(['ok', 'dudoso', 'dudoso']);
+    it('un lote fallido no rompe el OCR: el adjunto se guarda', async () => {
+      const { svc, vision, created } = setup({ visionEnabled: true });
+      vision.readZones.mockRejectedValue(new Error('boom'));
+      await svc.process('att1');
+      expect(created).toHaveLength(2);
+      expect(created[0].regions.create[1].status).toBe('dudoso');
+      expect(created[0].regions.create[1]).not.toHaveProperty('sugerencias');
     });
 
     it('respeta getMaxRegions por página', async () => {
       const { svc, vision } = setup({ visionEnabled: true });
       vision.getMaxRegions.mockResolvedValue(4);
-      vision.rereadBatch.mockImplementation((_p: unknown, items: any[]) =>
-        Promise.resolve(items.map(() => good('x'))),
+      vision.readZones.mockImplementation((_p: unknown, items: any[]) =>
+        Promise.resolve(items.map(() => zona('x'))),
       );
-      const out = await svc.retryWithVision(new Uint8Array([1]), dudosas(8));
-      expect(vision.rereadBatch.mock.calls[0][1]).toHaveLength(4);
+      const out = await svc.readDoubtfulZones(new Uint8Array([1]), dudosas(8));
+      expect(vision.readZones.mock.calls[0][1]).toHaveLength(4);
       expect(out.filter((r) => r.status === 'ok')).toHaveLength(4);
       expect(out.filter((r) => r.status === 'dudoso')).toHaveLength(4);
     });
 
+    it('respeta la cancelación entre lotes', async () => {
+      const { svc, vision } = setup({ visionEnabled: true });
+      let calls = 0;
+      const shouldContinue = jest.fn(() => Promise.resolve(++calls < 2));
+      await expect(
+        svc.readDoubtfulZones(
+          new Uint8Array([1]),
+          dudosas(8),
+          't1',
+          shouldContinue,
+        ),
+      ).rejects.toBeInstanceOf(CancelledError);
+      expect(vision.readZones).toHaveBeenCalledTimes(1);
+    });
+
     it('sin dudosas o con visión apagada no hay llamadas; las ok nunca se envían', async () => {
       const a = setup({ visionEnabled: true });
-      await a.svc.retryWithVision(new Uint8Array([1]), dudosas(0, 3));
-      expect(a.vision.rereadBatch).not.toHaveBeenCalled();
+      await a.svc.readDoubtfulZones(new Uint8Array([1]), dudosas(0, 3));
+      expect(a.vision.readZones).not.toHaveBeenCalled();
       const b = setup({ visionEnabled: false });
-      await b.svc.retryWithVision(new Uint8Array([1]), dudosas(3));
-      expect(b.vision.rereadBatch).not.toHaveBeenCalled();
+      await b.svc.readDoubtfulZones(new Uint8Array([1]), dudosas(3));
+      expect(b.vision.readZones).not.toHaveBeenCalled();
       const c = setup({ visionEnabled: true });
-      await c.svc.retryWithVision(new Uint8Array([1]), dudosas(2, 3));
-      const sent = c.vision.rereadBatch.mock.calls[0][1].map(
+      await c.svc.readDoubtfulZones(new Uint8Array([1]), dudosas(2, 3));
+      const sent = c.vision.readZones.mock.calls[0][1].map(
         (i: any) => i.ocrText,
       );
       expect(sent).toEqual(['d0', 'd1']);

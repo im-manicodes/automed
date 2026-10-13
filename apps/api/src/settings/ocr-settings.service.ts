@@ -27,8 +27,6 @@ export interface OcrStoredConfig {
   motor?: OcrMotor;
   textractMode?: TextractMode;
   visionRetry?: boolean;
-  /** Segundo intento en lote con el modelo de respaldo; ausente = activado. */
-  visionSegundoIntento?: boolean;
   visionMaxRegions?: number;
   renderDpi?: number;
   /** Ámbito de la relectura con visión; ausente = por defecto, '' = sin ámbito. */
@@ -58,7 +56,6 @@ export interface OcrEffectiveConfig {
   motor: OcrMotor;
   textractMode: TextractMode;
   visionRetry: boolean;
-  visionSegundoIntento: boolean;
   visionMaxRegions: number;
   renderDpi: number;
   visionAmbito: string;
@@ -69,7 +66,6 @@ export interface OcrSettingsInput {
   motor?: OcrMotor;
   textractMode?: TextractMode;
   visionRetry?: boolean;
-  visionSegundoIntento?: boolean;
   visionMaxRegions?: number;
   renderDpi?: number;
   /** string = texto; '' = sin ámbito; null = valor por defecto. */
@@ -111,10 +107,6 @@ export class OcrSettingsService {
         typeof stored?.visionRetry === 'boolean'
           ? stored.visionRetry
           : this.config.get<string>('OCR_VISION_RETRY') === 'true',
-      visionSegundoIntento:
-        typeof stored?.visionSegundoIntento === 'boolean'
-          ? stored.visionSegundoIntento
-          : true,
       visionMaxRegions: intIn(
         stored?.visionMaxRegions,
         MIN_VISION_MAX_REGIONS,
@@ -207,7 +199,6 @@ export class OcrSettingsService {
       motor: raw.motor,
       textractMode: raw.textractMode,
       visionRetry: raw.visionRetry,
-      visionSegundoIntento: raw.visionSegundoIntento,
       visionMaxRegions: raw.visionMaxRegions,
       renderDpi: raw.renderDpi,
       visionAmbito: raw.visionAmbito,
@@ -259,14 +250,6 @@ export class OcrSettingsService {
       );
     }
     if (
-      input.visionSegundoIntento !== undefined &&
-      typeof input.visionSegundoIntento !== 'boolean'
-    ) {
-      throw new BadRequestException(
-        'Indica si se usa el segundo intento con otro modelo (sí o no)',
-      );
-    }
-    if (
       input.visionMaxRegions !== undefined &&
       !intIn(
         input.visionMaxRegions,
@@ -298,7 +281,6 @@ export class OcrSettingsService {
       input.motor !== undefined ||
       input.textractMode !== undefined ||
       input.visionRetry !== undefined ||
-      input.visionSegundoIntento !== undefined ||
       input.visionMaxRegions !== undefined ||
       input.renderDpi !== undefined ||
       input.visionAmbito !== undefined ||
@@ -307,12 +289,12 @@ export class OcrSettingsService {
     ) {
       const prev = (await this.stored()) ?? {};
       const next: OcrStoredConfig = { ...prev };
+      // Ajuste retirado (una sola pasada de visión): se descarta al guardar.
+      delete (next as Record<string, unknown>).visionSegundoIntento;
       if (input.motor !== undefined) next.motor = input.motor;
       if (input.textractMode !== undefined)
         next.textractMode = input.textractMode;
       if (input.visionRetry !== undefined) next.visionRetry = input.visionRetry;
-      if (input.visionSegundoIntento !== undefined)
-        next.visionSegundoIntento = input.visionSegundoIntento;
       if (input.visionMaxRegions !== undefined)
         next.visionMaxRegions = input.visionMaxRegions;
       if (input.renderDpi !== undefined) next.renderDpi = input.renderDpi;

@@ -19,8 +19,6 @@ function eff(
       evento: 'm-ev',
       reporte: 'm-rep',
       vision: 'm-vis',
-      vision_respaldo: 'm-vis-r',
-      vision_sugerencias: 'm-vis-s',
     },
     maxInputTokens: 60000,
     llm: {

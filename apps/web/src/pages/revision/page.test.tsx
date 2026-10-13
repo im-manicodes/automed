@@ -1,9 +1,7 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { mockFetch } from '../../test/mockFetch';
-import { ajustesIa } from '../../test/ajustesIa';
-import { limpiarCacheSugerencias } from './hooks/useSugerencias';
 import { _vaciarCachePaginas } from '../../hooks/usePaginaImagen';
 import RevisionPage from './page';
 
@@ -47,13 +45,11 @@ function mediaMovil() {
 }
 
 beforeEach(() => {
-  limpiarCacheSugerencias();
   _vaciarCachePaginas();
   mediaMovil();
   vi.stubGlobal('Image', ImagenFalsa);
   mockFetch({
     'GET /api/attachments/a1/pages': { body: respuesta },
-    'POST /api/ocr/regions/r1/suggest': { body: { sugerencias: [] } },
   });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -81,11 +77,12 @@ describe('Revisión en celular', () => {
     expect(within(d).getByText('Duda 1 de 1')).toBeInTheDocument();
   });
 
-  it('con las sugerencias apagadas en Ajustes -> IA no muestra «Obtener recomendaciones»', async () => {
-    const f = mockFetch({
-      'GET /api/attachments/a1/pages': { body: respuesta },
-      'GET /api/settings/ia': { body: ajustesIa({ sugerencias: false }) },
-    });
+  it('muestra las sugerencias guardadas de la duda sin llamar a /suggest', async () => {
+    const conSug = {
+      ...respuesta,
+      pages: respuesta.pages.map((p) => ({ ...p, regions: p.regions.map((r) => ({ ...r, sugerencias: ['120', '12O'] })) })),
+    };
+    const f = mockFetch({ 'GET /api/attachments/a1/pages': { body: conSug } });
     render(
       <MemoryRouter initialEntries={['/tickets/t1/revision/a1']}>
         <Routes>
@@ -93,9 +90,8 @@ describe('Revisión en celular', () => {
         </Routes>
       </MemoryRouter>,
     );
-    expect(await screen.findByText('Toca el recorte para verlo más grande.')).toBeInTheDocument();
-    await waitFor(() => expect(f.mock.calls.some(([u]) => String(u) === '/api/settings/ia')).toBe(true));
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Obtener recomendaciones' })).toBeNull());
+    expect(await screen.findByRole('button', { name: /Sugerencia 1: “120”/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Obtener recomendaciones/ })).toBeNull();
     expect(f.mock.calls.some(([u]) => String(u).includes('/suggest'))).toBe(false);
   });
 });

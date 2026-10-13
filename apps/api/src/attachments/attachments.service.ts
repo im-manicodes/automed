@@ -4,6 +4,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ownPageKey } from '../storage/storage-keys';
 import { StorageService } from '../storage/storage.service';
 
+/** `OcrRegion.sugerencias` (Json) -> arreglo de textos; vacío si no hay o no es válido. */
+export function sugerenciasOf(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
+    .slice(0, 2);
+}
+
 @Injectable()
 export class AttachmentsService {
   constructor(
@@ -49,6 +57,7 @@ export class AttachmentsService {
               confidence: r.confidence,
               status: r.status,
               textoUsuario: r.userText,
+              sugerencias: sugerenciasOf(r.sugerencias),
             })),
         };
       }),

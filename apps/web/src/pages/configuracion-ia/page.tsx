@@ -50,8 +50,6 @@ function Formulario({ inicial }: { inicial: AjustesIa }) {
           modelos={borrador.modelos}
           sugeridos={ajustes.sugeridos[borrador.proveedor] ?? { texto: [], vision: [] }}
           onChange={(t, m) => setBorrador((b) => ({ ...b, modelos: { ...b.modelos, [t]: m } }))}
-          activas={{ segundoIntento: borrador.segundoIntento, sugerencias: borrador.sugerencias }}
-          onActivar={(k, v) => setBorrador((b) => ({ ...b, [k]: v }))}
         />
       </section>
 

@@ -84,8 +84,6 @@ describe('RecorteCanvas con onAbrir', () => {
 describe('VisorAmpliado con formulario', () => {
   const formulario = (onGuardar = vi.fn()) => (
     <FormularioDuda
-      regionId="r1"
-      yaCorregida
       textoInicial=""
       sugerencia=""
       esUltima={false}
@@ -131,8 +129,6 @@ describe('VisorAmpliado con formulario', () => {
 describe('VisorAmpliado táctil', () => {
   const campoForm = (
     <FormularioDuda
-      regionId="r1"
-      yaCorregida
       textoInicial=""
       sugerencia=""
       esUltima={false}

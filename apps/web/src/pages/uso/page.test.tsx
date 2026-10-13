@@ -38,7 +38,7 @@ describe('Ajustes: uso y costo', () => {
     renderPage()
     const lista = await screen.findByRole('list', { name: 'Uso por modelo y actividad' })
     expect(within(lista).getByText('Resumen del ticket')).toBeInTheDocument()
-    expect(within(lista).getByText('Segundo intento de zonas dudosas')).toBeInTheDocument()
+    expect(within(lista).getByText('Segundo intento de zonas dudosas (histórico)')).toBeInTheDocument()
     expect(within(lista).getByText('OCR de pago (por página)')).toBeInTheDocument()
     expect(within(lista).getByText('Sin precio')).toBeInTheDocument()
     expect(within(lista).getByText(/Caché: 40\D?000 leídos · 5\D?000 escritos/)).toBeInTheDocument()

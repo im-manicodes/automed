@@ -150,6 +150,24 @@ describe('UsageService.summary', () => {
     });
   });
 
+  it('registros históricos con tareas retiradas (vision_respaldo/vision_sugerencias) se siguen agregando y valorando', async () => {
+    const { svc } = make([
+      row({ task: 'vision', inputTokens: 1_000_000 }),
+      row({ task: 'vision_respaldo', inputTokens: 1_000_000 }),
+      row({ task: 'vision_sugerencias', outputTokens: 1_000_000 }),
+    ]);
+    const r = await svc.summary('7d', NOW);
+    expect(r.totales.costo).toBe(12);
+    const tasks = r.porModelo.map((g) => g.task).sort();
+    expect(tasks).toEqual(['vision', 'vision_respaldo', 'vision_sugerencias']);
+    expect(r.porModelo.find((g) => g.task === 'vision_respaldo')).toMatchObject(
+      { llamadas: 1, costo: 2 },
+    );
+    expect(
+      r.porModelo.find((g) => g.task === 'vision_sugerencias'),
+    ).toMatchObject({ llamadas: 1, costo: 8 });
+  });
+
   it('periodos hoy y mes en la zona del reporte; periodo inválido -> 400', async () => {
     const { svc } = make([], PRICES, 'America/Mexico_City');
     expect((await svc.summary('hoy', NOW)).desde).toBe(

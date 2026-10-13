@@ -31,11 +31,9 @@ describe('EtapasAnalisis', () => {
     expect(screen.getByText('Zona 2 de 4')).toBeInTheDocument()
   })
 
-  it('muestra pasada y modelo en las zonas dudosas', () => {
-    const { rerender } = render(<EtapasAnalisis progreso={p('procesando_dudosas', { regiones: { total: 4, hechas: 1 }, modelo: 'gpt-6-luna', pasada: 1 })} />)
-    expect(screen.getByText('Pasada 1 · Zona 2 de 4 · gpt-6-luna')).toBeInTheDocument()
-    rerender(<EtapasAnalisis progreso={p('procesando_dudosas', { regiones: { total: 4, hechas: 2 }, modelo: 'otro', pasada: 2 })} />)
-    expect(screen.getByText('Pasada 2 (segundo intento) · Zona 3 de 4 · otro')).toBeInTheDocument()
+  it('muestra zona y modelo en las zonas dudosas', () => {
+    render(<EtapasAnalisis progreso={p('procesando_dudosas', { regiones: { total: 4, hechas: 1 }, modelo: 'gpt-6-luna' })} />)
+    expect(screen.getByText('Zona 2 de 4 · gpt-6-luna')).toBeInTheDocument()
   })
 
   it('el paso 3 sigue visible (hecho) después de haber estado activo', () => {

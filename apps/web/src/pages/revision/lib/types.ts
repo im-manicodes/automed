@@ -11,6 +11,8 @@ export interface ApiRegion {
   confidence: number;
   status: RegionStatus;
   textoUsuario: string | null;
+  /** Lecturas posibles de la IA, calculadas al analizar (0-2). */
+  sugerencias?: string[];
 }
 
 export interface ApiPage {
@@ -44,4 +46,6 @@ export interface Duda {
   sugerencia: string;
   /** Texto ya corregido en una sesión anterior (si existe). */
   textoGuardado: string | null;
+  /** Sugerencias de la IA precalculadas (0-2). */
+  sugerencias: string[];
 }

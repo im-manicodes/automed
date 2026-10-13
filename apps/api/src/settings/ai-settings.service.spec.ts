@@ -64,8 +64,6 @@ describe('AiSettingsService', () => {
     expect(e.maxInputTokens).toBe(5000);
     expect(e.llm.openaiApiKey).toBe('sk-panel');
     expect(await svc.modelFor('vision')).toBe('gpt-vis');
-    expect(await svc.modelFor('vision_respaldo')).toBe('gpt-vis');
-    expect(await svc.modelFor('vision_sugerencias')).toBe('gpt-vis');
   });
 
   it('cambiar de proveedor usa los modelos por defecto de ese proveedor y vision cae al de texto', async () => {
@@ -73,13 +71,11 @@ describe('AiSettingsService', () => {
     await svc.save({ proveedor: 'ollama' });
     const e = await svc.getEffective();
     expect(Object.values(e.modelos)).toEqual(
-      Array(7).fill('qwen3-vl:4b-instruct'),
+      Array(5).fill('qwen3-vl:4b-instruct'),
     );
     await svc.save({ modelos: { resumen: 'otro' } });
     const e2 = await svc.getEffective();
     expect(e2.modelos.vision).toBe('otro');
-    expect(e2.modelos.vision_respaldo).toBe('otro');
-    expect(e2.modelos.vision_sugerencias).toBe('otro');
   });
 
   it('cifra las claves en reposo y las descifra al usarlas', async () => {
@@ -277,26 +273,39 @@ describe('AiSettingsService', () => {
     }
   });
 
-  it('segundoIntento y sugerencias: defecto true, se guardan y validan boolean', async () => {
-    const { svc } = setup({ LLM_PROVIDER: 'openai' });
-    expect(await svc.getPublic()).toMatchObject({
-      segundoIntento: true,
-      sugerencias: true,
-    });
-    const pub = await svc.save({ segundoIntento: false });
-    expect(pub).toMatchObject({ segundoIntento: false, sugerencias: true });
-    expect(await svc.getStoredSegundoIntento()).toBe(false);
-    expect(await svc.save({ sugerencias: false })).toMatchObject({
+  it('ajustes retirados guardados (segundoIntento, sugerencias, modelos de vision_respaldo/vision_sugerencias) se ignoran sin romper', async () => {
+    const { svc, rows } = setup({ LLM_PROVIDER: 'openai' });
+    rows.set('ia.config', {
+      proveedor: 'openai',
       segundoIntento: false,
-      sugerencias: false,
+      sugerencias: true,
+      modelos: {
+        vision: 'gpt-vis',
+        vision_respaldo: 'viejo-r',
+        vision_sugerencias: 'viejo-s',
+      },
     });
-    for (const bad of ['no', 0, null]) {
-      await expect(
-        svc.save({ segundoIntento: bad as never }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      await expect(
-        svc.save({ sugerencias: bad as never }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    }
+    const pub = await svc.getPublic();
+    expect(pub).not.toHaveProperty('segundoIntento');
+    expect(pub).not.toHaveProperty('sugerencias');
+    expect(Object.keys(pub.modelos).sort()).toEqual(
+      ['evento', 'reporte', 'resumen', 'vision', 'whatsapp'].sort(),
+    );
+    expect(pub.modelos.vision).toBe('gpt-vis');
+    // Entradas antiguas en el PUT: se ignoran sin 400.
+    const out = await svc.save({
+      modelos: { vision_respaldo: 'x', resumen: 'r' },
+      segundoIntento: true,
+      sugerencias: false,
+    } as never);
+    expect(out.modelos).toMatchObject({ resumen: 'r', vision: 'gpt-vis' });
+    expect(out).not.toHaveProperty('segundoIntento');
+    const stored = rows.get('ia.config') as Record<string, any>;
+    expect(stored).not.toHaveProperty('segundoIntento');
+    expect(stored).not.toHaveProperty('sugerencias');
+    expect(stored.modelos).toEqual({ vision: 'gpt-vis', resumen: 'r' });
+    await expect(
+      svc.save({ modelos: { inventada: 'x' } as never }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

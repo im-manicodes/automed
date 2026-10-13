@@ -1,15 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { LuSparkles } from 'react-icons/lu';
-import { useSugerencias } from '../hooks/useSugerencias';
 import { MARCADOR_ILEGIBLE, textoEnviable } from '../lib/borrador';
 
 interface Props {
-  /** Id de la duda (región): se usa para pedir las sugerencias de la IA. */
-  regionId: string;
-  /** Si ya tiene corrección guardada no se ofrece pedir recomendaciones. */
-  yaCorregida?: boolean;
-  /** Ajustes -> IA -> sugerencias: si es falso no se ofrece «Obtener recomendaciones». */
-  sugerenciasActivas?: boolean;
+  /** Lecturas posibles precalculadas al analizar (0-2); vacío si la duda ya está corregida. */
+  sugerenciasIa?: string[];
   textoInicial: string;
   sugerencia: string;
   esUltima: boolean;
@@ -28,9 +23,7 @@ interface Props {
 
 /** Campo grande + botones de la duda actual. Se remonta (key) en cada duda. */
 export default function FormularioDuda({
-  regionId,
-  yaCorregida = false,
-  sugerenciasActivas = true,
+  sugerenciasIa = [],
   textoInicial,
   sugerencia,
   esUltima,
@@ -44,7 +37,6 @@ export default function FormularioDuda({
   enterGuarda = enModal,
 }: Props) {
   const [texto, setTexto] = useState(textoInicial);
-  const { estado, sugerencias, pedir } = useSugerencias(regionId);
   const campo = useRef<HTMLTextAreaElement>(null);
   const valido = textoEnviable(texto) !== null;
 
@@ -113,29 +105,7 @@ export default function FormularioDuda({
           Usar lo que leyó la máquina: “{sugerencia}”
         </button>
       )}
-      {!yaCorregida && sugerenciasActivas && (
-        <button
-          type="button"
-          className="btn btn-secondary w-full min-h-11"
-          disabled={estado === 'cargando'}
-          onClick={() => void pedir(texto)}
-        >
-          <LuSparkles aria-hidden="true" className="shrink-0" />
-          <span>{estado === 'error' ? 'Intentar otra vez' : 'Obtener recomendaciones'}</span>
-        </button>
-      )}
-      {sugerenciasActivas && estado === 'cargando' && (
-        <p role="status" className="text-base text-slate-600">
-          La IA está leyendo el recorte…
-        </p>
-      )}
-      {sugerenciasActivas && estado === 'error' && (
-        <p role="status" className="text-base text-slate-600">
-          No se pudieron obtener recomendaciones.
-        </p>
-      )}
-      {!yaCorregida && sugerenciasActivas &&
-        sugerencias.map((s, i) => (
+      {sugerenciasIa.slice(0, 2).map((s, i) => (
           <button
             key={i}
             type="button"

@@ -27,8 +27,6 @@ export interface ProgresoAnalisis {
   reintento?: { intento: number; maximo: number }
   /** Modelo que lee las zonas dudosas (solo en procesando_dudosas / ia_dudosas). */
   modelo?: string
-  /** 1 = modelo de lectura; 2 = segundo intento (solo en esas etapas). */
-  pasada?: 1 | 2
 }
 
 export interface ThreadListItem {
@@ -411,7 +409,7 @@ export interface CambiosAjustesMicrosoft {
 }
 
 // --- Configuración de IA (/settings/ia) ---
-export type LlmTask = 'resumen' | 'whatsapp' | 'evento' | 'reporte' | 'vision' | 'vision_respaldo' | 'vision_sugerencias'
+export type LlmTask = 'resumen' | 'whatsapp' | 'evento' | 'reporte' | 'vision'
 export type ProveedorIa = 'ollama' | 'openai' | 'anthropic' | 'bedrock' | 'foundry'
 
 export interface AjustesIa {
@@ -426,10 +424,6 @@ export interface AjustesIa {
   maxInputTokens: number
   /** Longitud máxima de cada respuesta del modelo (1000..64000). */
   maxOutputTokens: number
-  /** Segundo intento de zonas dudosas con otro modelo (defecto true). */
-  segundoIntento: boolean
-  /** Sugerencias de la IA al revisar una duda (defecto true). */
-  sugerencias: boolean
   /** Solo si hay clave guardada; la clave en sí nunca llega al navegador. */
   claves: { openai: boolean; anthropic: boolean; aws: boolean; foundry: boolean }
   sugeridos: Record<ProveedorIa, { texto: string[]; vision: string[] }>
@@ -442,8 +436,6 @@ export interface CambiosAjustesIa {
   awsRegion?: string
   maxInputTokens?: number
   maxOutputTokens?: number
-  segundoIntento?: boolean
-  sugerencias?: boolean
   /** string = nueva clave, null = quitar, ausente = no cambiar. */
   claveOpenai?: string | null
   claveAnthropic?: string | null

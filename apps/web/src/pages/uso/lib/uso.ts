@@ -12,9 +12,9 @@ const ACTIVIDADES: Record<string, string> = {
   whatsapp: 'Mensaje de WhatsApp',
   evento: 'Evento',
   reporte: 'Reporte de Excel',
-  vision: 'Lectura de zonas dudosas (pasada 1)',
-  vision_respaldo: 'Segundo intento de zonas dudosas',
-  vision_sugerencias: 'Sugerencias en la revisión',
+  vision: 'Lectura de zonas dudosas',
+  vision_respaldo: 'Segundo intento de zonas dudosas (histórico)',
+  vision_sugerencias: 'Sugerencias en la revisión (histórico)',
   ocr: 'OCR de pago (por página)',
 }
 

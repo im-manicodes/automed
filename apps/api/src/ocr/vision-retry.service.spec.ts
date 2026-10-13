@@ -1,58 +1,90 @@
 import { createCanvas } from '@napi-rs/canvas';
 import {
-  parseVisionBatch,
+  parseZonas,
   VisionRetryService,
-  VISION_BATCH_SYSTEM,
+  VISION_ZONAS_SYSTEM,
 } from './vision-retry.service';
 
-describe('parseVisionBatch', () => {
-  it('lee un arreglo válido, aun con texto/markdown alrededor', () => {
+const items3 = [{ ocrText: 'Igual' }, { ocrText: 'q' }, { ocrText: 'z' }];
+
+describe('parseZonas', () => {
+  it('lee lectura, confianza y sugerencias aun con texto/markdown alrededor', () => {
     const raw =
-      'Aquí:\n```json\n[{"n":1,"text":" A ","confidence":0.9},{"n":2,"text":"B","confidence":2}]\n```';
-    expect(parseVisionBatch(raw, 2)).toEqual([
-      { text: 'A', confidence: 0.9 },
-      { text: 'B', confidence: 1 },
+      'Aquí:\n```json\n[{"n":1,"lectura":" A b ","confianza":0.9,"sugerencias":["Ab","C"]},' +
+      '{"n":2,"lectura":"B","confianza":2,"sugerencias":[]}]\n```';
+    expect(parseZonas(raw, items3)).toEqual([
+      // "Ab" se descarta por igual a la lectura (sin espacios ni mayúsculas)
+      { lectura: { text: 'A b', confidence: 0.9 }, sugerencias: ['A b', 'C'] },
+      { lectura: { text: 'B', confidence: 1 }, sugerencias: ['B'] },
+      { lectura: null, sugerencias: [] },
     ]);
   });
 
-  it('elementos faltantes, [ilegible] o n fuera de rango -> null', () => {
+  it('sugerencias: sin vacías, [ilegible], duplicadas ni iguales al OCR previo; máx. 2', () => {
     const raw =
-      '[{"n":1,"text":"ok","confidence":0.9},{"n":2,"text":"x [ilegible]","confidence":0.9},{"n":9,"text":"z","confidence":0.9},{"n":0,"text":"z","confidence":0.9}]';
-    expect(parseVisionBatch(raw, 3)).toEqual([
-      { text: 'ok', confidence: 0.9 },
-      null,
-      null,
+      '[{"n":1,"lectura":"x [ilegible]","confianza":0.9,"sugerencias":["", "igual", "[ilegible] y", "P", "p", "Q", "R"]},' +
+      '{"n":2,"lectura":"Uno","confianza":0.3,"sugerencias":["Dos","Tres"]},' +
+      '{"n":9,"lectura":"fuera","confianza":1},{"n":0,"lectura":"z","confianza":1}]';
+    expect(parseZonas(raw, items3)).toEqual([
+      { lectura: null, sugerencias: ['P', 'Q'] },
+      {
+        lectura: { text: 'Uno', confidence: 0.3 },
+        sugerencias: ['Uno', 'Dos'],
+      },
+      { lectura: null, sugerencias: [] },
     ]);
   });
 
-  it('JSON roto o sin arreglo -> todo null', () => {
-    expect(parseVisionBatch('[{"n":1,', 2)).toEqual([null, null]);
-    expect(parseVisionBatch('nada', 2)).toEqual([null, null]);
-    expect(parseVisionBatch('{"text":"a"}', 1)).toEqual([null]);
+  it('tolera los nombres text/confidence', () => {
+    expect(
+      parseZonas('[{"n":1,"text":"ok","confidence":0.8}]', [{ ocrText: 'a' }]),
+    ).toEqual([
+      { lectura: { text: 'ok', confidence: 0.8 }, sugerencias: ['ok'] },
+    ]);
+  });
+
+  it('confianza no numérica -> sin lectura, pero el texto sirve de sugerencia', () => {
+    expect(
+      parseZonas('[{"n":1,"lectura":"ok","confianza":"alta"}]', [
+        { ocrText: 'a' },
+      ]),
+    ).toEqual([{ lectura: null, sugerencias: ['ok'] }]);
+  });
+
+  it('JSON roto o sin arreglo -> todo vacío', () => {
+    const vacio = [
+      { lectura: null, sugerencias: [] },
+      { lectura: null, sugerencias: [] },
+    ];
+    const two = [{ ocrText: 'a' }, { ocrText: 'b' }];
+    expect(parseZonas('[{"n":1,', two)).toEqual(vacio);
+    expect(parseZonas('nada', two)).toEqual(vacio);
+    expect(parseZonas('[{"n":1,"sugerencias":"x"},5,null]', two)).toEqual(
+      vacio,
+    );
   });
 });
 
 describe('VisionRetryService.modelFor', () => {
-  it('devuelve solo el nombre del modelo de la tarea', async () => {
+  it('devuelve solo el nombre del modelo de la tarea vision', async () => {
     const llm: any = { modelFor: jest.fn().mockResolvedValue('modelo-v') };
     const svc = new VisionRetryService(
       { get: () => undefined } as any,
       {} as any,
-      {} as any,
       llm,
     );
-    await expect(svc.modelFor('vision_respaldo')).resolves.toBe('modelo-v');
-    expect(llm.modelFor).toHaveBeenCalledWith('vision_respaldo');
+    await expect(svc.modelFor()).resolves.toBe('modelo-v');
+    expect(llm.modelFor).toHaveBeenCalledWith('vision');
   });
 });
 
-describe('VisionRetryService.rereadBatch', () => {
-  it('hace una sola llamada con N imágenes y el system de lote (+ámbito)', async () => {
+describe('VisionRetryService.readZones', () => {
+  it('una sola llamada con N imágenes, tarea vision, prompt de zonas (+ámbito) y threadId', async () => {
     const llm: any = {
       complete: jest
         .fn()
         .mockResolvedValue(
-          '[{"n":1,"text":"A","confidence":0.9},{"n":2,"text":"B","confidence":0.8}]',
+          '[{"n":1,"lectura":"A","confianza":0.9,"sugerencias":["A1"]},{"n":2,"lectura":"B","confianza":0.4,"sugerencias":["B1","B2"]}]',
         ),
       vision: jest.fn(),
     };
@@ -64,80 +96,40 @@ describe('VisionRetryService.rereadBatch', () => {
     const svc = new VisionRetryService(
       { get: () => undefined } as any,
       ocrSettings,
-      {} as any,
       llm,
     );
     const png = new Uint8Array(createCanvas(100, 100).toBuffer('image/png'));
-    const out = await svc.rereadBatch(png, [
-      { box: { x: 0, y: 0, w: 0.5, h: 0.5 }, ocrText: 'a' },
-      { box: { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, ocrText: 'b' },
-    ]);
+    const out = await svc.readZones(
+      png,
+      [
+        { box: { x: 0, y: 0, w: 0.5, h: 0.5 }, ocrText: 'x' },
+        { box: { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, ocrText: 'y' },
+      ],
+      'hilo-1',
+    );
     expect(llm.complete).toHaveBeenCalledTimes(1);
     expect(llm.vision).not.toHaveBeenCalled();
     const req = llm.complete.mock.calls[0][0];
     expect(req.images).toHaveLength(2);
     expect(req.task).toBe('vision');
-    expect(req.system.startsWith(VISION_BATCH_SYSTEM)).toBe(true);
+    expect(req.threadId).toBe('hilo-1'); // solo para el registro de uso
+    expect(req.system.startsWith(VISION_ZONAS_SYSTEM)).toBe(true);
     expect(req.system).toContain('Notas médicas');
+    expect(req.prompt).toContain('Recorte 2');
     expect(out).toEqual([
-      { text: 'A', confidence: 0.9 },
-      { text: 'B', confidence: 0.8 },
+      { lectura: { text: 'A', confidence: 0.9 }, sugerencias: ['A', 'A1'] },
+      { lectura: { text: 'B', confidence: 0.4 }, sugerencias: ['B', 'B1'] },
     ]);
   });
 
-  it('con task vision_respaldo hace una sola llamada con N imágenes y ese task', async () => {
-    const llm: any = {
-      complete: jest
-        .fn()
-        .mockResolvedValue(
-          '[{"n":1,"text":"A","confidence":0.9},{"n":2,"text":"B","confidence":0.8},{"n":3,"text":"C","confidence":0.7}]',
-        ),
-    };
+  it('sin zonas no llama al modelo', async () => {
+    const llm: any = { complete: jest.fn() };
     const svc = new VisionRetryService(
       { get: () => undefined } as any,
-      {
-        getEffective: jest.fn().mockResolvedValue({ visionAmbito: '' }),
-      } as any,
       {} as any,
       llm,
     );
-    const png = new Uint8Array(createCanvas(100, 100).toBuffer('image/png'));
-    const box = { x: 0, y: 0, w: 0.5, h: 0.5 };
-    const out = await svc.rereadBatch(
-      png,
-      [1, 2, 3].map(() => ({ box, ocrText: 'x' })),
-      'vision_respaldo',
-      'hilo-1',
-    );
-    expect(llm.complete).toHaveBeenCalledTimes(1);
-    const req = llm.complete.mock.calls[0][0];
-    expect(req.images).toHaveLength(3);
-    expect(req.task).toBe('vision_respaldo');
-    expect(req.threadId).toBe('hilo-1'); // solo para el registro de uso
-    expect(out).toHaveLength(3);
-  });
-});
-
-describe('VisionRetryService.isSecondPassEnabled', () => {
-  const make = (ai: boolean | undefined, ocr: boolean) =>
-    new VisionRetryService(
-      { get: () => undefined } as any,
-      {
-        getEffective: jest
-          .fn()
-          .mockResolvedValue({ visionSegundoIntento: ocr }),
-      } as any,
-      { getStoredSegundoIntento: jest.fn().mockResolvedValue(ai) } as any,
-      {} as any,
-    );
-
-  it('ai.config manda sobre ocr.config', async () => {
-    expect(await make(false, true).isSecondPassEnabled()).toBe(false);
-    expect(await make(true, false).isSecondPassEnabled()).toBe(true);
-  });
-
-  it('sin valor en ai.config respeta el antiguo ocr.config', async () => {
-    expect(await make(undefined, false).isSecondPassEnabled()).toBe(false);
-    expect(await make(undefined, true).isSecondPassEnabled()).toBe(true);
+    expect(await svc.readZones(new Uint8Array([1]), [])).toEqual([]);
+    expect(llm.complete).not.toHaveBeenCalled();
   });
 });

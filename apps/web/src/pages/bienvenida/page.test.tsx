@@ -61,7 +61,6 @@ describe('Asistente de bienvenida', () => {
     // Modelos preseleccionados con los sugeridos de OpenAI.
     expect(screen.getByLabelText('Resúmenes de tickets')).toHaveValue('gpt-4o-mini')
     expect(screen.getByLabelText('Lectura de zonas dudosas (visión)')).toHaveValue('gpt-4o')
-    expect(screen.getByLabelText('Segundo intento de zonas dudosas (visión)')).toHaveValue('gpt-4o')
     await user.click(screen.getByRole('button', { name: /Siguiente/ }))
 
     // Paso de lectura de PDFs escaneados: se deja para después.
@@ -80,9 +79,8 @@ describe('Asistente de bienvenida', () => {
     const [body] = puts(f)
     expect(body).toMatchObject({ proveedor: 'openai', claveOpenai: 'sk-secreta-123', bienvenidaCompletada: true })
     expect(body.modelos.resumen).toBe('gpt-4o-mini')
-    expect(body.modelos.vision_respaldo).toBe('gpt-4o')
-    expect(body.modelos.vision_sugerencias).toBe('gpt-4o')
-    expect(body).toMatchObject({ segundoIntento: true, sugerencias: true })
+    expect(body.modelos).not.toHaveProperty('vision_respaldo')
+    expect(body).not.toHaveProperty('sugerencias')
     expect(document.body.innerHTML).not.toContain('sk-secreta-123')
   })
 

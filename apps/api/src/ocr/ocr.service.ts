@@ -14,12 +14,16 @@ import type { OcrEngine } from './ocr-engine.interface';
 import { PdfExtractClientService } from './pdf-extract-client.service';
 import { PdfRasterizerService } from './pdf-rasterizer.service';
 import { VISION_BATCH_SIZE, VisionRetryService } from './vision-retry.service';
-import type { VisionReading } from './vision-retry.service';
+import type { ZonaLeida } from './vision-retry.service';
 
 /** Valor de OcrPage.engine para páginas digitales (texto del PDF -> markdown, sin OCR). */
 export const PDF_TEXT_ENGINE = 'pdf-text';
 
-export type StoredRegion = ClassifiedRegion & { source: 'ocr' | 'vision' };
+export type StoredRegion = ClassifiedRegion & {
+  source: 'ocr' | 'vision';
+  /** Hasta 2 lecturas posibles de una zona que sigue dudosa (se guardan en OcrRegion.sugerencias). */
+  sugerencias?: string[];
+};
 
 /** Punto de control de cancelación: false -> se lanza CancelledError. */
 export type ShouldContinue = () => Promise<boolean>;
@@ -28,14 +32,12 @@ async function checkpoint(shouldContinue?: ShouldContinue): Promise<void> {
   if (shouldContinue && !(await shouldContinue())) throw new CancelledError();
 }
 
-/** Progreso escrito en `progress:<threadId>` (solo etapa, contadores, modelo y pasada). */
+/** Progreso escrito en `progress:<threadId>` (solo etapa, contadores y modelo). */
 type ProgressValue = {
   etapa: 'ocr' | 'vision_enviando' | 'vision_procesando';
   regiones?: { total: number; hechas: number };
   /** Modelo que lee las zonas dudosas (solo en las etapas de visión). */
   modelo?: string;
-  /** 1 = modelo de lectura; 2 = segundo intento con el modelo de respaldo. */
-  pasada?: 1 | 2;
 };
 
 /**
@@ -128,7 +130,7 @@ export class OcrService implements AttachmentProcessor {
         lines,
         this.cfg.confidenceThreshold,
       ).map((r) => ({ ...r, source: 'ocr' as const }));
-      regions = await this.retryWithVision(
+      regions = await this.readDoubtfulZones(
         page.png,
         regions,
         threadId,
@@ -168,6 +170,9 @@ export class OcrService implements AttachmentProcessor {
                   confidence: r.confidence,
                   status: r.status,
                   source: r.source,
+                  ...(r.sugerencias && r.sugerencias.length > 0
+                    ? { sugerencias: r.sugerencias }
+                    : {}),
                 })),
               },
             },
@@ -184,14 +189,14 @@ export class OcrService implements AttachmentProcessor {
   }
 
   /**
-   * Relee con visión las regiones dudosas (si está habilitado); alta confianza -> ok.
-   * Las zonas dudosas (hasta `getMaxRegions()` por página) van juntas en lotes de
-   * `VISION_BATCH_SIZE` recortes por llamada; las que el lote no resuelve (omitidas,
-   * `[ilegible]`, baja confianza o lote fallido) se reintentan UNA vez, también en lote, con el modelo `vision_respaldo`
-   * (nunca recortes sueltos), salvo que el ajuste `visionSegundoIntento` esté apagado.
-   * Lo que siga sin resolverse queda `dudoso`. Las regiones `ok` nunca se envían.
+   * UNA sola pasada de visión (si está habilitada): las zonas `dudoso` (hasta `getMaxRegions()`
+   * por página) van en lotes de `VISION_BATCH_SIZE` recortes al modelo de `vision`, que devuelve
+   * por zona lectura + confianza + alternativas. Lectura válida con confianza >= umbral -> `ok`
+   * (`source:'vision'`); si no, sigue `dudoso` con hasta 2 sugerencias para la revisión. Un lote
+   * fallido deja sus zonas dudosas sin sugerencias. Las regiones `ok` nunca se envían. La
+   * cancelación se comprueba antes de cada lote.
    */
-  async retryWithVision(
+  async readDoubtfulZones(
     png: Uint8Array,
     regions: StoredRegion[],
     threadId?: string | null,
@@ -206,92 +211,69 @@ export class OcrService implements AttachmentProcessor {
     const total = idx.length;
     if (total === 0) return regions;
 
-    const modelo = await this.modelOf('vision');
+    const modelo = await this.modelOf();
     await this.writeProgress(threadId, {
       etapa: 'vision_enviando',
       regiones: { total, hechas: 0 },
       ...(modelo ? { modelo } : {}),
-      pasada: 1,
     });
     const out = [...regions];
     const threshold = this.vision.acceptThreshold;
-    const accept = (i: number, reading: VisionReading | null): boolean => {
-      if (!reading || reading.confidence < threshold) return false;
-      out[i] = {
-        ...regions[i],
-        text: reading.text,
-        confidence: reading.confidence,
-        status: 'ok',
-        source: 'vision',
-      };
-      return true;
-    };
-
     let hechas = 0;
-    // Una pasada en lote (trozos de VISION_BATCH_SIZE); devuelve las zonas no resueltas.
-    const lote = async (
-      indices: number[],
-      task: 'vision' | 'vision_respaldo',
-    ): Promise<number[]> => {
-      const unresolved: number[] = [];
-      // El modelo se lee una vez por pasada (solo el nombre, sin claves).
-      const modeloPasada =
-        task === 'vision' ? modelo : await this.modelOf(task);
-      const pasada = task === 'vision' ? 1 : 2;
-      for (let k = 0; k < indices.length; k += VISION_BATCH_SIZE) {
-        await checkpoint(shouldContinue);
-        const chunk = indices.slice(k, k + VISION_BATCH_SIZE);
-        await this.writeProgress(threadId, {
-          etapa: 'vision_procesando',
-          regiones: { total, hechas },
-          ...(modeloPasada ? { modelo: modeloPasada } : {}),
-          pasada,
-        });
-        let readings: (VisionReading | null)[] = [];
-        try {
-          readings = await this.vision.rereadBatch(
-            png,
-            chunk.map((i) => ({
-              box: regions[i].box,
-              ocrText: regions[i].text,
-            })),
-            task,
-            threadId,
-          );
-        } catch {
-          this.logger.warn(
-            `Falló la relectura con visión en lote (${task}, ${chunk.length} zonas)`,
-          );
-        }
-        chunk.forEach((i, j) => {
-          if (!accept(i, readings[j] ?? null)) unresolved.push(i);
-        });
-        hechas += chunk.length;
+    let resueltas = 0;
+    let fallidas = 0;
+    for (let k = 0; k < idx.length; k += VISION_BATCH_SIZE) {
+      await checkpoint(shouldContinue);
+      const chunk = idx.slice(k, k + VISION_BATCH_SIZE);
+      await this.writeProgress(threadId, {
+        etapa: 'vision_procesando',
+        regiones: { total, hechas },
+        ...(modelo ? { modelo } : {}),
+      });
+      let zonas: ZonaLeida[] = [];
+      try {
+        zonas = await this.vision.readZones(
+          png,
+          chunk.map((i) => ({ box: regions[i].box, ocrText: regions[i].text })),
+          threadId,
+        );
+      } catch {
+        fallidas += chunk.length;
+        this.logger.warn(
+          `Falló la lectura con visión en lote (${chunk.length} zonas)`,
+        );
       }
-      return unresolved;
-    };
-
-    const pending = await lote(idx, 'vision');
-    if (pending.length > 0 && !(await this.vision.isSecondPassEnabled())) {
-      this.logger.log(
-        `Visión: ${pending.length} de ${total} zonas sin resolver; segundo intento desactivado`,
-      );
-    } else if (pending.length > 0) {
-      this.logger.log(
-        `Visión: ${pending.length} de ${total} zonas sin resolver; segundo intento en lote con el modelo de respaldo`,
-      );
-      hechas = total - pending.length;
-      await lote(pending, 'vision_respaldo');
+      chunk.forEach((i, j) => {
+        const z = zonas[j];
+        if (!z) return;
+        if (z.lectura && z.lectura.confidence >= threshold) {
+          out[i] = {
+            ...regions[i],
+            text: z.lectura.text,
+            confidence: z.lectura.confidence,
+            status: 'ok',
+            source: 'vision',
+          };
+          resueltas++;
+        } else if (z.sugerencias.length > 0) {
+          out[i] = { ...regions[i], sugerencias: z.sugerencias };
+        }
+      });
+      hechas += chunk.length;
     }
+    const conSugerencias = idx.filter(
+      (i) => (out[i].sugerencias?.length ?? 0) > 0,
+    ).length;
+    this.logger.log(
+      `Visión: ${resueltas} de ${total} zonas resueltas, ${conSugerencias} con sugerencias${fallidas ? ` (${fallidas} en lotes fallidos)` : ''}`,
+    );
     return out;
   }
 
-  /** Nombre del modelo de la tarea para la vista de progreso; undefined si no se puede leer. */
-  private async modelOf(
-    task: 'vision' | 'vision_respaldo',
-  ): Promise<string | undefined> {
+  /** Nombre del modelo de `vision` para la vista de progreso; undefined si no se puede leer. */
+  private async modelOf(): Promise<string | undefined> {
     try {
-      const m = await this.vision.modelFor(task);
+      const m = await this.vision.modelFor('vision');
       return typeof m === 'string' && m.trim() !== '' ? m : undefined;
     } catch {
       return undefined;

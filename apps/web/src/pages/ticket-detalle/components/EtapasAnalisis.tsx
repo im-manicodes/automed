@@ -32,7 +32,6 @@ const POSICION: Record<EtapaProgreso, number> = {
 function detalleDudosas(p: ProgresoAnalisis): string {
   const r = p.regiones!
   const partes = [
-    p.pasada === 2 ? 'Pasada 2 (segundo intento)' : p.pasada === 1 ? 'Pasada 1' : '',
     `Zona ${Math.min(r.hechas + 1, r.total)} de ${r.total}`,
     p.modelo ?? '',
   ].filter(Boolean)

@@ -19,6 +19,12 @@ export const AI_PROVIDERS: readonly LlmProviderName[] = [
   'foundry',
 ];
 
+/** Tareas que ya no existen (una sola pasada de visión); si llegan en `modelos` se ignoran. */
+const RETIRED_TASKS: readonly string[] = [
+  'vision_respaldo',
+  'vision_sugerencias',
+];
+
 export const MIN_MAX_INPUT_TOKENS = 2000;
 const DEFAULT_MAX_INPUT_TOKENS = 60000;
 export const MIN_MAX_OUTPUT_TOKENS = 1000;
@@ -34,8 +40,6 @@ export interface AiStoredConfig {
   awsRegion?: string;
   maxInputTokens?: number;
   maxOutputTokens?: number;
-  segundoIntento?: boolean;
-  sugerencias?: boolean;
   openaiKeyEnc?: string;
   anthropicKeyEnc?: string;
   foundryKeyEnc?: string;
@@ -52,10 +56,6 @@ export interface AiEffectiveConfig {
   awsRegion: string;
   maxInputTokens: number;
   maxOutputTokens: number;
-  /** Segundo intento de lectura con el modelo de respaldo (defecto true). */
-  segundoIntento: boolean;
-  /** Recomendaciones del LLM al revisar una duda (defecto true). */
-  sugerencias: boolean;
   origen: 'panel' | 'servidor';
   /** Config lista para los adaptadores (incluye claves en claro). */
   llm: LlmConfig;
@@ -77,8 +77,6 @@ export interface AiPublicSettings {
   awsRegion: string;
   maxInputTokens: number;
   maxOutputTokens: number;
-  segundoIntento: boolean;
-  sugerencias: boolean;
   claves: {
     openai: boolean;
     anthropic: boolean;
@@ -97,8 +95,6 @@ export interface AiSettingsInput {
   awsRegion?: string;
   maxInputTokens?: number;
   maxOutputTokens?: number;
-  segundoIntento?: boolean;
-  sugerencias?: boolean;
   claveOpenai?: string | null;
   claveAnthropic?: string | null;
   claveFoundry?: string | null;
@@ -215,9 +211,6 @@ export class AiSettingsService {
       evento: m.evento || (sameAsEnv ? baseText : resumen),
       reporte: m.reporte || (sameAsEnv ? baseText : resumen),
       vision: visionPrincipal,
-      vision_respaldo: m.vision_respaldo || visionPrincipal,
-      vision_sugerencias:
-        m.vision_sugerencias || m.vision_respaldo || visionPrincipal,
     };
     const ollamaUrl = stored?.ollamaUrl || env.ollamaBaseUrl;
     const foundryEndpoint =
@@ -256,8 +249,6 @@ export class AiSettingsService {
       awsRegion,
       maxInputTokens,
       maxOutputTokens,
-      segundoIntento: stored?.segundoIntento !== false,
-      sugerencias: stored?.sugerencias !== false,
       origen: stored ? 'panel' : 'servidor',
       llm: {
         ...env,
@@ -299,12 +290,6 @@ export class AiSettingsService {
     return (await this.getEffective()).modelos[task];
   }
 
-  /** Valor guardado en el panel (`undefined` si nunca se fijó), para el respaldo con `ocr.config`. */
-  async getStoredSegundoIntento(): Promise<boolean | undefined> {
-    const v = (await this.load()).stored?.segundoIntento;
-    return typeof v === 'boolean' ? v : undefined;
-  }
-
   async bienvenidaCompletada(): Promise<boolean> {
     return (await this.load()).welcomeDone;
   }
@@ -330,8 +315,6 @@ export class AiSettingsService {
       awsRegion: e.awsRegion,
       maxInputTokens: e.maxInputTokens,
       maxOutputTokens: e.maxOutputTokens,
-      segundoIntento: e.segundoIntento,
-      sugerencias: e.sugerencias,
       claves: {
         openai: !!e.llm.openaiApiKey,
         anthropic: !!e.llm.anthropicApiKey,
@@ -349,6 +332,9 @@ export class AiSettingsService {
     }
     const { stored } = await this.load();
     const next: AiStoredConfig = { ...(stored ?? {}) };
+    // Interruptores retirados (una sola pasada de visión): se ignoran y se descartan al guardar.
+    delete (next as Record<string, unknown>).segundoIntento;
+    delete (next as Record<string, unknown>).sugerencias;
     let touchesConfig = false;
 
     if (input.proveedor !== undefined) {
@@ -367,13 +353,19 @@ export class AiSettingsService {
       if (!isObj(input.modelos)) {
         throw new BadRequestException('Los modelos no son válidos');
       }
-      const modelos: Partial<Record<LlmTask, string>> = {
-        ...(input.proveedor === undefined ||
+      const modelos: Partial<Record<LlmTask, string>> = {};
+      if (
+        input.proveedor === undefined ||
         input.proveedor === stored?.proveedor
-          ? (next.modelos ?? {})
-          : {}),
-      };
+      ) {
+        // Solo las tareas vigentes: las retiradas guardadas antes se descartan.
+        for (const [k, v] of Object.entries(next.modelos ?? {})) {
+          if (LLM_TASKS.includes(k as LlmTask)) modelos[k as LlmTask] = v;
+        }
+      }
       for (const [k, v] of Object.entries(input.modelos)) {
+        // Tareas retiradas (segunda pasada y sugerencias aparte): se ignoran sin error.
+        if (RETIRED_TASKS.includes(k)) continue;
         if (!LLM_TASKS.includes(k as LlmTask)) {
           throw new BadRequestException(`Tarea desconocida: ${k}`);
         }
@@ -451,20 +443,6 @@ export class AiSettingsService {
         );
       }
       next.maxOutputTokens = n;
-      touchesConfig = true;
-    }
-    for (const [field, label] of [
-      ['segundoIntento', 'El segundo intento'],
-      ['sugerencias', 'Las recomendaciones'],
-    ] as const) {
-      const v = input[field];
-      if (v === undefined) continue;
-      if (typeof v !== 'boolean') {
-        throw new BadRequestException(
-          `${label} debe ser verdadero o falso (true o false)`,
-        );
-      }
-      next[field] = v;
       touchesConfig = true;
     }
     for (const [field, enc, label] of [

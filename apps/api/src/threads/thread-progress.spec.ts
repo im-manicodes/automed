@@ -2,7 +2,7 @@ import { computeProgress } from './thread-progress';
 import { parseStored } from './threads.service';
 
 describe('parseStored (progress:<threadId>)', () => {
-  it('acepta modelo (texto corto) y pasada 1|2 solo en etapas de visión', () => {
+  it('acepta modelo (texto corto) solo en etapas de visión y descarta la antigua pasada', () => {
     expect(
       parseStored({
         etapa: 'vision_procesando',
@@ -14,7 +14,6 @@ describe('parseStored (progress:<threadId>)', () => {
       etapa: 'vision_procesando',
       regiones: { total: 2, hechas: 1 },
       modelo: 'm',
-      pasada: 2,
     });
     expect(parseStored({ etapa: 'ocr', modelo: 'm', pasada: 1 })).toEqual({
       etapa: 'ocr',
@@ -26,7 +25,7 @@ describe('parseStored (progress:<threadId>)', () => {
       parseStored({
         etapa: 'vision_enviando',
         modelo: 5,
-        pasada: 3,
+        pasada: 4,
         clave: 'secreta',
       }),
     ).toEqual({ etapa: 'vision_enviando' });
@@ -133,7 +132,7 @@ describe('computeProgress', () => {
     );
   });
 
-  it('expone modelo y pasada solo en las etapas de dudosas', () => {
+  it('expone modelo (sin pasada) solo en las etapas de dudosas', () => {
     const base = {
       threadStatus: 'procesando',
       attachments: [att('procesando', 4, 2)],
@@ -144,29 +143,27 @@ describe('computeProgress', () => {
         etapa: 'vision_procesando',
         regiones: { total: 4, hechas: 2 },
         modelo: 'gpt-x',
-        pasada: 2,
       },
     });
     expect(p).toMatchObject({
       etapa: 'procesando_dudosas',
       modelo: 'gpt-x',
-      pasada: 2,
+      regiones: { total: 4, hechas: 2 },
     });
+    expect(p).not.toHaveProperty('pasada');
     const e = computeProgress({
       ...base,
-      stored: { etapa: 'vision_enviando', modelo: 'gpt-x', pasada: 1 },
+      stored: { etapa: 'vision_enviando', modelo: 'gpt-x' },
     });
     expect(e).toMatchObject({
       etapa: 'ia_dudosas',
       modelo: 'gpt-x',
-      pasada: 1,
     });
     const o = computeProgress({
       ...base,
-      stored: { etapa: 'ocr', modelo: 'gpt-x', pasada: 1 },
+      stored: { etapa: 'ocr', modelo: 'gpt-x' },
     });
     expect(o).not.toHaveProperty('modelo');
-    expect(o).not.toHaveProperty('pasada');
     // sin progreso guardado de visión no hay modelo
     expect(
       computeProgress({ threadStatus: 'pendiente', attachments: [] }),

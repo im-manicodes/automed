@@ -134,13 +134,7 @@ d('Flujo completo con mocks (sync -> OCR -> síntesis -> corrección)', () => {
   let n = 0;
   const llm: LlmProvider = {
     modelFor: (task) =>
-      Promise.resolve(
-        task === 'vision' ||
-          task === 'vision_respaldo' ||
-          task === 'vision_sugerencias'
-          ? 'mock-vision'
-          : 'mock-text',
-      ),
+      Promise.resolve(task === 'vision' ? 'mock-vision' : 'mock-text'),
     complete: () => Promise.resolve(''),
     vision: () => Promise.resolve('{"text":"x","confidence":0.1}'),
     text: (_system, user) => {

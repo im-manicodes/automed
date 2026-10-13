@@ -14,6 +14,7 @@ export function construirDudas(pages: ApiPage[]): Duda[] {
         bbox: { x: r.x, y: r.y, w: r.w, h: r.h },
         sugerencia: (r.text ?? '').trim(),
         textoGuardado: r.textoUsuario,
+        sugerencias: (r.sugerencias ?? []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 2),
       });
     }
   }
